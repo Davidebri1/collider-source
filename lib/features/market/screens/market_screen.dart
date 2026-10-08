@@ -171,6 +171,20 @@ class _MarketScreenState extends State<MarketScreen> with SingleTickerProviderSt
   }
 
   @override
+  void didUpdateWidget(covariant MarketScreen old) {
+    super.didUpdateWidget(old);
+    if (old.view == widget.view) return;
+    // The rail moves between Discover / Search / My generations behind us.
+    // Coming back to Discover returns the window to its featured state, and
+    // leaving Search drops the query, so nothing leaks between the views.
+    _queryCtrl.clear();
+    setState(() {
+      _query = '';
+      if (widget.view == 'discover') _window = _Window.featured;
+    });
+  }
+
+  @override
   void dispose() {
     _entrance.dispose();
     _queryCtrl.dispose();
@@ -475,7 +489,14 @@ class _MarketScreenState extends State<MarketScreen> with SingleTickerProviderSt
   // ----------------------------------------------------------- browse view --
 
   Widget _browseView(List<_Tile> tiles) {
-    if (tiles.isEmpty) return _empty();
+    // The header stays even with nothing to show, so the window still says
+    // which view you are in and keeps a way back.
+    if (tiles.isEmpty) {
+      return Column(children: [
+        _browseHeader(0),
+        Expanded(child: _empty()),
+      ]);
+    }
     const g = MarketScreen.gridGutter;
     const w = (MarketScreen.windowWidth - 2 * MarketScreen.contentInset - g) / 2;
     final (a, b) = _split(tiles, w);
@@ -612,17 +633,21 @@ class _MarketScreenState extends State<MarketScreen> with SingleTickerProviderSt
         ),
       );
 
-  Widget _empty() => Padding(
-        padding: const EdgeInsets.fromLTRB(32, 40, 32, 0),
-        child: Column(children: [
-          Text(_inMine ? 'Nothing here yet' : 'No matches', style: _sans(17, FontWeight.w600, _chalk)),
-          const SizedBox(height: 8),
-          Text(
-            _inMine ? 'Images you generate this session collect here.' : 'Try a different word, or clear the search.',
-            textAlign: TextAlign.center,
-            style: _sans(14, FontWeight.w400, _ash, h: 1.35),
-          ),
-        ]),
+  /// Empty states sit in the middle of the window, where an invitation to act
+/// belongs, rather than stranded at the top.
+Widget _empty() => Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 36),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text(_inMine ? 'Nothing here yet' : 'No matches', style: _sans(17, FontWeight.w600, _chalk)),
+            const SizedBox(height: 8),
+            Text(
+              _inMine ? 'Images you generate this session collect here.' : 'Try a different word, or clear the search.',
+              textAlign: TextAlign.center,
+              style: _sans(14, FontWeight.w400, _ash, h: 1.35),
+            ),
+          ]),
+        ),
       );
 
   // ------------------------------------------------------------ ornaments --
