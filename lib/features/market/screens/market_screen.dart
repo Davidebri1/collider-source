@@ -56,15 +56,21 @@ class MarketScreen extends StatefulWidget {
   /// Portrait design frame. Everything inside is expressed in these units.
   static const frame = Size(393, 852);
 
-  /// The window is inset to clear the side rail (which ends at x 16) and to
-  /// keep a matching air on the right.
-  static const windowLeft = 20.0;
-  static const windowRight = 20.0;
+  /// The window floats. In the source it takes a little over half the frame's
+  /// width and under half its height, with clear air on every side — it is a
+  /// panel on a canvas, never a full-bleed surface. These insets reproduce
+  /// that: the left one clears the side rail (which ends at x 46) so the rail
+  /// sits beside the window rather than across it, and the top one leaves the
+  /// window hanging in space instead of pinned under the status bar.
+  static const windowLeft = 52.0;
+  static const windowRight = 24.0;
   /// A literal rather than frame.width, so this stays a const expression.
   static const windowWidth = 393.0 - windowLeft - windowRight;
+  static const windowTop = 158.0;
+  static const windowHeight = 470.0;
 
-  static const windowRadius = 28.0;
-  static const contentInset = 20.0;
+  static const windowRadius = 24.0;
+  static const contentInset = 18.0;
 
   /// Space between the window and the ornaments below it.
   static const capsuleGap = 14.0;
@@ -218,7 +224,9 @@ class _MarketScreenState extends State<MarketScreen> with SingleTickerProviderSt
     return [
       for (final id in ids)
         for (final t in themes)
-          if (t.id == id) _Tile('photo-${t.id}', t.name, t.stillPath ?? t.assetPath),
+          if (t.id == id)
+            _Tile('photo-${t.id}', t.name, t.stillPath ?? t.assetPath,
+                ratio: _ratios[_stableHash('photo-${t.id}') % _ratios.length]),
     ];
   }
 
@@ -330,21 +338,21 @@ class _MarketScreenState extends State<MarketScreen> with SingleTickerProviderSt
         left: 0,
         top: 0,
         bottom: 0,
-        width: 220,
+        width: 190,
         child: DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(colors: [Color(0xB3000000), Color(0x00000000)]))),
       ),
       const Positioned(
         right: 0,
         top: 0,
         bottom: 0,
-        width: 120,
+        width: 110,
         child: DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(colors: [Color(0x00000000), Color(0x4D000000)]))),
       ),
       const Positioned(
         left: 0,
         right: 0,
         bottom: 0,
-        height: 240,
+        height: 186,
         child: DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -363,12 +371,12 @@ class _MarketScreenState extends State<MarketScreen> with SingleTickerProviderSt
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
             ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 108),
+              constraints: const BoxConstraints(maxHeight: 84),
               child: Text(
                 t.title,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: _sans(32, FontWeight.w800, _chalk, ls: -0.8, h: 1.1),
+                style: _sans(28, FontWeight.w800, _chalk, ls: -0.7, h: 1.12),
               ),
             ),
             const SizedBox(height: 6),
@@ -376,7 +384,7 @@ class _MarketScreenState extends State<MarketScreen> with SingleTickerProviderSt
               t.generated ? 'Your generation' : 'Featured still',
               style: _mono(11, FontWeight.w500, _chalk.withValues(alpha: 0.7), ls: 0.6),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
             Row(children: [
               Expanded(child: _pill('Open', Icons.play_arrow_rounded, () => setState(() => _open = t), wide: true)),
               const SizedBox(width: 10),
@@ -745,10 +753,11 @@ Widget _empty() => Center(
           return Stack(children: [
             Positioned.fill(
               child: Column(children: [
-                SizedBox(height: insetTop + 8),
-                Expanded(
+                SizedBox(height: insetTop + MarketScreen.windowTop),
+                SizedBox(
+                  height: MarketScreen.windowHeight,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: MarketScreen.windowLeft - 4),
+                    padding: const EdgeInsets.symmetric(horizontal: MarketScreen.windowLeft),
                     child: _windowFrame(
                       AnimatedSwitcher(
                         duration: const Duration(milliseconds: 260),
