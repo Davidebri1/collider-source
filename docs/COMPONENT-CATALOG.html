@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Collider — Surface Designs</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#0f1115;color:#e9edf3;
+    font-family:-apple-system,'Segoe UI',Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1460px;margin:0 auto;padding:44px 28px 80px}
+  header{border-bottom:1px solid rgba(255,255,255,.11);padding-bottom:26px;margin-bottom:40px}
+  .eyebrow{font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px;letter-spacing:.16em;
+    text-transform:uppercase;color:#8b95a5;margin:0 0 10px}
+  h1{font-size:34px;font-weight:600;margin:0 0 10px;letter-spacing:-.01em}
+  .lede{color:#98a2b3;font-size:15px;max-width:78ch;margin:0;line-height:1.65}
+  h2{font-size:21px;font-weight:600;margin:0 0 4px}
+  .sub{color:#8b95a5;font-size:13.5px;margin:0 0 16px;line-height:1.6;max-width:80ch}
+  section{margin-bottom:44px}
+  figure{margin:0;background:#15181e;border:1px solid rgba(255,255,255,.11);
+    border-radius:8px;overflow:hidden}
+  figure img{display:block;width:100%;height:auto}
+  figcaption{padding:13px 15px;border-top:1px solid rgba(255,255,255,.09);
+    font-size:12.5px;color:#98a2b3;line-height:1.55}
+  figcaption b{color:#e9edf3;font-weight:600;display:block;margin-bottom:3px;font-size:13.5px}
+  .n{display:inline-block;font-family:ui-monospace,Menlo,monospace;font-size:10px;
+    letter-spacing:.1em;text-transform:uppercase;padding:2px 6px;
+    border:1px solid rgba(255,255,255,.18);border-radius:3px;color:#8b95a5;margin-right:7px}
+  .anat{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-top:12px}
+  .anat div{background:#15181e;border:1px solid rgba(255,255,255,.10);border-radius:6px;padding:11px 13px}
+  .anat dt{font-family:ui-monospace,Menlo,monospace;font-size:10px;letter-spacing:.08em;
+    text-transform:uppercase;color:#6f7a8a;margin:0 0 4px}
+  .anat dd{margin:0;font-size:12.5px;color:#c6cdd8;line-height:1.5}
+  footer{margin-top:56px;padding-top:18px;border-top:1px solid rgba(255,255,255,.11);
+    font-size:11.5px;color:#6f7a8a}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">Collider · Surface Designs</p>
+  <h1>Whole-screen design, per surface.</h1>
+  <p class="lede">Each frame below is a reference screen reduced to structure: greyscale, photographic
+  backdrop flattened, so what remains is the part that gets copied — window placement, proportions,
+  row rhythm, control arrangement. Colour and imagery belong to the material that goes inside the
+  windows; they are not part of the design. Each screen is labelled by the Collider surface it feeds.</p>
+</header>
+
+<section>
+  <h2>Ticker</h2>
+  <p class="sub">Bottom window, dock width, 40% height at most. The row list carries the summaries;
+  tapping a row opens that model's thread in the second pane.</p>
+  <figure>
+    <img src="design-screens/01-ticker.jpg" alt="Greyscale structural study of the ticker: left window of conversation rows each with avatar, name, message preview and right-aligned time; centre window holding the open thread with incoming bubbles left and an outgoing bubble right; composer pill at the bottom of the thread window">
+    <figcaption><b>Reference structure</b>Three windows. Two are Collider's: the row list and the open
+    thread. The third panel on the right is not part of this app and is not built. The small vertical
+    pill on the left edge is the system rail and is shared across every surface.</figcaption>
+  </figure>
+  <dl class="anat">
+    <div><dt>Row</dt><dd>Avatar · model name · response preview · time, right-aligned, one line tall.</dd></div>
+    <div><dt>Open</dt><dd>Preview is replaced by the thread in the second window.</dd></div>
+    <div><dt>Thread</dt><dd>Model name and status in the header; composer pill pinned to the bottom.</dd></div>
+    <div><dt>Rail</dt><dd>Floats outside every window. Never inside a content rect.</dd></div>
+  </dl>
+</section>
+
+<section>
+  <h2>Apps platter</h2>
+  <p class="sub">Seven icons, centred, background dimmed, click away to close.</p>
+  <figure>
+    <img src="design-screens/02-apps-platter.jpg" alt="Greyscale structural study of a home screen: four columns of circular app icons with labels beneath, laid in three offset rows over an environment">
+    <figcaption><b>Reference structure</b>Columns are evenly spaced and the rows are staggered — odd rows
+    shift by half a pitch. Labels sit under each icon. The environment stays visible behind, dimmed.</figcaption>
+  </figure>
+  <dl class="anat">
+    <div><dt>Grid</dt><dd>Four columns, three rows, staggered.</dd></div>
+    <div><dt>Icon</dt><dd>Full circle. Label centred beneath.</dd></div>
+    <div><dt>Backdrop</dt><dd>Dimmed, never replaced.</dd></div>
+    <div><dt>Close</dt><dd>Click away. The platter is not a sheet.</dd></div>
+  </dl>
+</section>
+
+<section>
+  <h2>Smart Gen</h2>
+  <p class="sub">Cards, boards, canvas and Genie. Active, Urgent and All. New card. Genie is Pro and above.</p>
+  <figure>
+    <img src="design-screens/03-smart-gen.jpg" alt="Greyscale structural study of a presentation board: a large window containing a wide canvas area with a toolbar and side controls">
+    <figcaption><b>Reference structure</b>One wide working window. Tools sit along an edge; the canvas is
+    the largest single region on screen and is left uninterrupted.</figcaption>
+  </figure>
+  <dl class="anat">
+    <div><dt>Window</dt><dd>Single wide work surface.</dd></div>
+    <div><dt>Canvas</dt><dd>Largest region; tools stay on the edges.</dd></div>
+    <div><dt>Views</dt><dd>Cards · Boards · Canvas · Genie.</dd></div>
+    <div><dt>Gate</dt><dd>Genie is Pro+. Cards, boards and canvas are free.</dd></div>
+  </dl>
+</section>
+
+<section>
+  <h2>Discover Market</h2>
+  <p class="sub">Images only. Picture row, labelled looks, two-column feed. Not the wallpaper store.</p>
+  <figure>
+    <img src="design-screens/04-discover-market.jpg" alt="Greyscale structural study of a gallery: one large window with an editorial hero region, a row of small pagination dots and a lower row of cards clipped by the window edge">
+    <figcaption><b>Reference structure</b>One window, three horizontal bands: hero, then a row beneath it,
+    then a feed. The feed is clipped mid-card at the window's lower edge — a window clips its content, and
+    that is correct rather than a layout fault.</figcaption>
+  </figure>
+  <dl class="anat">
+    <div><dt>Bands</dt><dd>Hero → labelled looks row → two-column feed.</dd></div>
+    <div><dt>Content</dt><dd>Images only.</dd></div>
+    <div><dt>Edge</dt><dd>Feed clips at the window edge.</dd></div>
+    <div><dt>Is not</dt><dd>The wallpaper store, or a shelf of saved messages.</dd></div>
+  </dl>
+</section>
+
+<section>
+  <h2>Theme Gallery</h2>
+  <p class="sub">Free background swap. Image only — the glass does not change.</p>
+  <figure>
+    <img src="design-screens/05-theme-gallery.jpg" alt="Greyscale structural study of a photo gallery window over a landscape, with a grid of images and floating controls">
+    <figcaption><b>Reference structure</b>A grid window floating over the environment. The glass is
+    identical everywhere; only the imagery inside changes between themes.</figcaption>
+  </figure>
+  <dl class="anat">
+    <div><dt>Swap</dt><dd>Imagery changes. Glass does not.</dd></div>
+    <div><dt>Switcher</dt><dd>Theme Gallery · Premium Marketplace · Music Collection.</dd></div>
+    <div><dt>Surface</dt><dd>Image only — no live playback while browsing.</dd></div>
+  </dl>
+</section>
+
+<section>
+  <h2>Music Player</h2>
+  <p class="sub">Plays the tracks that ship with a wallpaper. Corner volume appears once a track has played.</p>
+  <figure>
+    <img src="design-screens/06-music-player.jpg" alt="Greyscale structural study of a music app: a two-pane window with a navigation sidebar and a grid of album tiles, a system rail floating outside on the left, and a transport bar straddling the window's bottom edge">
+    <figcaption><b>Reference structure</b>Two panes inside one window: navigation on the left, content on
+    the right. The transport bar is the important part — it floats at the window's bottom edge and
+    <em>straddles</em> it, half inside and half outside.</figcaption>
+  </figure>
+  <dl class="anat">
+    <div><dt>Panes</dt><dd>Navigation left, content right, one window.</dd></div>
+    <div><dt>Transport</dt><dd>Floats outside the window, straddling its bottom edge.</dd></div>
+    <div><dt>Rail</dt><dd>Floats outside on the left, vertically centred on the window.</dd></div>
+    <div><dt>Source</dt><dd>Only tracks that ship with a wallpaper.</dd></div>
+  </dl>
+</section>
+
+<footer>
+  Reference renders reduced to structure for study. Each is the whole-screen design of the named
+  Collider surface — layout, proportion and component arrangement only. Colour and background imagery
+  belong to the material placed inside these windows and are not reproduced here.
+</footer>
+
+</div>
+</body>
+</html>
