@@ -20,8 +20,8 @@ class ThemeMedia {
     return AssetImage(src);
   }
 
-  static final ImageProvider offlineWallpaper =
-      const AssetImage(ThemeCatalog.offlineWallpaperAsset);
+  static const ImageProvider offlineWallpaper =
+      AssetImage(ThemeCatalog.offlineWallpaperAsset);
 }
 
 /// Warms the image cache for posters the user is about to see.
@@ -63,7 +63,11 @@ class ThemeImage extends StatelessWidget {
     this.fit = BoxFit.cover,
     this.width,
     this.height,
-    this.filterQuality = FilterQuality.medium,
+    // Retina-only product: downsampling here is what made every theme
+    // thumbnail and gallery card look soft. `medium` was the default and the
+    // offline fallback was `low`, so the placeholders were the worst-looking
+    // images in the app.
+    this.filterQuality = FilterQuality.high,
     this.alignment = Alignment.center,
   });
 
@@ -73,7 +77,7 @@ class ThemeImage extends StatelessWidget {
         width: width,
         height: height,
         alignment: alignment,
-        filterQuality: FilterQuality.low,
+        filterQuality: FilterQuality.high,
         errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFF1A1B22)),
       );
 

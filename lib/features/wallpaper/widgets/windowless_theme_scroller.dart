@@ -42,8 +42,6 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
   late WallpaperTheme _previewed;
   bool _expanded = false;
 
-  static const _shadow = [Shadow(color: Color(0x99000000), blurRadius: 16)];
-
   @override
   void initState() {
     super.initState();
@@ -99,7 +97,12 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
               opacity: fade,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(10),
-                child: ThemePosterImage(theme: t, fit: BoxFit.cover, filterQuality: FilterQuality.medium),
+                // R32: a thumbnail shows the whole subject — portrait,
+                // recognizable, sharp — never a cover-cropped strip. The
+                // letterbox [BoxFit.contain] leaves is filled with the same
+                // poster blurred, inside the chip only, so the chip reads as
+                // a solid tile while the artwork stays whole.
+                child: _WholeSubject(theme: t),
               ),
             ),
           ),
@@ -135,12 +138,17 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                             onTap: () => setState(() => _expanded = false),
                             child: ThemePosterImage(theme: _previewed, fit: BoxFit.cover, fullBleed: true),
                           )
-                        : ImageFiltered(
-                            imageFilter: ImageFilter.blur(sigmaX: 28, sigmaY: 28, tileMode: TileMode.clamp),
-                            child: ColorFiltered(
-                              colorFilter: const ColorFilter.mode(Color(0x55000000), BlendMode.darken),
-                              child: ThemePosterImage(theme: _previewed, fit: BoxFit.cover, fullBleed: true),
-                            ),
+                        // R32: browsing must NOT blur the wallpaper, and the
+                        // live wallpaper stays sharp while browsing. This room
+                        // layer was an ImageFiltered(sigma 28) behind the
+                        // preview window, which is exactly the "blurred room"
+                        // the requirement rules out — it also meant you judged
+                        // every theme by an unreadable smear instead of by the
+                        // artwork. A light dim only, so the preview window
+                        // still separates from the room without hiding it.
+                        : ColorFiltered(
+                            colorFilter: const ColorFilter.mode(Color(0x33000000), BlendMode.darken),
+                            child: ThemePosterImage(theme: _previewed, fit: BoxFit.cover, fullBleed: true),
                           ),
                   ),
                 ),
@@ -265,19 +273,6 @@ class _PreviewWindowState extends State<_PreviewWindow> {
     super.dispose();
   }
 
-  Widget _capsule(Widget child) => ClipRRect(
-        borderRadius: BorderRadius.circular(VRadius.full),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-          child: Container(
-            height: 32,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(color: const Color(0x66808080), borderRadius: BorderRadius.circular(VRadius.full)),
-            child: child,
-          ),
-        ),
-      );
-
   Widget _circle(IconData icon, String label, VoidCallback onTap, {double iconSize = 24}) => Semantics(
         button: true,
         label: label,
@@ -343,7 +338,7 @@ class _PreviewWindowState extends State<_PreviewWindow> {
                   radius: BorderRadius.circular(23),
                   fill: const Color(0x4D808080),
                   blur: 50,
-                  child: Row(children: const [
+                  child: const Row(children: [
                     SizedBox(width: 12),
                     Icon(Icons.open_in_full_rounded, size: 20, color: Colors.white),
                     SizedBox(width: 12),
@@ -467,9 +462,29 @@ class _LoopVideoState extends State<_LoopVideo> {
   }
 }
 
+/// R32 whole-subject thumbnail: the poster contained, sharp, whole; the
+/// letterbox filled by the same poster blurred (inside the chip only).
+class _WholeSubject extends StatelessWidget {
+  final WallpaperTheme theme;
+  const _WholeSubject({required this.theme});
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        ImageFiltered(
+          imageFilter: ImageFilter.blur(sigmaX: 8, sigmaY: 8, tileMode: TileMode.clamp),
+          child: ThemePosterImage(theme: theme, fit: BoxFit.cover),
+        ),
+        ThemePosterImage(theme: theme, fit: BoxFit.contain, filterQuality: FilterQuality.high),
+      ],
+    );
+  }
+}
+
 /// Horizontal edge fade for thumbnail strips.
-class EdgeFadeHorizontal extends StatelessWidget {
-  final Widget child;
+class EdgeFadeHorizontal extends StatelessWidget {  final Widget child;
   const EdgeFadeHorizontal({super.key, required this.child});
 
   @override
