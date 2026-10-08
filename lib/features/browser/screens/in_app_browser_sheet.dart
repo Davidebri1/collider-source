@@ -324,7 +324,7 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
           padding: const EdgeInsets.all(40),
           child: GridView.builder(
             physics: const BouncingScrollPhysics(),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: cols, childAspectRatio: 0.9),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: cols, childAspectRatio: 0.9),
             itemCount: widget.tabs.length,
             itemBuilder: (_, i) {
               final t = widget.tabs[i];

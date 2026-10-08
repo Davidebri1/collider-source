@@ -47,7 +47,6 @@ class ContextualSideNav extends StatefulWidget {
   // Market props
   final String activeMarketCategory;
   final ValueChanged<String>? onSelectMarketCategory;
-  final ValueChanged<String>? onMarketSearch;
 
   // Themes props
   final String activeThemeSection;
@@ -90,7 +89,6 @@ class ContextualSideNav extends StatefulWidget {
     this.onSelectSmartGenBoardType,
     this.activeMarketCategory = 'prompts',
     this.onSelectMarketCategory,
-    this.onMarketSearch,
     this.activeThemeSection = 'gallery',
     this.onSelectThemeSection,
     this.browserTabs,
@@ -110,15 +108,12 @@ class ContextualSideNav extends StatefulWidget {
 }
 
 class _ContextualSideNavState extends State<ContextualSideNav> {
-  SideNavTab _chatTab = SideNavTab.global;
   final TextEditingController _chatSearchCtrl = TextEditingController();
   String _chatQuery = '';
-  final TextEditingController _marketSearchCtrl = TextEditingController();
 
   @override
   void dispose() {
     _chatSearchCtrl.dispose();
-    _marketSearchCtrl.dispose();
     super.dispose();
   }
 

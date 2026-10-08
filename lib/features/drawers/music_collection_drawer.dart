@@ -174,13 +174,13 @@ class _MusicCollectionDrawerState extends State<MusicCollectionDrawer> {
     final cur = p.current;
     return _panel(
       child: Stack(children: [
-        Positioned(
+        const Positioned(
           left: 48,
           top: 42,
           child: Row(children: [
-            const Icon(Icons.library_music_rounded, size: 28, color: Colors.white),
-            const SizedBox(width: 16),
-            const FText('Your Library', size: 20, height: 28, weight: FontWeight.w700),
+            Icon(Icons.library_music_rounded, size: 28, color: Colors.white),
+            SizedBox(width: 16),
+            FText('Your Library', size: 20, height: 28, weight: FontWeight.w700),
           ]),
         ),
         if (widget.onOpenMarket != null)

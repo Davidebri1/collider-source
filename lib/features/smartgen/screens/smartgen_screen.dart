@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
@@ -765,7 +764,7 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
   Widget _presentView(Size size) {
     final l = _visibleCards;
     final c = _store.byId(_sel) ?? (l.isEmpty ? null : l.first);
-    if (c == null) return Center(child: FText('No cards to present', size: 17, color: const Color(0xFF1C1C1E)));
+    if (c == null) return const Center(child: FText('No cards to present', size: 17, color: Color(0xFF1C1C1E)));
     return Stack(children: [
       Center(
         child: SizedBox(
@@ -873,7 +872,7 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
       decoration: BoxDecoration(color: const Color(0xFF8D8579), borderRadius: BorderRadius.circular(18), border: Border.all(color: const Color(0x1AFFFFFF))),
       padding: const EdgeInsets.fromLTRB(18, 40, 17, 0),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        FText('Column', size: 16, weight: FontWeight.w700),
+        const FText('Column', size: 16, weight: FontWeight.w700),
         const SizedBox(height: 16),
         SizedBox(
           width: 228,
@@ -884,7 +883,7 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
         const SizedBox(height: 36),
         Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            FText('Layer', size: 16, weight: FontWeight.w700),
+            const FText('Layer', size: 16, weight: FontWeight.w700),
             const SizedBox(height: 15),
             SizedBox(
               width: 118,
@@ -908,7 +907,7 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
           ),
         ]),
         const SizedBox(height: 30),
-        FText('Colour', size: 14, weight: FontWeight.w700),
+        const FText('Colour', size: 14, weight: FontWeight.w700),
         const SizedBox(height: 15),
         SizedBox(
           width: 228,
@@ -952,12 +951,12 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
           padding: const EdgeInsets.fromLTRB(14, 12, 12, 0),
           decoration: BoxDecoration(color: const Color(0xCCFFFFFF), borderRadius: BorderRadius.circular(8)),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            FText('Card', size: 14, color: ink),
+            const FText('Card', size: 14, color: ink),
             const SizedBox(height: 16),
             Row(children: [
               const Icon(Icons.crop_square_rounded, size: 14, color: ink),
               const SizedBox(width: 9),
-              FText('Size', size: 12, color: ink),
+              const FText('Size', size: 12, color: ink),
               const SizedBox(width: 6),
               const Icon(Icons.keyboard_arrow_down_rounded, size: 12, color: ink),
               const SizedBox(width: 12),
