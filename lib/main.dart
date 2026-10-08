@@ -4,8 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'core/theme/edge_fade.dart';
-import 'core/theme/living_stardust_overlay.dart';
 import 'core/vision/vision_kit.dart';
 import 'core/api/collider_api.dart';
 import 'core/audio/music_player.dart';
@@ -13,8 +11,7 @@ import 'features/music/floating_music.dart';
 import 'models/model_def.dart';
 import 'models/theme_def.dart';
 import 'models/ticker_item.dart';
-import 'features/ticker/widgets/model_pill.dart';
-import 'features/ticker/widgets/consensus_row.dart';
+
 import 'features/ticker/widgets/message_zoom_overlay.dart';
 import 'features/ticker/widgets/local_history_pane.dart';
 import 'features/prompt/floating_prompt.dart';
@@ -47,6 +44,7 @@ import 'features/mediagen/media_ticker.dart';
 import 'core/figma/figma_stage.dart';
 import 'core/figma/f_rail.dart';
 import 'features/ticker/widgets/figma_ticker.dart';
+import 'features/ticker/widgets/ticker_sheet.dart';
 import 'features/mediagen/figma_media_stage.dart';
 import 'core/figma/rail_specs.dart';
 import 'features/account/account_sheet.dart';
@@ -147,7 +145,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
   /// A send that cannot run on this link: one quiet line, the prompt goes
   /// back into the composer, nothing else changes (D59).
-  bool get _mediaShowing => _activeCategory.isMedia && (_mediaGens[_activeCategory]?.isNotEmpty ?? false);
 
   void _cannotRun(String prompt) {
     _restoreText.value = prompt;
@@ -196,6 +193,13 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   // Ticker items
   late List<TickerItem> _tickerItems;
 
+  /// R03: nine models in one view.
+  static const int _maxTickerRows = 9;
+
+  /// True once the R01 first-launch seed has filled [_tickerItems]. Distinguishes
+  /// "seeded with idle rows" from "genuinely empty" so a restored job can win.
+  bool _tickerSeeded = false;
+
   // Global History Sessions
   late List<ConversationHistorySession> _globalHistorySessions;
 
@@ -209,7 +213,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   String _smartGenView = 'cards';
   String _smartGenBoardType = 'kanban';
   String _marketCategory = 'discover';
-  String _marketSearchQuery = '';
   String _themeSection = 'gallery';
   String _filesCategory = 'all';
   String _chatSection = 'global';
@@ -293,6 +296,30 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     _tickerItems = [];
   }
 
+  /// One model per provider, so rows carry distinct colour and no two repeat.
+  List<String> _defaultModelIds() {
+    final seen = <String>{};
+    return <String>[
+      for (final m in ModelRoster.allModels.where((m) => !m.isMedia))
+        if (seen.add(m.provider)) m.id,
+    ];
+  }
+
+  /// R01: the first launch is the ticker.
+  ///
+  /// The ticker plane is gated on the rows being non-empty, and the rows only
+  /// ever filled from a finished job or a send - so on a first run the surface
+  /// the PRD names as the entry point did not exist at the entry point.
+  void _seedTickerFromDefaults(List<String> modelIds) {
+    if (_tickerItems.isNotEmpty) return;
+    _tickerItems = [
+      for (final id in modelIds)
+        if (ModelRoster.byId(id) case final m?)
+          TickerItem(modelDef: m, relativeTime: '', summary: '', conversation: const []),
+    ];
+    _tickerSeeded = true;
+  }
+
   String _ago(DateTime t) {
     final d = DateTime.now().difference(t);
     if (d.inMinutes < 1) return 'just now';
@@ -309,6 +336,16 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   Future<void> _boot() async {
     final ok = await ColliderApi.instance.loadRoster();
     if (!mounted) return;
+
+    // R01 seed, before either branch below can return: with no backend the
+    // roster is the bundled fallback, but the models exist either way and the
+    // ticker is the entry point whether or not a server answered.
+    setState(() {
+      final ids = _defaultModelIds().take(_maxTickerRows).toList();
+      _selByCat[ModelCategory.general] = ids;
+      _seedTickerFromDefaults(ids);
+    });
+
     if (!ok) {
       // No backend: the untouched start tab moves to a page that can be
       // framed (browser_urls.dart, v8.3 D41).
@@ -317,15 +354,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       }
       return;
     }
-    // Default selection: one model per provider, so every card carries a distinct colour.
-    final seen = <String>{};
-    final live = <String>[
-      for (final m in ModelRoster.allModels.where((m) => !m.isMedia))
-        if (seen.add(m.provider)) m.id,
-    ];
-    setState(() {
-      _selByCat[ModelCategory.general] = live.take(6).toList();
-    });
     await _reloadHistory(restoreLatest: true);
     // Deep links used by the launcher and the screenshot tour: ?ask=...&mode=research
     final qp = Uri.base.queryParameters;
@@ -372,7 +400,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         });
       }
       _localHistorySessions = local;
-      if (restoreLatest && hist.isNotEmpty && _tickerItems.isEmpty) _applyJob(hist.first, restored: true);
+      if (restoreLatest && hist.isNotEmpty && !_tickerSeeded) _applyJob(hist.first, restored: true);
     });
   }
 
@@ -499,13 +527,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     });
   }
 
-  void _newConversation() {
-    setState(() {
-      _closeAllPanes();
-      _expandedModelIds.clear();
-      _isComposerSummoned = true;
-    });
-  }
 
   // One answer open at a time (row 15): tapping a card opens it in the
   // middle; tapping it again, or the pane's close button, closes it.
@@ -526,56 +547,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       if (_expandedModelIds.contains(p.modelDef.id)) return p;
     }
     return null;
-  }
-
-  ModelPill _pill(TickerItem item, {required double elevation, bool pane = false, bool narrow = false}) => ModelPill(
-        narrow: narrow,
-        key: ValueKey('${pane ? 'pane' : 'card'}-${item.modelDef.id}'),
-        item: item,
-        pane: pane,
-        elevation: elevation,
-        isExpanded: _expandedModelIds.contains(item.modelDef.id),
-        onToggleExpand: () => _onTogglePill(item.modelDef.id),
-        onSendInlineReply: (reply) => _onSendInlineReply(item.modelDef.id, reply),
-        onOpenBrowser: () => _openBrowserForTab(_browserTabs.length > 1 ? _browserTabs[1].id : 'user_default'),
-        onTapMessage: (msg) => setState(() {
-          _zoomedMessage = msg;
-          _zoomedModelDef = item.modelDef;
-        }),
-        onOpenLocalHistory: () => setState(() => _localHistoryModel = item.modelDef),
-      );
-
-  Widget _buildTicker(List<TickerItem> pills, bool isMobile) {
-    final open = _openPill(pills);
-    Widget column() => EdgeFade(
-          fadeHeight: 16,
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (int i = 0; i < pills.length; i++) ...[
-                  if (i > 0) const SizedBox(height: 6),
-                  _pill(pills[i], elevation: pills.length <= 1 ? 1.0 : 1.0 - i / (pills.length - 1), narrow: open != null),
-                ],
-              ],
-            ),
-          ),
-        );
-    if (open == null) return column();
-    final h = (MediaQuery.of(context).size.height * (_isComposerSummoned ? 0.62 : 0.52) - 120).clamp(220.0, 520.0);
-    return SizedBox(
-      height: h,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SizedBox(width: isMobile ? 124 : 200, child: column()),
-          const SizedBox(width: 6),
-          Expanded(child: _pill(open, elevation: 1, pane: true)),
-        ],
-      ),
-    );
   }
 
   Future<void> _onSendInlineReply(String modelId, String text) async {
@@ -1036,14 +1007,17 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       onSelectSmartGenBoardType: (b) => setState(() => _smartGenBoardType = b),
       activeMarketCategory: _marketCategory,
       onSelectMarketCategory: (c) => setState(() => _marketCategory = c),
-      onMarketSearch: (q) => setState(() => _marketSearchQuery = q),
       activeThemeSection: _themeSection,
       onSelectThemeSection: (s) {
         setState(() {
           _themeSection = s;
-          if (s == 'gallery') _activeDrawer = 'themes';
-          else if (s == 'premium') _activeDrawer = 'premium';
-          else if (s == 'music') _activeDrawer = 'music';
+          if (s == 'gallery') {
+            _activeDrawer = 'themes';
+          } else if (s == 'premium') {
+            _activeDrawer = 'premium';
+          } else if (s == 'music') {
+            _activeDrawer = 'music';
+          }
         });
       },
       browserTabs: _browserTabs,
@@ -1088,6 +1062,26 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     final activePills = categoryPills;
     final isMobile = MediaQuery.of(context).size.width < 768;
 
+    // The ticker is the bottom window: it sits on the dock, and the composer
+    // sits on the ticker rather than through it. One height, two consumers.
+    const double dockTop = 74;
+    final viewportH = MediaQuery.of(context).size.height;
+    final tickerVisible = !_browserOpen &&
+        !(isMobile && _isMobileSideNavOpen) &&
+        !const {
+          'premium',
+          'themes',
+          'apps',
+          'smartgen',
+          'market',
+          'files',
+          'consensus',
+          'music',
+        }.contains(_activeDrawer) &&
+        !_activeCategory.isMedia &&
+        activePills.isNotEmpty;
+    final tickerH = tickerVisible ? TickerSheet.heightFor(viewportH) : 0.0;
+
     return Scaffold(
       body: Stack(
         fit: StackFit.expand,
@@ -1113,12 +1107,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             ),
           ),
 
-          // Ambient drifting stardust particles in Plane 0
-          const Positioned.fill(
-            child: IgnorePointer(
-              child: LivingStardustOverlay(),
-            ),
-          ),
+          // Ambient stardust overlay removed: D8/R36 both say no particles, and a
+          // drifting field is a screensaver, not visionOS.
           ],
 
           // Base ambient dim. Overlays and work surfaces bring their own VScrim
@@ -1133,49 +1123,33 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             ),
           ),
           // ================= PLANE 1: RESTING WORKSPACE =================
-          // v8.4 scaled-frame method: the model ticker is wechat CHAT 2013:75
-          // at its own size, scaled as one unit (map row 15).
-          if (!_browserOpen && !(isMobile && _isMobileSideNavOpen) && !const {'premium', 'themes', 'apps', 'smartgen', 'market', 'files', 'consensus', 'music'}.contains(_activeDrawer) && !_activeCategory.isMedia && activePills.isNotEmpty)
-            Positioned.fill(
+          // The ticker: bottom window, max 40% height, summaries in the left
+          // 50%. Drawn at portrait size rather than scaling the 2610x1468
+          // wechat scene, which collapsed to a ~150pt sliver at 430pt wide.
+          if (tickerVisible)
+            Positioned(
+              left: TickerSheet.gutter,
+              right: TickerSheet.gutter,
+              bottom: dockTop + TickerSheet.gutter,
+              height: tickerH,
               child: Builder(builder: (context) {
                 final open = _openPill(activePills);
-                return FigmaStage(
-                  frame: Row15.frame,
-                  cropWidth: Row15.cropWidth,
-                  center: Row15.center,
-                  children: [
-                    // "Chat" window title 59:464 (643,282).
-                    const Positioned(left: 643, top: 282, child: FText('Answers', size: 28, height: 33, weight: FontWeight.w700)),
-                    Positioned.fromRect(
-                      rect: Row15.leftWin,
-                      child: TickerColumnWindow(
-                        items: activePills,
-                        openId: open?.modelDef.id,
-                        joined: open != null,
-                        onOpen: _onTogglePill,
-                        consensusTitle: _consensusRatio.contains('Consensus') ? _consensusRatio : '$_consensusRatio Consensus',
-                        consensusLine: _isConsensusGenerating ? 'Comparing answers' : _consensusSummary,
-                        onConsensus: () => setState(() => _activeDrawer = 'consensus'),
-                      ),
-                    ),
-                    if (open != null)
-                      Positioned(
-                        left: Row15.midWin.left,
-                        top: Row15.midWin.top,
-                        width: 791,
-                        height: 739,
-                        child: TickerAnswerWindow(
-                          key: ValueKey('answer-${open.modelDef.id}'),
-                          item: open,
-                          onClose: () => _onTogglePill(open.modelDef.id),
-                          onReply: (t) => _onSendInlineReply(open.modelDef.id, t),
-                          onTapMessage: (msg) => setState(() {
-                            _zoomedMessage = msg;
-                            _zoomedModelDef = open.modelDef;
-                          }),
-                        ),
-                      ),
-                  ],
+                return TickerSheet(
+                  items: activePills,
+                  openId: open?.modelDef.id,
+                  onOpen: _onTogglePill,
+                  onReply: (t) {
+                    final o = open;
+                    if (o != null) _onSendInlineReply(o.modelDef.id, t);
+                  },
+                  onTapMessage: (msg) => setState(() {
+                    _zoomedMessage = msg;
+                    _zoomedModelDef = open!.modelDef;
+                  }),
+                  consensusTitle: _consensusRatio.contains('Consensus') ? _consensusRatio : '$_consensusRatio Consensus',
+                  consensusLine: _isConsensusGenerating ? 'Comparing responses' : _consensusSummary,
+                  onConsensus: () => setState(() => _activeDrawer = 'consensus'),
+                  onClose: open == null ? null : () => _onTogglePill(open.modelDef.id),
                 );
               }),
             ),
@@ -1184,12 +1158,13 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             Positioned.fill(child: _buildMediaStage()),
 
           // Map row 8: the composer (Figma 1-240, 760 x 116) scaled as one unit
-          // to the device width, its bottom edge on the dock's top (74 px).
+          // to the device width. It rests on the dock, and steps up onto the
+          // ticker when the ticker is on screen - never through it.
           if (!_browserOpen && !(isMobile && _isMobileSideNavOpen) && !const {'premium', 'themes', 'apps', 'smartgen', 'market', 'files', 'consensus', 'music'}.contains(_activeDrawer))
             Positioned(
               left: 0,
               right: 0,
-              bottom: 74,
+              bottom: tickerVisible ? dockTop + TickerSheet.gutter + tickerH + 10 : dockTop,
               child:
               FloatingPrompt(
                 summoned: _isComposerSummoned,
