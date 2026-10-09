@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../../models/ticker_item.dart';
-import '../../../core/vision/vision_kit.dart';
+import '../../models/ticker_item.dart';
+import '../../core/vision/vision_kit.dart';
 
 /// REQ-13 Global History Drawer — notes-list window (Vision OS Design System
 /// 417:8104 "All iCloud"): large title, recessed search capsule, rows with
