@@ -322,24 +322,28 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
         const cols = 4;
         return Padding(
           padding: const EdgeInsets.all(40),
-          child: GridView.builder(
-            physics: const BouncingScrollPhysics(),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: cols, childAspectRatio: 0.9),
-            itemCount: widget.tabs.length,
-            itemBuilder: (_, i) {
-              final t = widget.tabs[i];
-              return VTile(
-                selected: t.id == _activeTabId,
-                onTap: () => _switchTab(t.id),
-                aspect: 4 / 3,
-                title: t.title,
-                subtitle: t.isModelAssigned ? (t.modelName ?? 'Model') : _host(t.url),
-                media: Container(
-                  color: VColors.fillCell,
-                  child: Icon(t.isModelAssigned ? Icons.terminal_rounded : Icons.person_outline_rounded, size: 26, color: VColors.textSecondary),
-                ),
-              );
-            },
+          // Tab cards dissolve into the page glass at both ends.
+          child: EdgeFade(
+            fadeHeight: 28,
+            child: GridView.builder(
+              physics: const BouncingScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: cols, childAspectRatio: 0.9),
+              itemCount: widget.tabs.length,
+              itemBuilder: (_, i) {
+                final t = widget.tabs[i];
+                return VTile(
+                  selected: t.id == _activeTabId,
+                  onTap: () => _switchTab(t.id),
+                  aspect: 4 / 3,
+                  title: t.title,
+                  subtitle: t.isModelAssigned ? (t.modelName ?? 'Model') : _host(t.url),
+                  media: Container(
+                    color: VColors.fillCell,
+                    child: Icon(t.isModelAssigned ? Icons.terminal_rounded : Icons.person_outline_rounded, size: 26, color: VColors.textSecondary),
+                  ),
+                );
+              },
+            ),
           ),
         );
       },
