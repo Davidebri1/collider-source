@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'core/vision/vision_kit.dart';
+import 'core/kit/collider_kit.dart';
 import 'core/api/collider_api.dart';
 import 'core/audio/music_player.dart';
 import 'features/music/floating_music.dart';
@@ -42,8 +44,6 @@ import 'features/mediagen/gen_settings.dart';
 import 'features/mediagen/gen_options_sheet.dart';
 import 'features/mediagen/media_ticker.dart';
 import 'core/figma/figma_stage.dart';
-import 'core/figma/f_rail.dart';
-import 'features/ticker/widgets/figma_ticker.dart';
 import 'features/ticker/widgets/ticker_sheet.dart';
 import 'features/mediagen/figma_media_stage.dart';
 import 'core/figma/rail_specs.dart';
@@ -910,55 +910,50 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     }
   }
 
-  /// v8.4: the side tab bar is the Figma frame's own tab bar, at its own
-  /// position and size in the frame of the screen it is on, scaled with it.
-  RailSpec? _railSpec() {
-    const wechat = (inset: Offset(14.6, 17.6), pitch: 69.0, tab: 44.0, bottomPad: 20.4);
-    switch (_currentActiveSurface) {
-      case ActiveWorkSurface.chat:
-        if (_activeCategory.isMedia && (_mediaGens[_activeCategory]?.isNotEmpty ?? false)) {
-          return (frame: Row13.frame, crop: Row13.cropWidth, center: Row13.center, rail: Row13.rail, inset: wechat.inset, pitch: wechat.pitch, tab: wechat.tab, bottomPad: wechat.bottomPad);
-        }
-        return (frame: Row15.frame, crop: Row15.cropWidth, center: Row15.center, rail: Row15.rail, inset: wechat.inset, pitch: wechat.pitch, tab: wechat.tab, bottomPad: wechat.bottomPad);
-      default:
-        return RailSpecs.of(_currentActiveSurface);
-    }
-  }
-
-  Widget _buildRailLayer() {
-    final spec = _railSpec();
-    if (spec == null) return const SizedBox.shrink();
+  Widget _buildRailLayer(TickerLayout layout) {
     final surface = _currentActiveSurface;
     final entries = sideRailEntries(surface);
-    final key = _railKey();
-    return FigmaStage(
-      frame: spec.frame,
-      cropWidth: spec.crop,
-      center: spec.center,
-      children: [
-        Positioned(
-          left: spec.rail.left,
-          top: spec.rail.top,
-          child: FRail(
-            key: ValueKey(surface),
-            width: spec.rail.width,
-            tabInset: spec.inset,
-            pitch: spec.pitch,
-            tab: spec.tab,
-            bottomPad: spec.bottomPad,
-            iconSize: spec.tab * 0.55,
-            icons: [for (final e in entries) e.icon],
-            labels: [for (final e in entries) e.label],
-            active: entries.indexWhere((e) => e.key == key),
-            onSelect: (i) => _onRailSelect(entries[i].key),
-          ),
+    if (entries.isEmpty) return const SizedBox.shrink();
+    // Drawn natively at portrait size. It used to be an FRail positioned inside
+    // a FigmaStage scaled from the 2610x1468 landscape scene, which collapsed it
+    // to a ~22pt sliver with iconSize = tab * 0.55 - a third of the dock's
+    // controls beside them, which is why it read as a toy. The rail is a nav,
+    // not a scaled screenshot, so it is sized against the dock like one.
+    //
+    // It also sits in the field ABOVE the lower group, not centred in the
+    // screen. Centred, its bottom edge lands under the composer as soon as the
+    // screen is shorter than 932 - at 393x852 the rail ran to 553pt against a
+    // composer top of 471pt and covered the Consensus row. The rail is nav for
+    // the content field; the ticker, composer and dock own the bottom.
+    final viewport = MediaQuery.of(context).size;
+    const top = TickerSheet.gutter;
+    final floor = layout.composer.height > 0 && !layout.composer.isEmpty
+        ? layout.composer.top
+        : (layout.summaries.height > 0 ? layout.summaries.top : viewport.height - TickerSheet.dockInset);
+    final band = math.max(0.0, floor - TickerSheet.gutter - top);
+    // Capsule chrome: VOrnament pads 5 a side, items are 6 apart.
+    const chrome = 10.0, pitch = 6.0;
+    final n = entries.length;
+    final fit = (band - chrome - (n - 1) * pitch) / n;
+    final size = fit < Kit.controlCircle ? math.max(28.0, fit) : Kit.controlCircle;
+    return Padding(
+      padding: const EdgeInsets.only(left: TickerSheet.gutter, top: top),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: VOrnamentRail(
+          key: ValueKey(surface),
+          size: size,
+          items: [for (final e in entries) VRailItem(e.icon, e.label)],
+          active: entries.indexWhere((e) => e.key == _railKey()),
+          onSelect: (i) => _onRailSelect(entries[i].key),
         ),
-      ],
+      ),
     );
   }
 
   Widget _buildMediaStage() => MediaStageContent(
         key: ValueKey('media-${_activeCategory.name}'),
+        field: MediaStageLayout.forField(MediaQuery.of(context).size).field,
         items: _mediaGens[_activeCategory]!,
         onRemix: (p) => _restoreText.value = p,
         onNotice: _notice,
@@ -1065,7 +1060,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     // The ticker is the bottom window: it sits on the dock, and the composer
     // sits on the ticker rather than through it. One height, two consumers.
     const double dockTop = 74;
-    final viewportH = MediaQuery.of(context).size.height;
     final tickerVisible = !_browserOpen &&
         !(isMobile && _isMobileSideNavOpen) &&
         !const {
@@ -1080,7 +1074,15 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         }.contains(_activeDrawer) &&
         !_activeCategory.isMedia &&
         activePills.isNotEmpty;
-    final tickerH = tickerVisible ? TickerSheet.heightFor(viewportH) : 0.0;
+    final tickerOpen = tickerVisible && _openPill(activePills) != null;
+    // One layout resolves the window and the composer together. Neither picks
+    // its own box, which is what let the composer become a screen-wide pill.
+    final tickerLayout = TickerSheet.layoutFor(
+      MediaQuery.of(context).size,
+      expanded: tickerOpen,
+      dockTop: dockTop,
+    );
+    final tickerH = tickerVisible ? tickerLayout.summaries.height : 0.0;
 
     return Scaffold(
       body: Stack(
@@ -1128,43 +1130,45 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // wechat scene, which collapsed to a ~150pt sliver at 430pt wide.
           if (tickerVisible)
             Positioned(
-              left: TickerSheet.gutter,
-              right: TickerSheet.gutter,
+              left: 0,
+              right: 0,
               bottom: dockTop + TickerSheet.gutter,
               height: tickerH,
-              child: Builder(builder: (context) {
-                final open = _openPill(activePills);
-                return TickerSheet(
-                  items: activePills,
-                  openId: open?.modelDef.id,
-                  onOpen: _onTogglePill,
-                  onReply: (t) {
-                    final o = open;
-                    if (o != null) _onSendInlineReply(o.modelDef.id, t);
-                  },
-                  onTapMessage: (msg) => setState(() {
-                    _zoomedMessage = msg;
-                    _zoomedModelDef = open!.modelDef;
-                  }),
-                  consensusTitle: _consensusRatio.contains('Consensus') ? _consensusRatio : '$_consensusRatio Consensus',
-                  consensusLine: _isConsensusGenerating ? 'Comparing responses' : _consensusSummary,
-                  onConsensus: () => setState(() => _activeDrawer = 'consensus'),
-                  onClose: open == null ? null : () => _onTogglePill(open.modelDef.id),
-                );
-              }),
+              // The window is narrower than the screen, so it is centred on
+              // the canvas rather than pinned to the gutter.
+              child: Center(child: TickerSheet(
+                items: activePills,
+                openId: _openPill(activePills)?.modelDef.id,
+                onOpen: _onTogglePill,
+                onReply: (t) {
+                  final o = _openPill(activePills);
+                  if (o != null) _onSendInlineReply(o.modelDef.id, t);
+                },
+                onTapMessage: (msg) => setState(() {
+                  _zoomedMessage = msg;
+                  _zoomedModelDef = _openPill(activePills)?.modelDef;
+                }),
+                consensusTitle: _consensusRatio.contains('Consensus') ? _consensusRatio : '$_consensusRatio Consensus',
+                consensusLine: _isConsensusGenerating ? 'Comparing responses' : _consensusSummary,
+                onConsensus: () => setState(() => _activeDrawer = 'consensus'),
+                onClose: _openPill(activePills) == null ? null : () => _onTogglePill(_openPill(activePills)!.modelDef.id),
+              )),
             ),
           // Map row 13: the media ticker (wechat IMAGE 2013:71) at its own size.
           if (!_browserOpen && !(isMobile && _isMobileSideNavOpen) && !const {'premium', 'themes', 'apps', 'smartgen', 'market', 'files', 'consensus', 'music'}.contains(_activeDrawer) && _activeCategory.isMedia && (_mediaGens[_activeCategory]?.isNotEmpty ?? false))
             Positioned.fill(child: _buildMediaStage()),
 
-          // Map row 8: the composer (Figma 1-240, 760 x 116) scaled as one unit
-          // to the device width. It rests on the dock, and steps up onto the
-          // ticker when the ticker is on screen - never through it.
+          // Map row 8: the composer is a bar on the window it types into. Collapsed it
+          // rides on the summaries window; expanded it rides on the thread. It is
+          // never wider than that window and never wider than the screen - the
+          // previous full-width pill was the single largest thing wrong with the
+          // composition.
           if (!_browserOpen && !(isMobile && _isMobileSideNavOpen) && !const {'premium', 'themes', 'apps', 'smartgen', 'market', 'files', 'consensus', 'music'}.contains(_activeDrawer))
             Positioned(
-              left: 0,
-              right: 0,
-              bottom: tickerVisible ? dockTop + TickerSheet.gutter + tickerH + 10 : dockTop,
+              left: tickerLayout.composer.left,
+              bottom: MediaQuery.of(context).size.height - tickerLayout.composer.bottom,
+              width: tickerLayout.composer.width,
+              height: tickerLayout.composer.height,
               child:
               FloatingPrompt(
                 summoned: _isComposerSummoned,
@@ -1445,7 +1449,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               child: VScrim(onTap: () => setState(() => _isMobileSideNavOpen = false)),
             ),
           // The tab bar ornament: the screen's own Figma tab bar (v8.4).
-          if (_railVisible) Positioned.fill(child: _buildRailLayer()),
+          if (_railVisible) Positioned.fill(child: _buildRailLayer(tickerLayout)),
           if (_railVisible && _isMobileSideNavOpen && _currentActiveSurface == ActiveWorkSurface.chat)
             Positioned(
               left: 10,

@@ -173,4 +173,22 @@ class Kit {
 
   static double tickerWidth(Size screen) =>
       screen.width < dockWidth ? screen.width : dockWidth;
+
+  // ────────────────────────────────────────────── edge fades and focus reel ──
+  /// WCH Window.pdf: the exported chat row is 300x88, radius 20, sitting at a
+  /// 6px pitch inside the panel. The reel keeps that pitch wherever it is used
+  /// so the same component reads identically inset or full height.
+  static const double rowBody = 88;
+  static const double rowPitch = 94;
+
+  /// Dissolve height at a panel edge. Long enough to read as a fade rather
+  /// than a cut, short enough that the first and last row are still readable.
+  static const double focusFade = 26;
+
+  /// Default distance, in slots, at which a reel row is fully out of the band.
+  static const double focusReach = 2.2;
+
+  /// How far a reel row shrinks and dims once it is fully out of the band.
+  static const double focusMinScale = 0.92;
+  static const double focusMinOpacity = 0.45;
 }

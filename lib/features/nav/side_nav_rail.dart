@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/audio/music_player.dart';
+import '../../core/kit/collider_kit.dart';
 import '../../core/vision/vision_kit.dart';
 import 'contextual_side_nav.dart';
 
@@ -76,11 +77,15 @@ class SideNavRail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final entries = sideRailEntries(surface);
+    // The rail is a nav, not an ornament: its targets are the same controls as
+    // the dock's. At 36 they read as half-size decoration next to a 44pt dock,
+    // which is why the rail looked laughably small - the dock was the reference
+    // and the rail was not sized against it.
     return AnimatedSwitcher(
       duration: VMotion.base,
       child: VOrnamentRail(
         key: ValueKey(surface),
-        size: compact ? 36 : 40,
+        size: compact ? Kit.controlCircle : Kit.controlCircle,
         items: [for (final e in entries) VRailItem(e.icon, e.label)],
         active: entries.indexWhere((e) => e.key == activeKey),
         onSelect: (i) => onSelect(entries[i].key),

@@ -1,32 +1,91 @@
-// Map row 13 (Media Gen Ticker Layout) — v8.4: a straight copy of wechat
-// IMAGE 2013:71 at its own size (scene 2610 x 1468), scaled as one unit.
-// Media window = Rectangle 22 (638,308, 1285 x 754); action tab bar 36:1867
-// (1102,1030, 358 x 76); window controls (pager) 35:1826; side panel 59:498
-// (1943,314, 348 x 748) with the "likes" avatar grid (-> the models that ran)
-// and the "comments" cards (-> each generation: model, time, prompt).
+// Map row 13 (Media Gen Ticker Layout) — wechat IMAGE 2013:71.
+//
+// This used to be a FigmaStage: the 2610x1468 landscape scene scaled as one
+// unit, cropped to the tab bar and centred. At 430pt that scale is 0.2456, so
+// the 76pt action bar came out as 18.7pt circles and the 348pt side panel as
+// an 85pt sliver, and the whole thing was Positioned.fill under a composer and
+// a ticker - three layers of UI in the same space. It is the same
+// scaled-landscape bug the ticker and the rail had.
+//
+// Drawn natively instead. The reference's OWN boxes keep their reference
+// ratios: the media window holds its 1285x754 aspect, the action bar stays
+// centred under that window, the pager stays under the bar. What changes is
+// that the controls are real size - Kit.controlCircle, the same as the dock -
+// instead of 0.2456 of themselves.
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/figma/figma_stage.dart';
+import '../../core/kit/collider_kit.dart';
+import '../../core/vision/vision_kit.dart';
 import '../../core/files/file_store.dart';
 import '../ticker/widgets/figma_ticker.dart' show ModelDisc;
 import 'media_ticker.dart' show MediaGeneration;
 import 'media_view.dart';
 
-class Row13 {
-  static const frame = Size(2610, 1468);
-  // Crop: tab bar (540) .. side panel right edge (2291), no extra margin.
-  static const cropWidth = 1751.0;
-  static const center = Offset(1415.5, 734);
-  static const rail = Rect.fromLTWH(540, 624, 76, 220);
-}
-
 String _hm(DateTime t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
+/// Geometry for row 13, resolved against the field the host actually has.
+///
+/// The host hands down the rectangle above the composer, so the media window
+/// and the list below it can never grow into the ticker - the collision was
+/// structural, not a z-order accident.
+class MediaStageLayout {
+  const MediaStageLayout(this.field);
+
+  final Rect field;
+
+  /// Air around the group. Same clause as the ticker: visionOS floats.
+  static const double gutter = 12;
+
+  /// The reference media window is 1285 x 754.
+  static const double aspect = 1285 / 754;
+
+  /// Action pill + pager + the minimum the runs/prompts pane needs to read.
+  static const double _rest = 190;
+
+  double get mediaW => field.width;
+
+  /// The reference aspect, then whatever is left after the rest of the group
+  /// has taken its share - so on a short screen the list shrinks, not the media.
+  double get mediaH => math.min(mediaW / aspect, math.max(120.0, field.height - _rest));
+
+  double get barH => Kit.controlCircle + 12;
+
+  Rect get media => Rect.fromLTWH(field.left, field.top, mediaW, mediaH);
+
+  Rect get bar {
+    const w = Kit.controlCircle * 4 + 6 * 3 + 12;
+    return Rect.fromLTWH(field.center.dx - w / 2, media.bottom + 10, w, barH);
+  }
+
+  Rect get pager {
+    const h = 12.0;
+    return Rect.fromLTWH(field.left, bar.bottom + 8, field.width, h);
+  }
+
+  Rect get runs {
+    final top = pager.bottom + 10;
+    return Rect.fromLTWH(field.left, top, field.width, math.max(0.0, field.bottom - top));
+  }
+
+  static MediaStageLayout forField(Size viewport, {double floorTop = 0}) {
+    final w = math.min(Kit.dockWidth, viewport.width);
+    final h = math.min(viewport.height * 0.40, w / 0.7198);
+    final tickerTop = viewport.height - (74 + gutter) - h;
+    final floor = floorTop > 0 ? floorTop : tickerTop - 10 - 52; // composer
+    return MediaStageLayout(
+      Rect.fromLTRB(gutter, gutter, viewport.width - gutter, math.max(gutter, floor - gutter)),
+    );
+  }
+}
+
 class MediaStageContent extends StatefulWidget {
-  const MediaStageContent({super.key, required this.items, required this.onRemix, required this.onNotice, required this.onOptions});
+  const MediaStageContent({super.key, required this.field, required this.items, required this.onRemix, required this.onNotice, required this.onOptions});
+  final Rect field;
   final List<MediaGeneration> items;
   final ValueChanged<String> onRemix;
   final void Function(String) onNotice;
@@ -49,156 +108,161 @@ class _MediaStageContentState extends State<MediaStageContent> {
     widget.onNotice(note ?? 'Saved to Files');
   }
 
-  Widget _action(IconData icon, String label, VoidCallback? onTap) => Semantics(
-        button: true,
-        label: label,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: onTap,
-          child: SizedBox(width: 44, height: 44, child: Icon(icon, size: 26, color: Colors.white.withOpacity(onTap == null ? 0.4 : 1))),
-        ),
-      );
-
   @override
   Widget build(BuildContext context) {
     final items = widget.items;
+    if (items.isEmpty) return const SizedBox.shrink();
     final i = _i.clamp(0, items.length - 1);
     final g = items[i];
-    return FigmaStage(
-      frame: Row13.frame,
-      cropWidth: Row13.cropWidth,
-      center: Row13.center,
-      children: [
-        // Media window (Rectangle 22).
-        Positioned(
-          left: 638,
-          top: 308,
-          width: 1285,
-          height: 754,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(46),
+    final L = MediaStageLayout(widget.field);
+
+    return Stack(children: [
+      // Media window (Rectangle 22), holding its reference aspect.
+      Positioned.fromRect(
+        rect: L.media,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: DecoratedBox(
+            position: DecorationPosition.foreground,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: const Color(0x4DFFFFFF), width: 1),
+            ),
             child: g.pending || g.url == null
-                ? const FGlass(child: Center(child: SizedBox(width: 60, height: 60, child: CircularProgressIndicator(strokeWidth: 5, color: Colors.white))))
+                ? const FGlass(child: Center(child: SizedBox(width: 32, height: 32, child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white))))
                 : GenMediaView(key: ValueKey(g.url!.hashCode), url: g.url!, kind: g.kind),
           ),
         ),
-        // Action tab bar 36:1867: forward / heart / download / comment ->
-        // Remix / Options / Save to Files / Copy prompt.
-        Positioned(
-          left: 1102,
-          top: 1030,
-          width: 358,
-          height: 76,
-          child: FGlass(
-            radius: BorderRadius.circular(38),
-            stroke: const Color(0x66FFFFFF),
-            strokeWidth: 1.4,
-            child: Stack(children: [
-              Positioned(left: 22, top: 15, child: _action(Icons.reply_rounded, 'Remix', () => widget.onRemix(g.prompt))),
-              Positioned(left: 115, top: 15, child: _action(Icons.tune_rounded, 'Options', widget.onOptions)),
-              Positioned(left: 199, top: 15, child: _action(Icons.download_rounded, 'Save to Files', g.url == null ? null : () => _save(g))),
-              Positioned(left: 282, top: 15, child: _action(Icons.content_copy_rounded, 'Copy prompt', () {
-                Clipboard.setData(ClipboardData(text: g.prompt));
-                widget.onNotice('Copied');
-              })),
-            ]),
+      ),
+
+      // Action bar 36:1867 - Remix / Options / Save to Files / Copy prompt.
+      // Centred under the media window, at real control size.
+      Positioned.fromRect(
+        rect: L.bar,
+        child: FGlass(
+          radius: BorderRadius.circular(999),
+          stroke: const Color(0x66FFFFFF),
+          strokeWidth: 1,
+          shadow: Kit.shadow(3),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              VCircleButton(icon: Icons.reply_rounded, tooltip: 'Remix', size: Kit.controlCircle, onTap: () => widget.onRemix(g.prompt)),
+              VCircleButton(icon: Icons.tune_rounded, tooltip: 'Options', size: Kit.controlCircle, onTap: widget.onOptions),
+              VCircleButton(icon: Icons.download_rounded, tooltip: 'Save to Files', size: Kit.controlCircle, onTap: g.url == null ? null : () => _save(g)),
+              VCircleButton(
+                icon: Icons.content_copy_rounded,
+                tooltip: 'Copy prompt',
+                size: Kit.controlCircle,
+                onTap: () {
+                  Clipboard.setData(ClipboardData(text: g.prompt));
+                  widget.onNotice('Copied');
+                },
+              ),
+            ],
           ),
         ),
-        // Window controls 35:1826 -> pager: dot + bar (centre 1278).
-        Positioned(
-          left: 1168,
-          top: 1146,
-          child: Row(children: [
+      ),
+
+      // Window controls 35:1826 -> the pager.
+      Positioned.fromRect(
+        rect: L.pager,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
             for (var k = 0; k < items.length; k++) ...[
-              if (k > 0) const SizedBox(width: 10),
+              if (k > 0) const SizedBox(width: 8),
               GestureDetector(
                 onTap: () => setState(() => _i = k),
                 child: Container(
-                  width: k == i ? 133 : 12,
-                  height: 12,
-                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.6), borderRadius: BorderRadius.circular(6)),
+                  width: k == i ? 28 : 8,
+                  height: 8,
+                  decoration: BoxDecoration(color: Colors.white.withOpacity(k == i ? 0.85 : 0.35), borderRadius: BorderRadius.circular(4)),
                 ),
               ),
             ],
-          ]),
+          ],
         ),
-        // Side panel 59:498.
-        Positioned(
-          left: 1943,
-          top: 314,
-          width: 348,
-          height: 748,
-          child: FGlass(
-            radius: BorderRadius.circular(46),
-            stroke: const Color(0x66FFFFFF),
-            child: Stack(children: [
-              // "Likes 16" -> Models N.
-              const Positioned(left: 22, top: 32, child: FText('Models', size: 20, height: 24, weight: FontWeight.w700)),
-              Positioned(left: 100, top: 32, child: FText('${items.length}', size: 16, height: 24, weight: FontWeight.w700, opacity: 0.4)),
-              // 37 px avatars, 31.6 px apart (overlapping), rows at 71 / 114.
-              for (var k = 0; k < items.length && k < 18; k++)
-                Positioned(
-                  left: 22 + (k % 9) * 31.6,
-                  top: 71 + (k ~/ 9) * 43,
-                  child: GestureDetector(
-                    onTap: () => setState(() => _i = k),
-                    child: Container(
-                      decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: k == i ? Colors.white : const Color(0x00000000), width: 2)),
-                      child: ModelDisc(color: items[k].model.providerColor, label: items[k].model.label, size: 37),
+      ),
+
+      // Side panel 59:498 -> in portrait it is a window under the media, not a
+      // column beside it: "likes" (the models that ran) then "comments" (each
+      // generation). Same content, same order, on the axis that has room.
+      Positioned.fromRect(
+        rect: L.runs,
+        child: FGlass(
+          radius: BorderRadius.circular(28),
+          stroke: const Color(0x4DFFFFFF),
+          shadow: Kit.shadow(3),
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              const FText('Models', size: 17, height: 22, weight: FontWeight.w700),
+              const SizedBox(width: 8),
+              FText('${items.length}', size: 15, height: 22, weight: FontWeight.w700, opacity: 0.4),
+            ]),
+            const SizedBox(height: 10),
+            // 37px discs, 31.6 apart (overlapping), wrapping - the reference's
+            // own avatar cluster, wrapped instead of clipped.
+            SizedBox(
+              height: 40,
+              child: ClipRect(
+                child: Row(children: [
+                  for (var k = 0; k < items.length; k++)
+                    GestureDetector(
+                      onTap: () => setState(() => _i = k),
+                      child: Container(
+                        margin: EdgeInsets.only(right: k == items.length - 1 ? 0 : -5),
+                        decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: k == i ? Colors.white : Colors.transparent, width: 2)),
+                        child: ModelDisc(color: items[k].model.providerColor, label: items[k].model.label, size: 37),
+                      ),
                     ),
-                  ),
-                ),
-              // "Comments 2" -> the generations.
-              const Positioned(left: 22, top: 192, child: FText('Prompts', size: 20, height: 24, weight: FontWeight.w700)),
-              Positioned(left: 108, top: 192, child: FText('${items.length}', size: 16, height: 24, weight: FontWeight.w700, opacity: 0.4)),
-              Positioned(
-                left: 0,
-                top: 238,
-                right: 0,
-                bottom: 0,
-                child: ListView(
-                  padding: const EdgeInsets.only(bottom: 26),
-                  physics: const BouncingScrollPhysics(),
-                  children: [
-                    for (var k = 0; k < items.length; k++)
-                      GestureDetector(
-                        onTap: () => setState(() => _i = k),
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: 22, right: 22, bottom: 26),
+                ]),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(children: [
+              const FText('Prompts', size: 17, height: 22, weight: FontWeight.w700),
+              const SizedBox(width: 8),
+              FText('${items.length}', size: 15, height: 22, weight: FontWeight.w700, opacity: 0.4),
+            ]),
+            const SizedBox(height: 8),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.only(bottom: 16),
+                physics: const BouncingScrollPhysics(),
+                children: [
+                  for (var k = 0; k < items.length; k++)
+                    GestureDetector(
+                      onTap: () => setState(() => _i = k),
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: FGlass(
+                          radius: BorderRadius.circular(18),
+                          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
                           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            SizedBox(
-                              height: 40,
-                              child: Row(children: [
-                                const SizedBox(width: 2),
-                                ModelDisc(color: items[k].model.providerColor, label: items[k].model.label, size: 40),
-                                const SizedBox(width: 9),
-                                Expanded(child: FText(items[k].model.label, size: 17, height: 24, weight: FontWeight.w700)),
-                                FText(_hm(items[k].at), size: 16, height: 24, weight: FontWeight.w700, opacity: 0.6),
-                              ]),
-                            ),
-                            const SizedBox(height: 14),
-                            FGlass(
-                              width: 304,
-                              radius: BorderRadius.circular(20),
-                              padding: const EdgeInsets.fromLTRB(18, 18, 27, 17),
-                              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                if (items[k].basis.isNotEmpty) ...[
-                                  FText(items[k].basis, size: 12, height: 15, weight: FontWeight.w700, opacity: 0.6),
-                                  const SizedBox(height: 12),
-                                ],
-                                FText(items[k].prompt, size: 15, height: 26, weight: FontWeight.w700, maxLines: 4),
-                              ]),
-                            ),
+                            Row(children: [
+                              ModelDisc(color: items[k].model.providerColor, label: items[k].model.label, size: 28),
+                              const SizedBox(width: 10),
+                              Expanded(child: FText(items[k].model.label, size: 15, height: 20, weight: FontWeight.w700, maxLines: 1)),
+                              const SizedBox(width: 8),
+                              FText(_hm(items[k].at), size: 14, height: 20, weight: FontWeight.w700, opacity: 0.6),
+                            ]),
+                            if (items[k].prompt.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              FText(items[k].prompt, size: 14, height: 20, weight: FontWeight.w500, opacity: 0.75, maxLines: 3),
+                            ],
                           ]),
                         ),
                       ),
-                  ],
-                ),
+                    ),
+                ],
               ),
-            ]),
-          ),
+            ),
+          ]),
         ),
-      ],
-    );
+      ),
+    ]);
   }
 }
