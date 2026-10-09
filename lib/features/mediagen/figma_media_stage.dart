@@ -73,12 +73,18 @@ class MediaStageLayout {
   }
 
   static MediaStageLayout forField(Size viewport, {double floorTop = 0}) {
-    final w = math.min(Kit.dockWidth, viewport.width);
-    final h = math.min(viewport.height * 0.40, w / 0.7198);
-    final tickerTop = viewport.height - (74 + gutter) - h;
-    final floor = floorTop > 0 ? floorTop : tickerTop - 10 - 52; // composer
+    // The rail is a persistent edge control at x 12..56. A field that runs the
+    // full width would sit under it - which is exactly what happened: the rail
+    // covered the "Models" heading and the first prompt card. The field is the
+    // space beside the rail, so it starts where the rail ends.
+    const left = gutter + Kit.controlCircle + gutter;
     return MediaStageLayout(
-      Rect.fromLTRB(gutter, gutter, viewport.width - gutter, math.max(gutter, floor - gutter)),
+      Rect.fromLTRB(
+        left,
+        gutter,
+        viewport.width - gutter,
+        floorTop > 0 ? math.max(gutter, floorTop - gutter) : viewport.height - 120,
+      ),
     );
   }
 }
@@ -203,19 +209,24 @@ class _MediaStageContentState extends State<MediaStageContent> {
               FText('${items.length}', size: 15, height: 22, weight: FontWeight.w700, opacity: 0.4),
             ]),
             const SizedBox(height: 10),
-            // 37px discs, 31.6 apart (overlapping), wrapping - the reference's
-            // own avatar cluster, wrapped instead of clipped.
-            SizedBox(
-              height: 40,
-              child: ClipRect(
-                child: Row(children: [
+            // 37px discs 32 apart - the reference's own avatar cluster
+            // (31.6 pitch on a 37 disc), which overlaps rather than spaces.
+            // Absolutely positioned: a negative margin asserts in Container,
+            // and the overlap is the point, so it is a pitch, not an inset.
+            ClipRect(
+              child: SizedBox(
+                height: 40,
+                width: math.min(L.runs.width - 32, 32.0 * (items.length - 1) + 37),
+                child: Stack(children: [
                   for (var k = 0; k < items.length; k++)
-                    GestureDetector(
-                      onTap: () => setState(() => _i = k),
-                      child: Container(
-                        margin: EdgeInsets.only(right: k == items.length - 1 ? 0 : -5),
-                        decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: k == i ? Colors.white : Colors.transparent, width: 2)),
-                        child: ModelDisc(color: items[k].model.providerColor, label: items[k].model.label, size: 37),
+                    Positioned(
+                      left: 32.0 * k,
+                      child: GestureDetector(
+                        onTap: () => setState(() => _i = k),
+                        child: Container(
+                          decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: k == i ? Colors.white : Colors.transparent, width: 2)),
+                          child: ModelDisc(color: items[k].model.providerColor, label: items[k].model.label, size: 37),
+                        ),
                       ),
                     ),
                 ]),

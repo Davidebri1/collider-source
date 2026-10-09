@@ -269,6 +269,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     if (cq != null) _activeCategory = ModelCategory.values.firstWhere((c) => c.name == cq, orElse: () => ModelCategory.general);
     if (Uri.base.queryParameters['genopts'] == '1' && _activeCategory.isMedia) _genOptionsOpen = true;
     if (Uri.base.queryParameters['rail'] == '1') _isMobileSideNavOpen = true;
+    if (Uri.base.queryParameters['media'] == '1' && _activeCategory.isMedia) _seedMediaDemo();
     _initializeTickerItems();
     _initializeHistorySessions();
     _initializeBrowserTabs();
@@ -590,6 +591,35 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         if (i != -1) _tickerItems[i] = before;
       });
     }
+  }
+
+  /// Seed placeholder generations for the media surface (?media=1).
+  ///
+  /// The stage only renders once a category has something in it, and a real
+  /// generation needs credentials, so there was no way to look at the row 13
+  /// layout at all. These are pending, so the media window shows its spinner -
+  /// enough to check that the window, the action bar, the pager and the runs
+  /// pane hold their boxes and clear the composer. Delete once media can be
+  /// generated without credentials.
+  void _seedMediaDemo() {
+    final models = ModelRoster.allModels.where((m) => m.isMedia).take(5).toList();
+    if (models.isEmpty) return;
+    final now = DateTime(2026, 1, 1, 9, 41);
+    _mediaGens[_activeCategory] = [
+      for (var k = 0; k < models.length; k++)
+        MediaGeneration(
+          model: models[k],
+          kind: _activeCategory == ModelCategory.video
+              ? 'video'
+              : (_activeCategory == ModelCategory.audio ? 'audio' : 'image'),
+          prompt: k.isEven
+              ? 'A quiet harbour at dusk, long exposure on the water, low horizon'
+              : 'Overhead shot of wet asphalt after rain, neon reflecting, no people',
+          basis: 'demo',
+          at: now.add(Duration(minutes: k * 3)),
+          pending: true,
+        ),
+    ];
   }
 
   /// Media send (source sendChat media routes): one generation per selected
@@ -951,9 +981,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     );
   }
 
-  Widget _buildMediaStage() => MediaStageContent(
+  Widget _buildMediaStage(double composerTop) => MediaStageContent(
         key: ValueKey('media-${_activeCategory.name}'),
-        field: MediaStageLayout.forField(MediaQuery.of(context).size).field,
+        field: MediaStageLayout.forField(MediaQuery.of(context).size, floorTop: composerTop).field,
         items: _mediaGens[_activeCategory]!,
         onRemix: (p) => _restoreText.value = p,
         onNotice: _notice,
@@ -1080,6 +1110,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     final tickerLayout = TickerSheet.layoutFor(
       MediaQuery.of(context).size,
       expanded: tickerOpen,
+      tickerVisible: tickerVisible,
       dockTop: dockTop,
     );
     final tickerH = tickerVisible ? tickerLayout.summaries.height : 0.0;
@@ -1156,7 +1187,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             ),
           // Map row 13: the media ticker (wechat IMAGE 2013:71) at its own size.
           if (!_browserOpen && !(isMobile && _isMobileSideNavOpen) && !const {'premium', 'themes', 'apps', 'smartgen', 'market', 'files', 'consensus', 'music'}.contains(_activeDrawer) && _activeCategory.isMedia && (_mediaGens[_activeCategory]?.isNotEmpty ?? false))
-            Positioned.fill(child: _buildMediaStage()),
+            Positioned.fill(child: _buildMediaStage(tickerLayout.composer.top)),
 
           // Map row 8: the composer is a bar on the window it types into. Collapsed it
           // rides on the summaries window; expanded it rides on the thread. It is

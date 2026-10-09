@@ -107,8 +107,27 @@ class TickerSheet extends StatelessWidget {
   static TickerLayout layoutFor(
     Size viewport, {
     required bool expanded,
+    bool tickerVisible = true,
     double dockTop = dockInset,
   }) {
+    // Nothing is showing: there is no window for the composer to ride, so it
+    // sits on the dock. It used to be placed above the *hypothetical* ticker
+    // window, which on the media surface left it floating ~300pt above the
+    // dock with nothing under it.
+    if (!tickerVisible) {
+      final w = math.min(Kit.dockWidth, viewport.width);
+      return TickerLayout(
+        summaries: Rect.zero,
+        thread: Rect.zero,
+        composer: Rect.fromLTWH(
+          (viewport.width - w) / 2,
+          viewport.height - dockTop - gutter - composerHeight,
+          w,
+          composerHeight,
+        ),
+      );
+    }
+
     final w = math.min(Kit.dockWidth, viewport.width);
     final capH = (viewport.height * maxHeightFraction).clamp(0.0, viewport.height);
     // Height follows from the width at the reference aspect, then is capped, so
