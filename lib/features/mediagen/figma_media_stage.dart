@@ -7,9 +7,11 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+
 import 'package:flutter/services.dart';
 
 import '../../core/figma/figma_stage.dart';
+import '../../core/theme/edge_fade.dart';
 import '../../core/files/file_store.dart';
 import '../ticker/widgets/figma_ticker.dart' show ModelDisc;
 import 'media_ticker.dart' show MediaGeneration;
@@ -156,10 +158,13 @@ class _MediaStageContentState extends State<MediaStageContent> {
                 top: 238,
                 right: 0,
                 bottom: 0,
-                child: ListView(
-                  padding: const EdgeInsets.only(bottom: 26),
-                  physics: const BouncingScrollPhysics(),
-                  children: [
+                // Prompts dissolve into the panel glass at both ends.
+                child: EdgeFade(
+                  fadeHeight: 24,
+                  child: ListView(
+                    padding: const EdgeInsets.only(bottom: 26),
+                    physics: const BouncingScrollPhysics(),
+                    children: [
                     for (var k = 0; k < items.length; k++)
                       GestureDetector(
                         onTap: () => setState(() => _i = k),
@@ -193,6 +198,7 @@ class _MediaStageContentState extends State<MediaStageContent> {
                         ),
                       ),
                   ],
+                ),
                 ),
               ),
             ]),

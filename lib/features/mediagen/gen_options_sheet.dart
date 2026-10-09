@@ -359,13 +359,24 @@ class _GenOptionsSheetState extends State<GenOptionsSheet> {
         SizedBox(
           width: 366,
           height: 168,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: EdgeInsets.zero,
-            physics: const BouncingScrollPhysics(),
-            itemCount: opts.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 8),
-            itemBuilder: (_, i) => _tile(opts[i]),
+          // Horizontal dissolve at the tile rail's ends (reference edge fade).
+          child: ShaderMask(
+            blendMode: BlendMode.dstIn,
+            shaderCallback: (rect) {
+              final f = (14.0 / (rect.width <= 0 ? 1 : rect.width)).clamp(0.0, 0.3);
+              return LinearGradient(
+                colors: const [Color(0x00FFFFFF), Colors.white, Colors.white, Color(0x00FFFFFF)],
+                stops: [0, f, 1 - f, 1],
+              ).createShader(rect);
+            },
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: EdgeInsets.zero,
+              physics: const BouncingScrollPhysics(),
+              itemCount: opts.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (_, i) => _tile(opts[i]),
+            ),
           ),
         ),
         // The open tile's (or the task's) choices, in the panel's foot.
