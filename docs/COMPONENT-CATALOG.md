@@ -3,6 +3,10 @@
 Generated 2026-10-08 from the reference material in `P:\My Drive\Collider Documentation`
 plus the exported frames the customer supplied.
 
+> This document records **where each primitive came from**. The customer's 27
+> references and what each one was pointed at are in
+> [REFERENCE-MAP.md](REFERENCE-MAP.md), grouped by Collider surface.
+
 ## The rule
 
 The references are **many different design systems**: Vision OS Design System,
