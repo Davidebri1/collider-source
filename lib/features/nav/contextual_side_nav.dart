@@ -32,6 +32,11 @@ class ContextualSideNav extends StatefulWidget {
   final String consensusSummary;
   final String? expandedModelId;
   final ValueChanged<ModelCategory> onSelectCategory;
+
+  /// Mirrors the market's search field up to the host. Held here so the side
+  /// nav can show the live query; the market filters on its own regardless.
+  final ValueChanged<String>? onMarketSearch;
+
   final ValueChanged<String> onToggleModel;
   final ValueChanged<ConversationHistorySession> onSelectSession;
   final VoidCallback onOpenConsensus;
@@ -78,6 +83,7 @@ class ContextualSideNav extends StatefulWidget {
     required this.consensusSummary,
     required this.expandedModelId,
     required this.onSelectCategory,
+    this.onMarketSearch,
     required this.onToggleModel,
     required this.onSelectSession,
     required this.onOpenConsensus,

@@ -163,14 +163,18 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                 ),
               // v8.4: Photos - Memories 69:1926 (1920 x 1080) at its own
               // geometry, scaled as one unit: window 725 x 730 at (597.5, 95),
-              // thumbnail strip at y 845, window controls at (855.6, 971);
-              // crop = the window's own width (725), centred, no margin.
+              // thumbnail strip at y 845, window controls at (855.6, 966).
+              // The crop is wider than the group it holds (725 wide), so the
+              // window floats at ~84% of the device width with air either
+              // side, and the strip and controls sit inside that floating
+              // cluster instead of trailing off the screen edge. Cropping to
+              // the group's own width is what pinned it edge to edge.
               if (!_expanded)
                 Positioned.fill(
                   child: FigmaStage(
                     frame: const Size(1920, 1080),
-                    cropWidth: 725,
-                    center: const Offset(960, 540),
+                    cropWidth: 863,
+                    center: const Offset(960, 542.5),
                     children: [
                       Positioned(
                         left: 597.5,

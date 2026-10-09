@@ -43,6 +43,10 @@ class MarketScreen extends StatefulWidget {
   /// The session's finished image generations as (prompt, url).
   final List<(String, String)> generated;
 
+  /// Every keystroke in the window's search field, so the host can mirror the
+  /// query. Optional: the market filters on its own either way.
+  final ValueChanged<String>? onMarketSearch;
+
   const MarketScreen({
     super.key,
     required this.onClose,
@@ -51,6 +55,7 @@ class MarketScreen extends StatefulWidget {
     this.onRemix,
     this.view = 'discover',
     this.generated = const [],
+    this.onMarketSearch,
   });
 
   /// Portrait design frame. Everything inside is expressed in these units.
@@ -572,7 +577,10 @@ class _MarketScreenState extends State<MarketScreen> with SingleTickerProviderSt
               controller: _queryCtrl,
               focusNode: _searchFocus,
               autofocus: true,
-              onChanged: (v) => setState(() => _query = v),
+              onChanged: (v) {
+                setState(() => _query = v);
+                widget.onMarketSearch?.call(v);
+              },
               cursorColor: _chalk,
               cursorWidth: 1.4,
               style: _sans(14, FontWeight.w400, _chalk),
@@ -589,6 +597,7 @@ class _MarketScreenState extends State<MarketScreen> with SingleTickerProviderSt
               onTap: () {
                 _queryCtrl.clear();
                 setState(() => _query = '');
+                widget.onMarketSearch?.call('');
               },
               child: const Icon(Icons.cancel_rounded, size: 14, color: _dim),
             ),
