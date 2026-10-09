@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/figma/figma_stage.dart';
+import '../../../core/theme/edge_fade.dart';
 import '../../../models/ticker_item.dart';
 
 /// Map row 15 — Model Response Ticker, a straight copy of wechat CHAT 2013:75
@@ -104,18 +105,23 @@ class TickerColumnWindow extends StatelessWidget {
           ),
         ),
         // Rows: 420 x 96 at x 27, y 105 + 108 i (9:127, 9:231, 9:239 ...).
+        // The list dissolves into the window's glass at both ends instead of
+        // ending on a hard line (wechat reference edge-fading).
         Positioned(
           left: 0,
           top: 105,
           right: 0,
           bottom: 0,
-          child: ListView.builder(
-            padding: const EdgeInsets.only(bottom: 24),
-            physics: const BouncingScrollPhysics(),
-            itemCount: items.length,
-            itemBuilder: (c, i) => Padding(
-              padding: const EdgeInsets.only(left: 27, right: 29, bottom: 12),
-              child: _Row(item: items[i], selected: items[i].modelDef.id == openId, onTap: () => onOpen(items[i].modelDef.id)),
+          child: EdgeFade(
+            fadeHeight: 26,
+            child: ListView.builder(
+              padding: const EdgeInsets.only(bottom: 24),
+              physics: const BouncingScrollPhysics(),
+              itemCount: items.length,
+              itemBuilder: (c, i) => Padding(
+                padding: const EdgeInsets.only(left: 27, right: 29, bottom: 12),
+                child: _Row(item: items[i], selected: items[i].modelDef.id == openId, onTap: () => onOpen(items[i].modelDef.id)),
+              ),
             ),
           ),
         ),
@@ -254,25 +260,29 @@ class _TickerAnswerWindowState extends State<TickerAnswerWindow> {
               ),
             ),
             // Messages from y 110 (9:414) to the text box (y 590).
+            // Edge-faded into the glass at both ends (wechat reference).
             Positioned(
               left: 0,
               right: 0,
               top: 110,
               height: 470,
-              child: ListView(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.only(bottom: 21),
-                children: [
-                  for (final msg in item.conversation)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 21),
-                      child: msg.sender == 'user'
-                          ? _Outgoing(msg: msg)
-                          : GestureDetector(onTap: () => widget.onTapMessage(msg), child: _Incoming(msg: msg, color: m.providerColor, label: m.label)),
-                    ),
-                  if (item.isStreaming)
-                    const Padding(padding: EdgeInsets.only(left: 114), child: FText('…', size: 18, height: 24, weight: FontWeight.w700, opacity: 0.6)),
-                ],
+              child: EdgeFade(
+                fadeHeight: 24,
+                child: ListView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.only(bottom: 21),
+                  children: [
+                    for (final msg in item.conversation)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 21),
+                        child: msg.sender == 'user'
+                            ? _Outgoing(msg: msg)
+                            : GestureDetector(onTap: () => widget.onTapMessage(msg), child: _Incoming(msg: msg, color: m.providerColor, label: m.label)),
+                      ),
+                    if (item.isStreaming)
+                      const Padding(padding: EdgeInsets.only(left: 114), child: FText('…', size: 18, height: 24, weight: FontWeight.w700, opacity: 0.6)),
+                  ],
+                ),
               ),
             ),
           ]),
