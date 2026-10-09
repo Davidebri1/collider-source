@@ -202,10 +202,15 @@ class _Menu extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.only(bottom: 20),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
+              // Account rows dissolve into the sheet glass at the bottom.
+              child: EdgeFade(
+                fadeTop: false,
+                fadeHeight: 28,
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.only(bottom: 20),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
+                ),
               ),
             ),
           ]),

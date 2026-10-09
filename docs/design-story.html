@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Collider Spatial Design Story — GLM</title>
+<style>
+  /* GLM (Z.ai) — living design spec for glm/spatial-consistency.
+     Every swatch below is the same recipe the Flutter code now carries. */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: radial-gradient(ellipse at 20% 10%, #1a1440 0%, #0a0716 45%, #050310 100%);
+    background-attachment: fixed;
+    color: #fff;
+    min-height: 100vh;
+    padding: 64px 32px 120px;
+  }
+  .wall { /* fake living wallpaper behind everything */
+    position: fixed; inset: 0; z-index: -1; overflow: hidden;
+  }
+  .wall::before {
+    content: ''; position: absolute; width: 60vw; height: 60vw; border-radius: 50%;
+    background: radial-gradient(circle, rgba(191,90,242,.28), transparent 70%);
+    top: -10vw; right: -12vw; filter: blur(60px);
+  }
+  .wall::after {
+    content: ''; position: absolute; width: 50vw; height: 50vw; border-radius: 50%;
+    background: radial-gradient(circle, rgba(10,132,255,.22), transparent 70%);
+    bottom: -15vw; left: -10vw; filter: blur(60px);
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  header h1 {
+    font-size: 44px; font-weight: 700; letter-spacing: -1px;
+    background: linear-gradient(120deg, #fff, #bf5af2 60%, #64d2ff);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  header p { color: rgba(255,255,255,.55); margin-top: 10px; font-size: 15px; }
+  .stamp {
+    display: inline-block; margin-top: 14px; padding: 5px 14px; border-radius: 999px;
+    background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.15);
+    font-size: 12px; color: rgba(255,255,255,.6); letter-spacing: .4px;
+  }
+  h2 {
+    margin: 72px 0 8px; font-size: 26px; letter-spacing: -.4px;
+  }
+  h2 .n { color: rgba(191,90,242,.9); margin-right: 10px; font-variant-numeric: tabular-nums; }
+  .lead { color: rgba(255,255,255,.55); font-size: 15px; max-width: 640px; line-height: 1.55; margin-bottom: 28px; }
+  .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+  @media (max-width: 760px) { .duo { grid-template-columns: 1fr; } }
+  .stage {
+    border-radius: 24px; padding: 36px 28px; min-height: 230px;
+    display: flex; flex-direction: column; justify-content: center; gap: 16px;
+    position: relative; overflow: hidden;
+    background: linear-gradient(160deg, #241a4d, #12102b 55%, #0e0c22);
+  }
+  .stage::before {
+    content: ''; position: absolute; inset: 0;
+    background:
+      radial-gradient(circle at 78% 18%, rgba(100,210,255,.25), transparent 42%),
+      radial-gradient(circle at 12% 85%, rgba(191,90,242,.3), transparent 45%);
+  }
+  .stage > * { position: relative; }
+  .tag {
+    position: absolute; top: 14px; left: 16px; font-size: 11px; letter-spacing: 1.6px;
+    text-transform: uppercase; color: rgba(255,255,255,.4);
+  }
+  .tag.bad { color: rgba(255,69,58,.85); }
+  .tag.good { color: rgba(48,209,88,.9); }
+
+  /* BEFORE: flat, hard-edged */
+  .flat-pill {
+    background: rgba(255,255,255,.30);
+    border-radius: 999px; padding: 14px 22px; font-size: 14px; font-weight: 600;
+    box-shadow: 0 2px 6px rgba(0,0,0,.2);
+  }
+  .flat-row {
+    background: rgba(255,255,255,.12); border-radius: 14px; padding: 13px 18px;
+    font-size: 13.5px; color: rgba(255,255,255,.85);
+  }
+  .flat-note { font-size: 12.5px; color: rgba(255,255,255,.45); line-height: 1.5; }
+
+  /* AFTER: canonical glass */
+  .glass {
+    background: linear-gradient(135deg, rgba(255,255,255,.14), rgba(255,255,255,.07));
+    backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+    border-radius: 999px; padding: 14px 22px; font-size: 14px; font-weight: 600;
+    box-shadow:
+      inset 0 1px 1px rgba(255,255,255,.35),
+      inset -1px -1px 1px rgba(255,255,255,.12),
+      0 8px 32px rgba(0,0,0,.45);
+    border: 1px solid transparent;
+    background-clip: padding-box;
+    position: relative;
+  }
+  .glass::before {
+    content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 1px;
+    background: linear-gradient(135deg, rgba(255,255,255,.55), rgba(255,255,255,.06) 55%, rgba(255,255,255,.28));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+    pointer-events: none;
+  }
+  .glass-row {
+    background: linear-gradient(135deg, rgba(255,255,255,.11), rgba(255,255,255,.05));
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    border-radius: 14px; padding: 13px 18px; font-size: 13.5px; color: rgba(255,255,255,.9);
+    box-shadow: inset 0 1px 1px rgba(255,255,255,.22), 0 4px 18px rgba(0,0,0,.35);
+  }
+  .glass-note {
+    font-size: 12.5px; color: rgba(255,255,255,.55); line-height: 1.5;
+    text-shadow: 0 1px 2px rgba(0,0,0,.4);
+  }
+
+  /* Edge fade demo */
+  .fadebox {
+    height: 190px; overflow: hidden; border-radius: 20px; position: relative;
+    background: linear-gradient(135deg, rgba(255,255,255,.13), rgba(255,255,255,.06));
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    box-shadow: inset 0 1px 1px rgba(255,255,255,.28);
+  }
+  .fadebox.hard { -webkit-mask: none; }
+  .fadebox.soft {
+    -webkit-mask: linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%);
+    mask: linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%);
+  }
+  .fadebox .r {
+    display: flex; align-items: center; gap: 12px; padding: 11px 16px;
+    font-size: 13px; color: rgba(255,255,255,.88);
+  }
+  .dot { width: 30px; height: 30px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: rgba(0,0,0,.75); }
+
+  /* Conjured demo */
+  .conj-row { display: flex; gap: 40px; align-items: center; }
+  .conjured {
+    padding: 12px 20px; border-radius: 18px; font-size: 13px; font-weight: 600;
+    background: linear-gradient(135deg, rgba(255,255,255,.16), rgba(255,255,255,.07));
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    -webkit-mask: linear-gradient(to bottom, transparent 0, black 14%, black 86%, transparent 100%);
+    mask: linear-gradient(to bottom, transparent 0, black 14%, black 86%, transparent 100%);
+    box-shadow: 0 18px 32px rgba(0,0,0,.4);
+    animation: conjure 2.6s cubic-bezier(.23,1,.32,1) infinite;
+  }
+  @keyframes conjure {
+    0%   { opacity: 0; transform: scale(.94); filter: brightness(1.6) blur(2px); }
+    30%  { opacity: 1; transform: scale(1);   filter: brightness(1) blur(0); }
+    78%  { opacity: 1; transform: scale(1); }
+    100% { opacity: 0; transform: scale(.94); filter: brightness(1.4); }
+  }
+  .conj-note { font-size: 12.5px; color: rgba(255,255,255,.5); max-width: 300px; line-height: 1.5; }
+
+  /* Depth planes */
+  .planes { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; }
+  @media (max-width: 860px) { .planes { grid-template-columns: repeat(2, 1fr); } }
+  .plane {
+    border-radius: 16px; padding: 16px 14px 18px; min-height: 130px;
+    display: flex; flex-direction: column; justify-content: space-between;
+    font-size: 11px; letter-spacing: .3px; position: relative;
+  }
+  .plane b { font-size: 12.5px; letter-spacing: 0; }
+  .plane::before {
+    content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 1px;
+    background: linear-gradient(135deg, rgba(255,255,255,.5), rgba(255,255,255,.05) 55%, rgba(255,255,255,.25));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+  }
+  .p1 { background: linear-gradient(135deg, rgba(255,255,255,.07), rgba(255,255,255,.03)); box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+  .p2 { background: linear-gradient(135deg, rgba(255,255,255,.10), rgba(255,255,255,.05)); box-shadow: 0 12px 32px rgba(0,0,0,.4); }
+  .p3 { background: linear-gradient(135deg, rgba(255,255,255,.14), rgba(255,255,255,.07)); box-shadow: 0 16px 40px rgba(0,0,0,.45); }
+  .p4 { background: linear-gradient(135deg, rgba(255,255,255,.17), rgba(255,255,255,.09)); box-shadow: 0 20px 48px rgba(0,0,0,.5); }
+  .p5 { background: linear-gradient(135deg, rgba(255,255,255,.20), rgba(255,255,255,.10)); box-shadow: 0 24px 56px rgba(0,0,0,.55); }
+  .plane .meta { color: rgba(255,255,255,.45); font-size: 10.5px; line-height: 1.5; }
+
+  /* Map */
+  .map { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 760px) { .map { grid-template-columns: 1fr; } }
+  .mrow {
+    display: flex; align-items: center; gap: 12px; padding: 13px 16px; border-radius: 14px;
+    background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08);
+    font-size: 13px;
+  }
+  .mrow .st { margin-left: auto; font-size: 10.5px; letter-spacing: 1px; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; flex: none; }
+  .done { background: rgba(48,209,88,.14); color: #30d158; border: 1px solid rgba(48,209,88,.3); }
+  .wip  { background: rgba(10,132,255,.14); color: #64d2ff; border: 1px solid rgba(10,132,255,.3); }
+  .todo { background: rgba(255,255,255,.07); color: rgba(255,255,255,.45); border: 1px solid rgba(255,255,255,.12); }
+  footer { margin-top: 90px; color: rgba(255,255,255,.35); font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wall"></div>
+<div class="wrap">
+
+  <header>
+    <h1>Collider — Spatial Design Story</h1>
+    <p>What was missing, what changed, and the system everything now inherits. Every sample below is live CSS running the same recipe the Flutter code carries.</p>
+    <span class="stamp">GLM · Z.ai · branch glm/spatial-consistency</span>
+  </header>
+
+  <h2><span class="n">01</span>Material — flat fill vs. canonical glass</h2>
+  <p class="lead">Before: opaque-leaning fills, single hairline border, no relationship to the room behind them. After: gradient fill lit from the top-left, signature edge stroke (bright corner → near-clear → light catch), specular rim, real backdrop blur.</p>
+  <div class="duo">
+    <div class="stage">
+      <span class="tag bad">before · hand-rolled</span>
+      <div class="flat-pill">Premium Themes</div>
+      <div class="flat-row">Neon Kyoto — 4K live</div>
+      <div class="flat-note">Flat white 30% · hard 1px border · no blur · reads as a sticker pasted over the wallpaper.</div>
+    </div>
+    <div class="stage">
+      <span class="tag good">after · VMaterial / VGlass</span>
+      <div class="glass">Premium Themes</div>
+      <div class="glass-row">Neon Kyoto — 4K live</div>
+      <div class="glass-note">Gradient fill · signature edge stroke · specular rim · blur 28 — the room glows through it.</div>
+    </div>
+  </div>
+
+  <h2><span class="n">02</span>Edges — hard cuts vs. dissolves</h2>
+  <p class="lead">The wechat reference's signature: scrollable content never ends on a line — it dissolves into the glass. Now carried by EdgeFade (12% vertical masks, bottom 85% vignette, horizontal rail fades).</p>
+  <div class="duo">
+    <div class="stage">
+      <span class="tag bad">before</span>
+      <div class="fadebox hard">
+        <div class="r"><span class="dot" style="background:#0a84ff">G</span>GPT-5 · consensus converged 2m ago</div>
+        <div class="r"><span class="dot" style="background:#bf5af2">C</span>Claude · streaming response…</div>
+        <div class="r"><span class="dot" style="background:#30d158">G</span>Gemini · summary pinned</div>
+        <div class="r"><span class="dot" style="background:#ff9f0a">G</span>Grok · joined the board</div>
+        <div class="r"><span class="dot" style="background:#64d2ff">L</span>Llama · open answer →</div>
+      </div>
+    </div>
+    <div class="stage">
+      <span class="tag good">after · EdgeFade</span>
+      <div class="fadebox soft">
+        <div class="r"><span class="dot" style="background:#0a84ff">G</span>GPT-5 · consensus converged 2m ago</div>
+        <div class="r"><span class="dot" style="background:#bf5af2">C</span>Claude · streaming response…</div>
+        <div class="r"><span class="dot" style="background:#30d158">G</span>Gemini · summary pinned</div>
+        <div class="r"><span class="dot" style="background:#ff9f0a">G</span>Grok · joined the board</div>
+        <div class="r"><span class="dot" style="background:#64d2ff">L</span>Llama · open answer →</div>
+      </div>
+    </div>
+  </div>
+
+  <h2><span class="n">03</span>Conjured — small elements embedded in air</h2>
+  <p class="lead">The gallery selector and its kin: no card behind them, edges dissolved, a suspension shadow far below, and materialization — assembling from 94% scale with a light bloom that dies as it settles.</p>
+  <div class="stage" style="align-items:center">
+    <span class="tag good">VConjured · looping demo</span>
+    <div class="conj-row">
+      <div class="conjured">Free Themes · 12</div>
+      <div class="conj-note" style="margin:0">Watch it assemble and dematerialize — it never slides in from anywhere. It is <em>conjured</em>.</div>
+    </div>
+  </div>
+
+  <h2><span class="n">04</span>Depth — the five planes</h2>
+  <p class="lead">One law for the whole app: the deeper the plane, the more light it catches, the heavier its shadow, the stronger its blur. Restraint is built in — the brightest corner anywhere stays under 20% white.</p>
+  <div class="planes">
+    <div class="plane p1"><b>Prompt</b><span class="meta">blur 16<br>fill 7→3%</span></div>
+    <div class="plane p2"><b>Resting</b><span class="meta">blur 24<br>fill 10→5%</span></div>
+    <div class="plane p3"><b>Elevated</b><span class="meta">blur 28<br>fill 14→7%</span></div>
+    <div class="plane p4"><b>Modal</b><span class="meta">blur 32<br>fill 17→9%</span></div>
+    <div class="plane p5"><b>Work surface</b><span class="meta">blur 36<br>fill 20→10%</span></div>
+  </div>
+
+  <h2><span class="n">05</span>The map — where the goal stands</h2>
+  <p class="lead">Every reference from your Figma map, ledger-tracked. Structure was already faithful in most screens — the work is material, edges, restraint.</p>
+  <div class="map">
+    <div class="mrow">Core glass + conjured primitives <span class="st done">done</span></div>
+    <div class="mrow">Theme Gallery selector — conjured <span class="st done">done</span></div>
+    <div class="mrow">Composer — frosted material <span class="st done">done</span></div>
+    <div class="mrow">Model Response Ticker — edge fades <span class="st done">done</span></div>
+    <div class="mrow">Media Gen — rail + prompts fades <span class="st done">done</span></div>
+    <div class="mrow">Files grid — bottom dissolve <span class="st done">done</span></div>
+    <div class="mrow">Browser — tabs overview fade <span class="st done">done</span></div>
+    <div class="mrow">Settings + Account — fades, blurred bg <span class="st wip">in progress</span></div>
+    <div class="mrow">Video playback control shelf <span class="st todo">queued</span></div>
+    <div class="mrow">Smart Gen cards + inline editing <span class="st todo">queued</span></div>
+    <div class="mrow">Premium alt — looping carousel, dim bg <span class="st todo">queued</span></div>
+    <div class="mrow">Alert / settings drawer vignette / Discover <span class="st todo">queued</span></div>
+  </div>
+
+  <footer>Rendered by GLM — every value here mirrors the shipped Flutter recipe. Open the Flutter app to see it live.</footer>
+</div>
+</body>
+</html>

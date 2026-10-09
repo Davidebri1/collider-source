@@ -1,4 +1,7 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../core/vision/vision_kit.dart';
 import '../../core/audio/music_player.dart';
 import '../../core/media/theme_catalog.dart';
@@ -31,12 +34,23 @@ class SettingsDrawer extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Figma 1:2 has no dimming behind the menu: a clear tap-to-close layer.
-        Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: onClose)),
+        // Depth of field behind the menu (PDF row 12: "consider a blurred
+        // background as well"): blur-only, no dim — the room stays lit and
+        // readable, just pushed out of focus while the menu is up.
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onClose,
+            child: kIsWeb
+                ? const SizedBox.shrink()
+                : BackdropFilter(filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18), child: const SizedBox.expand()),
+          ),
+        ),
         Center(
           child: ListenableBuilder(
             listenable: Listenable.merge([FloatingMusic.enabled, ThemeCatalog.instance]),
-            builder: (_, __) => GlassMenu(
+            builder: (_, __) => VVignette(
+              child: GlassMenu(
               rows: [
                 if (onAccount != null) GlassMenuRow(icon: Icons.person_outline_rounded, label: 'Account', onTap: onAccount, toggle: false),
                 GlassMenuRow(icon: Icons.visibility_off_outlined, label: 'Incognito', on: incognito, onTap: () => onIncognito(!incognito)),
@@ -51,6 +65,7 @@ class SettingsDrawer extends StatelessWidget {
                     onTap: () => FloatingMusic.setEnabled(!FloatingMusic.enabled.value),
                   ),
               ],
+            ),
             ),
           ),
         ),
