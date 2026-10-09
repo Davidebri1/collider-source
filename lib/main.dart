@@ -966,16 +966,27 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     final n = entries.length;
     final fit = (band - chrome - (n - 1) * pitch) / n;
     final size = fit < Kit.controlCircle ? math.max(28.0, fit) : Kit.controlCircle;
-    return Padding(
-      padding: const EdgeInsets.only(left: TickerSheet.gutter, top: top),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: VOrnamentRail(
-          key: ValueKey(surface),
-          size: size,
-          items: [for (final e in entries) VRailItem(e.icon, e.label)],
-          active: entries.indexWhere((e) => e.key == _railKey()),
-          onSelect: (i) => _onRailSelect(entries[i].key),
+    return Align(
+      alignment: Alignment.topLeft,
+      child: Padding(
+        padding: const EdgeInsets.only(left: TickerSheet.gutter, top: top),
+        child: SizedBox(
+          // The rail is centred in THIS box, which is the field above the lower
+          // group - not in the screen. Centring it in the screen put its bottom
+          // edge under the composer: invisible at 430 because the collapsed
+          // ticker is narrow and centred, but with the thread open the group
+          // spans the full width and the rail sat on the Consensus row at 393.
+          height: band,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: VOrnamentRail(
+              key: ValueKey(surface),
+              size: size,
+              items: [for (final e in entries) VRailItem(e.icon, e.label)],
+              active: entries.indexWhere((e) => e.key == _railKey()),
+              onSelect: (i) => _onRailSelect(entries[i].key),
+            ),
+          ),
         ),
       ),
     );
