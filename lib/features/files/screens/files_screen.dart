@@ -332,12 +332,16 @@ class _FilesScreenState extends State<FilesScreen> {
           ),
         ),
         // Grid 3011/3047/3083: rows at y 75 + 230 i, tiles 170 x 217, 174 apart.
+        // The grid dissolves into the window glass at the bottom (Files ref).
         Positioned(
           left: 40,
           top: 75,
           width: 866,
           bottom: 0,
-          child: CustomScrollView(
+          child: EdgeFade(
+            fadeTop: false,
+            fadeHeight: 36,
+            child: CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
               SliverGrid(
@@ -364,6 +368,7 @@ class _FilesScreenState extends State<FilesScreen> {
                 ),
               const SliverToBoxAdapter(child: SizedBox(height: 60)),
             ],
+            ),
           ),
         ),
       ]),
