@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/services.dart';
@@ -8,6 +9,7 @@ import 'vision_tokens.dart';
 
 export 'vision_tokens.dart';
 export '../theme/edge_fade.dart';
+export '../theme/conjured.dart';
 export 'md_text.dart';
 
 /// Glass material levels, mapped to the Collider depth planes.
@@ -21,6 +23,43 @@ extension VMaterialX on VMaterial {
         VMaterial.modal => VColors.glassModal,
         VMaterial.work => VColors.glassWork,
       };
+
+  /// Gradient fill: brighter top-left, receding bottom-right — the light
+  /// direction every Collider glass reads from. Plane-scaled so deeper
+  /// planes catch more light without ever going bright (restraint: the
+  /// strongest corner stays under 20% white).
+  LinearGradient get fillGradient => switch (this) {
+        VMaterial.prompt => const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0x12FFFFFF), Color(0x08FFFFFF)]),
+        VMaterial.resting => const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0x1AFFFFFF), Color(0x0DFFFFFF)]),
+        VMaterial.elevated => const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0x24FFFFFF), Color(0x12FFFFFF)]),
+        VMaterial.modal => const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0x2BFFFFFF), Color(0x16FFFFFF)]),
+        VMaterial.work => const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0x33FFFFFF), Color(0x1AFFFFFF)]),
+      };
+
+  /// The signature glass edge: specular white fading to near-transparent and
+  /// catching light again at the far corner. One recipe for all planes.
+  static const LinearGradient edgeStroke = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0x8CFFFFFF), Color(0x0FFFFFFF), Color(0x47FFFFFF)],
+    stops: [0.0, 0.55, 1.0],
+  );
+
   double get blur => switch (this) {
         VMaterial.prompt => 16,
         VMaterial.resting => 24,
@@ -40,8 +79,9 @@ extension VMaterialX on VMaterial {
       };
 }
 
-/// One-pass glass surface: blur + material fill + hairline + specular rim.
-/// Never nest a VGlass inside another VGlass; use plain fills inside.
+/// One-pass glass surface: blur + gradient fill + gradient edge stroke +
+/// specular rim. Never nest a VGlass inside another VGlass; use plain fills
+/// inside.
 class VGlass extends StatelessWidget {
   final Widget child;
   final VMaterial material;
@@ -63,22 +103,28 @@ class VGlass extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final r = BorderRadius.circular(radius);
+    // Layering (the Smart Gen measured recipe, now canonical): gradient edge
+    // shell, clipped backdrop blur, gradient fill, specular rim, content.
     return DecoratedBox(
       decoration: BoxDecoration(borderRadius: r, boxShadow: shadow ? material.shadow : null),
-      child: ClipRRect(
-        borderRadius: r,
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: material.blur, sigmaY: material.blur),
-          child: CustomPaint(
-            foregroundPainter: SpecularRimPainter(borderRadius: radius, strokeWidth: 0.6),
-            child: Container(
-              padding: padding,
-              decoration: BoxDecoration(
-                color: fill ?? material.fill,
-                borderRadius: r,
-                border: Border.all(color: material.rim, width: 0.5),
+      child: Container(
+        decoration: BoxDecoration(borderRadius: r, gradient: VMaterialX.edgeStroke),
+        padding: const EdgeInsets.all(0.75),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(math.max(0, radius - 0.75)),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: material.blur, sigmaY: material.blur),
+            child: CustomPaint(
+              foregroundPainter: SpecularRimPainter(borderRadius: radius, strokeWidth: 0.6),
+              child: Container(
+                padding: padding,
+                decoration: BoxDecoration(
+                  gradient: material.fillGradient,
+                  color: fill,
+                  borderRadius: BorderRadius.circular(math.max(0, radius - 0.75)),
+                ),
+                child: child,
               ),
-              child: child,
             ),
           ),
         ),

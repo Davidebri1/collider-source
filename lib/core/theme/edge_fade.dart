@@ -12,6 +12,12 @@ class EdgeFade extends StatelessWidget {
   /// Height in logical pixels over which the mask ramps from transparent.
   final double fadeHeight;
 
+  /// Reference-spec alternative to [fadeHeight]: ramp size as a fraction of
+  /// the viewport height (VisionSpatialChatBox §35: 0.12 each end). When set,
+  /// it overrides [fadeHeight] for that edge.
+  final double? fadeTopFraction;
+  final double? fadeBottomFraction;
+
   final bool fadeTop;
   final bool fadeBottom;
 
@@ -19,6 +25,8 @@ class EdgeFade extends StatelessWidget {
     super.key,
     required this.child,
     this.fadeHeight = 18.0,
+    this.fadeTopFraction,
+    this.fadeBottomFraction,
     this.fadeTop = true,
     this.fadeBottom = true,
   });
@@ -44,14 +52,41 @@ class EdgeFade extends StatelessWidget {
           ).createShader(rect);
         }
         // Cap the ramp so a very short viewport keeps a solid readable band.
-        final double f = (fadeHeight / h).clamp(0.0, 0.42);
+        final double top = fadeTop
+            ? (fadeTopFraction ?? fadeHeight / h).clamp(0.0, 0.42)
+            : 0.0;
+        final double bottom = fadeBottom
+            ? (fadeBottomFraction ?? fadeHeight / h).clamp(0.0, 0.42)
+            : 0.0;
         return LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: colors,
-          stops: <double>[0.0, f, 1.0 - f, 1.0],
+          stops: <double>[0.0, top, 1.0 - bottom, 1.0],
         ).createShader(rect);
       },
+      child: child,
+    );
+  }
+}
+
+/// Bottom-only vignette per VisionWallpaperSongDetail §38: content is solid
+/// until `black 85%`, then dissolves to transparent at the very bottom edge.
+class EdgeFadeBottom extends StatelessWidget {
+  final Widget child;
+  final double startFraction;
+  const EdgeFadeBottom({super.key, required this.child, this.startFraction = 0.85});
+
+  @override
+  Widget build(BuildContext context) {
+    return ShaderMask(
+      blendMode: BlendMode.dstIn,
+      shaderCallback: (rect) => LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: const [Color(0xFFFFFFFF), Color(0xFFFFFFFF), Color(0x00FFFFFF)],
+        stops: [0.0, startFraction, 1.0],
+      ).createShader(rect),
       child: child,
     );
   }

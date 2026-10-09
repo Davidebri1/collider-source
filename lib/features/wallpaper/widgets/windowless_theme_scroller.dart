@@ -335,8 +335,9 @@ class _ShelfSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return EdgeFade(
-      fadeHeight: 22,
+    // Conjured: the switch assembles in the air beside the preview window and
+    // dissolves at its ends — no hard edge, no card behind it.
+    return VConjured(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
