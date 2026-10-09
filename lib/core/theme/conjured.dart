@@ -130,7 +130,10 @@ class _VConjuredState extends State<VConjured> {
       builder: (context, t, child) {
         final settling = t < 1;
         final bloom = settling
-            ? BoxShadow(
+            ? // False positive: the shadow depends on the runtime animation
+              // value, so it can never be const.
+              // ignore: prefer_const_constructors
+              BoxShadow(
                 color: Color(0x33FFFFFF).withValues(alpha: (1 - t) * 0.35),
                 blurRadius: 24 * (1 - t) + 4)
             : null;
