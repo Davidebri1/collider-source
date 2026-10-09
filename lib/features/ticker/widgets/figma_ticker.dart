@@ -33,21 +33,6 @@ String initials(String label) {
   return '$a$b';
 }
 
-class ModelDisc extends StatelessWidget {
-  const ModelDisc({super.key, required this.color, required this.label, this.size = 64});
-  final Color color;
-  final String label;
-  final double size;
-  @override
-  Widget build(BuildContext context) => Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(shape: BoxShape.circle, color: color),
-        alignment: Alignment.center,
-        child: FText(initials(label), size: size * 0.34, weight: FontWeight.w700, color: const Color(0xE6000000)),
-      );
-}
-
 /// Left column window (collapsed answers).
 class TickerColumnWindow extends StatelessWidget {
   const TickerColumnWindow({
@@ -156,31 +141,27 @@ class _Row extends StatelessWidget {
               ? const RadialGradient(center: Alignment(-0.92, -1), radius: 1.6, colors: [Color(0x809C8585), Color(0x806C6C6C)])
               : null,
           padding: const EdgeInsets.all(16),
-          child: Row(children: [
-            ModelDisc(color: item.modelDef.providerColor, label: item.modelDef.label),
-            const SizedBox(width: 20),
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-                SizedBox(
-                  height: 24,
-                  child: Row(children: [
-                    Expanded(child: FText(item.modelDef.label, size: 20, height: 24, weight: FontWeight.w700)),
-                    const SizedBox(width: 8),
-                    Opacity(
-                      opacity: 0.6,
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Container(width: 5, height: 5, decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.white)),
-                        const SizedBox(width: 6),
-                        FText(time, size: 16, height: 24, weight: FontWeight.w700),
-                      ]),
-                    ),
-                  ]),
-                ),
-                const SizedBox(height: 8),
-                FText(msg.replaceAll('\n', ' '), size: 16, height: 16, weight: FontWeight.w700, opacity: 0.6),
-              ]),
-            ),
-          ]),
+          child: Center(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+              SizedBox(
+                height: 24,
+                child: Row(children: [
+                  Expanded(child: FText(item.modelDef.label, size: 20, height: 24, weight: FontWeight.w700)),
+                  const SizedBox(width: 8),
+                  Opacity(
+                    opacity: 0.6,
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Container(width: 5, height: 5, decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.white)),
+                      const SizedBox(width: 6),
+                      FText(time, size: 16, height: 24, weight: FontWeight.w700),
+                    ]),
+                  ),
+                ]),
+              ),
+              const SizedBox(height: 8),
+              FText(msg.replaceAll('\n', ' '), size: 16, height: 16, weight: FontWeight.w700, opacity: 0.6),
+            ]),
+          ),
         ),
       ),
     );
@@ -277,7 +258,7 @@ class _TickerAnswerWindowState extends State<TickerAnswerWindow> {
                         padding: const EdgeInsets.only(bottom: 21),
                         child: msg.sender == 'user'
                             ? _Outgoing(msg: msg)
-                            : GestureDetector(onTap: () => widget.onTapMessage(msg), child: _Incoming(msg: msg, color: m.providerColor, label: m.label)),
+                            : GestureDetector(onTap: () => widget.onTapMessage(msg), child: _Incoming(msg: msg)),
                       ),
                     if (item.isStreaming)
                       const Padding(padding: EdgeInsets.only(left: 114), child: FText('…', size: 18, height: 24, weight: FontWeight.w700, opacity: 0.6)),
@@ -341,30 +322,21 @@ class _CircleButton extends StatelessWidget {
 }
 
 class _Incoming extends StatelessWidget {
-  const _Incoming({required this.msg, required this.color, required this.label});
+  const _Incoming({required this.msg});
   final TickerMessage msg;
-  final Color color;
-  final String label;
   @override
-  Widget build(BuildContext context) => Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const SizedBox(width: 32),
-        ModelDisc(color: color, label: label, size: 50),
-        const SizedBox(width: 12),
-        Flexible(
-          child: Padding(
-            padding: const EdgeInsets.only(right: 32),
-            child: FGlass(
-              radius: const BorderRadius.only(topLeft: Radius.circular(4), topRight: Radius.circular(20), bottomLeft: Radius.circular(20), bottomRight: Radius.circular(20)),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                FText(msg.text, size: 18, height: 24, weight: FontWeight.w700, maxLines: null, ellipsis: false),
-                const SizedBox(height: 4),
-                FText(_clock(msg.timestamp), size: 16, height: 16, weight: FontWeight.w700, opacity: 0.4),
-              ]),
-            ),
-          ),
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(left: 32, right: 32),
+        child: FGlass(
+          radius: const BorderRadius.only(topLeft: Radius.circular(4), topRight: Radius.circular(20), bottomLeft: Radius.circular(20), bottomRight: Radius.circular(20)),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+            FText(msg.text, size: 18, height: 24, weight: FontWeight.w700, maxLines: null, ellipsis: false),
+            const SizedBox(height: 4),
+            FText(_clock(msg.timestamp), size: 16, height: 16, weight: FontWeight.w700, opacity: 0.4),
+          ]),
         ),
-      ]);
+      );
 }
 
 class _Outgoing extends StatelessWidget {

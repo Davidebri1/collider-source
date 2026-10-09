@@ -13,7 +13,7 @@ import 'package:flutter/services.dart';
 import '../../core/figma/figma_stage.dart';
 import '../../core/theme/edge_fade.dart';
 import '../../core/files/file_store.dart';
-import '../ticker/widgets/figma_ticker.dart' show ModelDisc;
+
 import 'media_ticker.dart' show MediaGeneration;
 import 'media_view.dart';
 
@@ -137,19 +137,6 @@ class _MediaStageContentState extends State<MediaStageContent> {
               // "Likes 16" -> Models N.
               const Positioned(left: 22, top: 32, child: FText('Models', size: 20, height: 24, weight: FontWeight.w700)),
               Positioned(left: 100, top: 32, child: FText('${items.length}', size: 16, height: 24, weight: FontWeight.w700, opacity: 0.4)),
-              // 37 px avatars, 31.6 px apart (overlapping), rows at 71 / 114.
-              for (var k = 0; k < items.length && k < 18; k++)
-                Positioned(
-                  left: 22 + (k % 9) * 31.6,
-                  top: 71 + (k ~/ 9) * 43,
-                  child: GestureDetector(
-                    onTap: () => setState(() => _i = k),
-                    child: Container(
-                      decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: k == i ? Colors.white : const Color(0x00000000), width: 2)),
-                      child: ModelDisc(color: items[k].model.providerColor, label: items[k].model.label, size: 37),
-                    ),
-                  ),
-                ),
               // "Comments 2" -> the generations.
               const Positioned(left: 22, top: 192, child: FText('Prompts', size: 20, height: 24, weight: FontWeight.w700)),
               Positioned(left: 108, top: 192, child: FText('${items.length}', size: 16, height: 24, weight: FontWeight.w700, opacity: 0.4)),
@@ -172,11 +159,8 @@ class _MediaStageContentState extends State<MediaStageContent> {
                           padding: const EdgeInsets.only(left: 22, right: 22, bottom: 26),
                           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                             SizedBox(
-                              height: 40,
+                              height: 24,
                               child: Row(children: [
-                                const SizedBox(width: 2),
-                                ModelDisc(color: items[k].model.providerColor, label: items[k].model.label, size: 40),
-                                const SizedBox(width: 9),
                                 Expanded(child: FText(items[k].model.label, size: 17, height: 24, weight: FontWeight.w700)),
                                 FText(_hm(items[k].at), size: 16, height: 24, weight: FontWeight.w700, opacity: 0.6),
                               ]),

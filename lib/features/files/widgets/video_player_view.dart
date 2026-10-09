@@ -32,6 +32,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
   VideoSource? _src;
   bool _failed = false;
   double? _scrub; // 0..1 while dragging
+  bool _spatialAudio = false; // spec §40 Spatial 3D Audio toggle
 
   VideoPlayerController? get _c => _src?.controller;
 
@@ -94,13 +95,21 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
     c.seekTo(t);
   }
 
-  // ignore: unused_element
   static String _fmt(Duration d) {
     final s = d.inSeconds;
     final h = s ~/ 3600, m = (s % 3600) ~/ 60, ss = s % 60;
     final two = ss.toString().padLeft(2, '0');
     return h > 0 ? '$h:${m.toString().padLeft(2, '0')}:$two' : '$m:$two';
   }
+
+  /// Spec §40: elapsed / remaining timecodes flanking the scrubber.
+  Widget _time(Duration d, {bool remaining = false}) => FText(
+        remaining ? '-${_fmt(d)}' : _fmt(d),
+        size: 13,
+        height: 16,
+        weight: FontWeight.w600,
+        opacity: 0.7,
+      );
 
   // ── Figma 417:8630 geometry (frame 1920 x 1080) ────────────────────────
   // Movie 1180 x 762 at (370, 109), radius 44, inner image radius 40.
@@ -201,6 +210,11 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
                 GlassMenuRow(icon: Icons.repeat_rounded, label: 'Loop', on: c.value.isLooping, onTap: () async {
                   await c.setLooping(!c.value.isLooping);
                   set(() {});
+                }),
+                // Spec §40: the Spatial 3D Audio toggle.
+                GlassMenuRow(icon: Icons.spatial_audio_off_rounded, label: 'Spatial Audio', on: _spatialAudio, onTap: () {
+                  set(() => _spatialAudio = !_spatialAudio);
+                  setState(() {});
                 }),
                 for (final v in const [1.0, 1.5, 2.0])
                   GlassMenuRow(icon: Icons.speed_rounded, label: 'Speed ${v == 1.0 ? '1' : v}x', on: speed == v, onTap: () async {
@@ -320,7 +334,10 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
                   const SizedBox(width: 16),
                   _btn(_skipGlyph(true), 'Forward 15 seconds', () => _skip(15)),
                   const SizedBox(width: 16),
-                  _bar(frac, 400,
+                  // Spec §40: elapsed / remaining timecodes around the scrub.
+                  _time(pos),
+                  const SizedBox(width: 8),
+                  _bar(frac, 320,
                       onDrag: ready ? (v) => setState(() => _scrub = v) : null,
                       onEnd: ready
                           ? (v) {
@@ -328,6 +345,8 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
                               setState(() => _scrub = null);
                             }
                           : null),
+                  const SizedBox(width: 8),
+                  _time(dur - pos, remaining: true),
                   const SizedBox(width: 16),
                   _btn(const Icon(Icons.more_horiz_rounded, size: 26, color: Colors.white), 'More', _menu),
                 ]),
