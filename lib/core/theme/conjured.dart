@@ -128,6 +128,12 @@ class _VConjuredState extends State<VConjured> {
       duration: widget.materialize,
       curve: Curves.easeOutCubic,
       builder: (context, t, child) {
+        final settling = t < 1;
+        final bloom = settling
+            ? BoxShadow(
+                color: Color(0x33FFFFFF).withValues(alpha: (1 - t) * 0.35),
+                blurRadius: 24 * (1 - t) + 4)
+            : null;
         return Opacity(
           opacity: t.clamp(0.0, 1.0),
           child: Transform.scale(
@@ -136,9 +142,7 @@ class _VConjuredState extends State<VConjured> {
               // Light bloom on assembly: a glow that dies as the element
               // settles, so it appears conjured out of the air.
               decoration: BoxDecoration(
-                boxShadow: t < 1
-                    ? <BoxShadow>[BoxShadow(color: Color(0x33FFFFFF).withValues(alpha: (1 - t) * 0.35), blurRadius: 24 * (1 - t) + 4)]
-                    : const <BoxShadow>[],
+                boxShadow: bloom == null ? const <BoxShadow>[] : <BoxShadow>[bloom],
               ),
               child: child,
             ),
