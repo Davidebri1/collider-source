@@ -12,11 +12,26 @@
 // stays live; a run that cannot happen on this link fails quietly at send
 // time (D59), replacing the dimmed send of D51.
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'dart:ui' show ImageFilter;
 import '../../core/api/collider_api.dart';
 import '../../models/model_def.dart';
 import '../../core/files/file_store.dart';
 import '../../core/vision/vision_kit.dart';
+
+/// Native: Flutter BackdropFilter; web: skipped (CanvasKit platform views
+/// behind the composer would force a saveLayer every frame — the same trade
+/// the premium market makes with its ambient).
+Widget _frost(double sigma, BorderRadius radius, Widget child) => kIsWeb
+    ? child
+    : ClipRRect(
+        borderRadius: radius,
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+          child: child,
+        ),
+      );
 
 class FloatingPrompt extends StatefulWidget {
   /// Focused (tapped, swiped up on the dock, or a new conversation).
@@ -284,58 +299,75 @@ class _FloatingPromptState extends State<FloatingPrompt> {
                         key: _plusKey,
                         behavior: HitTestBehavior.opaque,
                         onTap: _openMenu,
-                        child: Container(
-                          width: 60,
-                          height: 60,
-                          decoration: BoxDecoration(color: const Color(0x4DFFFFFF), borderRadius: BorderRadius.circular(32)),
-                          child: const Icon(Icons.add_rounded, size: 30, color: Colors.white),
+                        child: _frost(
+                          28,
+                          BorderRadius.circular(32),
+                          Container(
+                            width: 60,
+                            height: 60,
+                            decoration: BoxDecoration(
+                              color: const Color(0x4DFFFFFF),
+                              borderRadius: BorderRadius.circular(32),
+                              border: Border.all(color: const Color(0x33FFFFFF), width: 0.5),
+                            ),
+                            child: const Icon(Icons.add_rounded, size: 30, color: Colors.white),
+                          ),
                         ),
                       ),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
-                      child: Container(
-                        constraints: const BoxConstraints(minHeight: 60),
-                        padding: const EdgeInsets.fromLTRB(24, 6, 6, 6),
-                        decoration: BoxDecoration(
-                          color: const Color(0x4D000000),
-                          borderRadius: BorderRadius.circular(32),
-                          boxShadow: const [BoxShadow(color: Color(0x80FFFFFF), offset: Offset(0, 1), blurRadius: 1)],
-                        ),
-                        foregroundDecoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(32),
-                          gradient: const LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment(0.2, 0.6),
-                            colors: [Color(0x26000000), Color(0x00000000)],
+                      child: _frost(
+                        32,
+                        BorderRadius.circular(32),
+                        Container(
+                          constraints: const BoxConstraints(minHeight: 60),
+                          padding: const EdgeInsets.fromLTRB(24, 6, 6, 6),
+                          decoration: BoxDecoration(
+                            color: const Color(0x4D000000),
+                            borderRadius: BorderRadius.circular(32),
+                            // Light-emitting frosted capsule: inset white lip
+                            // (spec §35) + deep ambient shadow beneath.
+                            boxShadow: const [
+                              BoxShadow(color: Color(0x66FFFFFF), offset: Offset(0, 1), blurRadius: 1),
+                              BoxShadow(color: Color(0x99000000), offset: Offset(0, 8), blurRadius: 32),
+                            ],
                           ),
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Expanded(
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 10),
-                                child: TextField(
-                                  controller: _ctrl,
-                                  focusNode: _focus,
-                                  minLines: 1,
-                                  maxLines: 5,
-                                  cursorColor: Colors.white,
-                                  textInputAction: TextInputAction.send,
-                                  style: const TextStyle(fontSize: 24, height: 1.17, fontWeight: FontWeight.w500, color: Colors.white),
-                                  decoration: const InputDecoration(
-                                    border: InputBorder.none,
-                                    isDense: true,
-                                    contentPadding: EdgeInsets.zero,
+                          foregroundDecoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(32),
+                            gradient: const LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment(0.2, 0.6),
+                              colors: [Color(0x26000000), Color(0x00000000)],
+                            ),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  child: TextField(
+                                    controller: _ctrl,
+                                    focusNode: _focus,
+                                    minLines: 1,
+                                    maxLines: 5,
+                                    cursorColor: Colors.white,
+                                    textInputAction: TextInputAction.send,
+                                    style: const TextStyle(fontSize: 24, height: 1.17, fontWeight: FontWeight.w500, color: Colors.white),
+                                    decoration: const InputDecoration(
+                                      border: InputBorder.none,
+                                      isDense: true,
+                                      contentPadding: EdgeInsets.zero,
+                                    ),
+                                    onSubmitted: (_) => _submit(),
                                   ),
-                                  onSubmitted: (_) => _submit(),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 6),
-                            _SendButton(busy: widget.busy, onTap: _submit),
-                          ],
+                              const SizedBox(width: 6),
+                              _SendButton(busy: widget.busy, onTap: _submit),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -377,20 +409,25 @@ class _SendButtonState extends State<_SendButton> {
         scale: _down ? 0.86 : 1.0,
         duration: const Duration(milliseconds: 120),
         curve: Curves.easeOutBack,
-        child: AnimatedContainer(
-          duration: VMotion.base,
-          width: 48,
-          height: 48,
-          decoration: const BoxDecoration(
-            color: Color(0x4DFFFFFF),
-            shape: BoxShape.circle,
-          ),
-          child: Center(
-            child: AnimatedSwitcher(
-              duration: VMotion.fast,
-              child: widget.busy
-                  ? const SizedBox(key: ValueKey('b'), width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
-                  : const Icon(Icons.arrow_upward_rounded, key: ValueKey('s'), size: 26, color: Colors.white),
+        child: _frost(
+          28,
+          BorderRadius.circular(24),
+          AnimatedContainer(
+            duration: VMotion.base,
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: const Color(0x4DFFFFFF),
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0x33FFFFFF), width: 0.5),
+            ),
+            child: Center(
+              child: AnimatedSwitcher(
+                duration: VMotion.fast,
+                child: widget.busy
+                    ? const SizedBox(key: ValueKey('b'), width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
+                    : const Icon(Icons.arrow_upward_rounded, key: ValueKey('s'), size: 26, color: Colors.white),
+              ),
             ),
           ),
         ),
