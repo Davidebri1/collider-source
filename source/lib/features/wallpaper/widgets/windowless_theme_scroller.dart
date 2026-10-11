@@ -87,7 +87,7 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                 child: AnimatedSwitcher(
                   duration: VMotion.base,
                   child: KeyedSubtree(
-                    key: ValueKey('room-${_previewed.id}-$_expanded'),
+                    key: ValueKey('room-${_expanded ? _previewed.id : widget.currentTheme.id}-$_expanded'),
                     child: _expanded
                         ? GestureDetector(
                             onTap: () => setState(() => _expanded = false),
@@ -97,7 +97,8 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                             imageFilter: ImageFilter.blur(sigmaX: 28, sigmaY: 28, tileMode: TileMode.clamp),
                             child: ColorFiltered(
                               colorFilter: const ColorFilter.mode(Color(0x55000000), BlendMode.darken),
-                              child: ThemePosterImage(theme: _previewed, fit: BoxFit.cover, fullBleed: true),
+                              // v8.3.1: the room stays the current wallpaper while browsing.
+                              child: ThemePosterImage(theme: widget.currentTheme, fit: BoxFit.cover, fullBleed: true),
                             ),
                           ),
                   ),

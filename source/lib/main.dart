@@ -1,3 +1,4 @@
+import 'dart:ui' as ui;
 import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'dart:async';
 
@@ -33,6 +34,7 @@ import 'features/smartgen/screens/smartgen_screen.dart';
 import 'features/market/screens/market_screen.dart';
 import 'features/files/screens/files_screen.dart';
 import 'features/mediagen/figma_media_stage.dart';
+import 'core/ambient/ambient.dart';
 import 'features/browser/browser_urls.dart';
 import 'features/browser/models/browser_tab.dart';
 import 'features/browser/screens/in_app_browser_sheet.dart';
@@ -594,7 +596,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         duration: VMotion.base,
         opacity: selected ? 1.0 : 0.42,
         child: selected
-            ? card
+            ? AmbientGlow(color: item.modelDef.providerColor, radius: 18, phase: (item.modelDef.id.hashCode % 100) / 100, child: card)
             : ColorFiltered(
                 colorFilter: const ColorFilter.matrix(<double>[
                   0.2126, 0.7152, 0.0722, 0, 0,
@@ -610,7 +612,11 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
   Widget _tickerPage(ModelCategory c, bool isMobile) {
     final rows = _tickerRows(c);
-    final open = c == _activeCategory ? _openPill(rows) : null;
+    final open = c != _activeCategory
+        ? null
+        : _expandedModelIds.contains(_kConsensusId)
+            ? _consensusItem()
+            : _openPill(rows);
     final sc = _tickerScroll[c]!;
     Widget column() => Scrollbar(
           controller: sc,
@@ -638,6 +644,74 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     );
   }
 
+  static const String _kConsensusId = '__consensus';
+  String _consensusFull = '';
+  bool _settingsOpen = false;
+  static const ModelDef _consensusDef = ModelDef(id: _kConsensusId, label: 'Consensus', provider: 'Collider', desc: 'Agreement across the answering models.', tier: ModelTier.free, categories: [ModelCategory.general], weight: 0, providerColor: Color(0xFFEDEDED));
+
+  TickerItem _consensusItem() => TickerItem(
+        modelDef: _consensusDef,
+        relativeTime: _promptTime == null ? '' : _clock(_promptTime!),
+        summary: _consensusSummary,
+        isStreaming: _isConsensusGenerating,
+        conversation: [
+          if (_currentPrompt.isNotEmpty) TickerMessage(id: 'cu', sender: 'user', text: _currentPrompt, timestamp: _promptTime ?? DateTime.now()),
+          if (!_isConsensusGenerating) TickerMessage(id: 'cm', sender: 'model', text: '$_consensusRatio\n\n${_consensusFull.isNotEmpty ? _consensusFull : _consensusSummary}', timestamp: DateTime.now()),
+        ],
+      );
+
+  /// Direct mode consensus: a real call to the keyless judge, over the real answers.
+  Future<void> _directConsensus(String prompt) async {
+    final answers = [
+      for (final t in _tickerItems)
+        if (t.conversation.isNotEmpty && t.conversation.last.sender == 'model' && !t.conversation.last.text.startsWith('Error: '))
+          (t.modelDef.label, t.conversation.last.text),
+    ];
+    final total = _tickerItems.length;
+    if (answers.isEmpty) {
+      setState(() {
+        _isConsensusGenerating = false;
+        _consensusRatio = '0/$total Consensus';
+        _consensusSummary = 'No model answered.';
+        _consensusFull = 'No model answered, so there is nothing to compare.';
+      });
+      return;
+    }
+    if (answers.length == 1) {
+      setState(() {
+        _isConsensusGenerating = false;
+        _consensusRatio = '1/$total Consensus';
+        _consensusSummary = answers.first.$2.split('\n').first;
+        _consensusFull = 'Only ${answers.first.$1} answered:\n\n${answers.first.$2}';
+      });
+      return;
+    }
+    try {
+      final judge = await MediaGen.instance.chat('free/pollinations-openai', [
+        {'role': 'system', 'content': 'You compare answers. Reply exactly in this format:\nAGREE: <number of answers that agree with the majority>\nLINE: <the agreed answer in one short line>\nDETAIL: <the agreed answer in full, noting any disagreement>'},
+        {'role': 'user', 'content': 'Question: $prompt\n\n${[for (final a in answers) '### ${a.$1}\n${a.$2}'].join('\n\n')}'},
+      ]);
+      final agree = RegExp(r'AGREE:\s*(\d+)').firstMatch(judge)?.group(1) ?? '?';
+      final line = RegExp(r'LINE:\s*(.+)').firstMatch(judge)?.group(1)?.trim() ?? judge.split('\n').first;
+      final detail = RegExp(r'DETAIL:\s*([\s\S]+)').firstMatch(judge)?.group(1)?.trim() ?? judge;
+      if (!mounted) return;
+      setState(() {
+        _isConsensusGenerating = false;
+        _consensusRatio = '$agree/$total Consensus';
+        _consensusSummary = line;
+        _consensusFull = detail;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isConsensusGenerating = false;
+        _consensusRatio = 'Consensus';
+        _consensusSummary = 'Error: $e';
+        _consensusFull = 'Error: $e';
+      });
+    }
+  }
+
   bool get _mediaStageOn => _activeCategory.isMedia && (_mediaGens[_activeCategory]?.isNotEmpty ?? false);
 
   Widget _buildMediaStage() => MediaStageContent(
@@ -655,8 +729,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         if (_catPager.hasClients) _catPager.animateToPage(idx, duration: VMotion.base, curve: Curves.easeOutCubic);
       });
     }
-    final open = _openPill(_tickerRows(_activeCategory));
-    final h = open != null
+    final h = _expandedModelIds.isNotEmpty
         ? (MediaQuery.of(context).size.height * (_isComposerSummoned ? 0.62 : 0.52) - 140).clamp(220.0, 520.0)
         : _rowH * 4.5 + 6 * 4;
     return Column(
@@ -721,6 +794,15 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       );
     });
     final conv = _tickerItems[idx].conversation;
+    if (!ColliderApi.instance.online) {
+      final msgs = [for (final m in conv) {'role': m.sender == 'user' ? 'user' : 'assistant', 'content': m.text}];
+      try {
+        _answer(modelId, await MediaGen.instance.chat(modelId, msgs), false);
+      } catch (e) {
+        _answer(modelId, 'Error: $e', true);
+      }
+      return;
+    }
     try {
       final r = await ColliderApi.instance.reply(
         model: modelId,
@@ -805,10 +887,27 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
   /// No Collider server, but this build has a provider key: the source's own
   /// direct OpenRouter path (chat.ts callOpenRouter).
+  void _answer(String id, String text, bool error) {
+    if (!mounted) return;
+    setState(() {
+      final i = _tickerItems.indexWhere((t) => t.modelDef.id == id);
+      if (i == -1) return;
+      final cur = _tickerItems[i];
+      final now = DateTime.now();
+      _tickerItems[i] = cur.copyWith(isStreaming: false, relativeTime: _clock(now), summary: text.split('\n').first,
+          conversation: [...cur.conversation, TickerMessage(id: 'm$id${now.microsecondsSinceEpoch}', sender: 'model', text: text, timestamp: now)]);
+    });
+  }
+
+  static String _clock(DateTime t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
   Future<void> _onSendDirect(String prompt, List<String> models) async {
     final now = DateTime.now();
-    final prevItems = _tickerItems;
-    final prevPrompt = _currentPrompt;
+    List<TickerMessage> hist(String id) => [
+          for (final t in _tickerItems)
+            if (t.modelDef.id == id) ...t.conversation,
+        ];
+    final before = {for (final id in models) id: hist(id)};
     setState(() {
       _busy = true;
       _isComposerSummoned = false;
@@ -816,38 +915,26 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       _expandedModelIds.clear();
       _currentPrompt = prompt;
       _promptTime = now;
+      _isConsensusGenerating = true;
+      _consensusRatio = 'Consensus';
+      _consensusSummary = '';
+      _consensusFull = '';
       _tickerItems = [
         for (final id in models)
-          TickerItem(modelDef: ModelRoster.byId(id)!, relativeTime: '', summary: '', isStreaming: true, conversation: [TickerMessage(id: 'u$id', sender: 'user', text: prompt, timestamp: now)]),
+          TickerItem(modelDef: ModelRoster.byId(id)!, relativeTime: '', summary: '', isStreaming: true, conversation: [...before[id]!, TickerMessage(id: 'u$id${now.microsecondsSinceEpoch}', sender: 'user', text: prompt, timestamp: now)]),
       ];
     });
     await Future.wait([
       for (final id in models)
         MediaGen.instance.chat(id, [
           {'role': 'system', 'content': 'You are Collider, a concise, helpful assistant.'},
+          for (final m in before[id]!) if (!m.text.startsWith('Error: ')) {'role': m.sender == 'user' ? 'user' : 'assistant', 'content': m.text},
           {'role': 'user', 'content': prompt},
-        ]).then((text) {
-          if (!mounted) return;
-          setState(() {
-            final i = _tickerItems.indexWhere((t) => t.modelDef.id == id);
-            if (i == -1) return;
-            final cur = _tickerItems[i];
-            _tickerItems[i] = cur.copyWith(isStreaming: false, relativeTime: 'just now', summary: text.split('\n').first,
-                conversation: [...cur.conversation, TickerMessage(id: 'm$id', sender: 'model', text: text, timestamp: DateTime.now())]);
-          });
-        }).catchError((_) {
-          if (mounted) setState(() => _tickerItems.removeWhere((t) => t.modelDef.id == id));
-        }),
+        ]).then((text) => _answer(id, text, false), onError: (e) => _answer(id, 'Error: $e', true)),
     ]);
     if (!mounted) return;
-    setState(() {
-      _busy = false;
-      if (_tickerItems.isEmpty) {
-        _tickerItems = prevItems;
-        _currentPrompt = prevPrompt;
-      }
-    });
-    if (identical(_tickerItems, prevItems)) _cannotRun(prompt);
+    setState(() => _busy = false);
+    await _directConsensus(prompt);
   }
 
   Future<void> _onSendPrompt(String prompt, [List<String> files = const []]) async {
@@ -858,11 +945,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     }).toList();
     if (models.isEmpty) return;
     if (!ColliderApi.instance.online) {
-      final direct = models.where((id) => MediaGen.instance.hasCredentials(id)).toList();
-      if (direct.isNotEmpty) return _onSendDirect(prompt, direct);
-      // Nothing can answer on this link: say so once, quietly (D59).
-      _cannotRun(prompt);
-      return;
+      // v8.3.1: every selected model is asked directly; one that cannot
+      // answer shows its real error in its bubble.
+      return _onSendDirect(prompt, models);
     }
     final now = DateTime.now();
     // Restored as-is if there is no backend to answer (D41).
@@ -1192,6 +1277,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // Base ambient dim. Overlays and work surfaces bring their own VScrim
           // (kit overlay 0.35 + medium blur) so the wallpaper stays visible;
           // the theme gallery keeps a light tint.
+          if (_activeDrawer == 'themes')
+            Positioned.fill(child: BackdropFilter(filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24), child: const SizedBox.expand())),
           Positioned.fill(
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 250),
@@ -1226,16 +1313,16 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                               ? MediaQuery.of(context).size.width - (_railVisible ? 81 : 24)
                               : isMobile
                               ? (_railVisible
-                                  ? (MediaQuery.of(context).size.width - 81).clamp(220.0, _openPill(activePills) != null ? 560.0 : 330.0)
-                                  : (MediaQuery.of(context).size.width - (_isComposerSummoned || _openPill(activePills) != null ? 24 : 120)).clamp(220.0, _openPill(activePills) != null ? 560.0 : 330.0))
-                              : (_openPill(activePills) != null ? 760.0 : 480.0),
+                                  ? (MediaQuery.of(context).size.width - 81).clamp(220.0, _expandedModelIds.isNotEmpty ? 560.0 : 330.0)
+                                  : (MediaQuery.of(context).size.width - (_isComposerSummoned || _expandedModelIds.isNotEmpty ? 24 : 120)).clamp(220.0, _expandedModelIds.isNotEmpty ? 560.0 : 330.0))
+                              : (_expandedModelIds.isNotEmpty ? 760.0 : 480.0),
                           // Map row 13: a generation gets the room to show the media and its panel.
                           maxHeight: MediaQuery.of(context).size.height * (_mediaShowing ? 0.80 : _isComposerSummoned ? 0.62 : 0.52),
                         ),
                         margin: isMobile && _railVisible
                             ? const EdgeInsets.only(left: 69, right: 12)
                             : EdgeInsets.symmetric(horizontal: isMobile ? 12 : 24),
-                        child: VGlass(
+                        child: EdgeLightDrift(radius: VRadius.card, child: VGlass(
                           radius: VRadius.card,
                           material: VMaterial.resting,
                           padding: const EdgeInsets.fromLTRB(VSpace.xs, VSpace.xs, VSpace.xs, 6),
@@ -1244,11 +1331,11 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                             children: [
                             // Pinned consensus row: score and the winning essence, verbatim.
                             if (!_activeCategory.isMedia && _tickerItems.isNotEmpty) ...[
-                              ConsensusRow(
+                              AmbientGlow(color: Colors.white, radius: 20, min: 0.06, max: 0.20, period: const Duration(milliseconds: 5200), child: ConsensusRow(
                                 agreementRatio: _consensusRatio,
                                 summary: _consensusSummary,
                                 isGenerating: _isConsensusGenerating,
-                                onTap: () => setState(() => _activeDrawer = 'consensus'),
+                                onTap: () => _onTogglePill(_kConsensusId)),
                               ),
                               const SizedBox(height: 8),
                             ],
@@ -1282,7 +1369,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                               generateTick: _generateTick,
                             ),
                           ],
-                        ),
+                        )),
                       ),
                     ),
                   ),
@@ -1312,7 +1399,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                 onOpenFiles: () => _requestSwitchSurface('files'),
                 onOpenMusicPlayer: () => _requestSwitchSurface('music'),
                 onOpenBrowser: () => _openBrowserForTab('user_default'),
-                onOpenSettings: () => _openDrawer('settings'),
+                onOpenSettings: () => setState(() { _activeDrawer = null; _settingsOpen = true; }),
               ),
             ),
 
@@ -1385,7 +1472,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             Positioned.fill(
               child: WindowlessThemeScroller(
                 currentTheme: _currentTheme,
-                onLivePreview: (theme) => setState(() => _currentTheme = theme),
+                // v8.3.1: browsing never changes the app background (only Set does).
+                onLivePreview: (_) {},
                 onConfirmTheme: (theme) => setState(() {
                   _currentTheme = theme;
                   _savedThemeBeforePreview = theme;
@@ -1434,17 +1522,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               ),
             ),
 
-          if (_activeDrawer == 'settings')
-            Positioned.fill(
-              child: SettingsDrawer(
-                onClose: () => setState(() => _activeDrawer = null),
-                incognito: _incognito,
-                autosave: _autosave,
-                onIncognito: (v) => setState(() => _incognito = v),
-                onAutosave: (v) => setState(() => _autosave = v),
-                onAccount: () => setState(() => _activeDrawer = 'account'),
-              ),
-            ),
 
           if (_activeDrawer == 'account')
             Positioned.fill(
@@ -1573,6 +1650,19 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // Shown on every screen, the Premium Theme Market included (the market
           // reserves its height; see PremiumThemeMarketView.bottomBarReserve).
           // Hidden on phone widths while consensus is open: the scene has its own back control.
+          // v8.3.1: Settings opens over the current screen (no reset), blurred behind.
+          if (_settingsOpen)
+            Positioned.fill(
+              child: SettingsDrawer(
+                onClose: () => setState(() => _settingsOpen = false),
+                incognito: _incognito,
+                autosave: _autosave,
+                onIncognito: (v) => setState(() => _incognito = v),
+                onAutosave: (v) => setState(() => _autosave = v),
+                onAccount: () => setState(() { _settingsOpen = false; _activeDrawer = 'account'; }),
+              ),
+            ),
+
           Positioned(
             left: 0,
             right: 0,
@@ -1580,7 +1670,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             child: SafeArea(
               top: false,
               child: Center(
-                child: PermanentNavBar(
+                child: SpecularSweep(radius: 40, child: PermanentNavBar(
                   isComposerSummoned: _isComposerSummoned,
                   onToggleComposer: _toggleComposer,
                   onHome: () {
@@ -1591,9 +1681,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                     }
                   },
                   onApps: () => _openDrawer('apps'),
-                  onSettings: () => _openDrawer('settings'),
+                  onSettings: () => setState(() => _settingsOpen = !_settingsOpen),
                   activeDrawer: _activeDrawer,
-                ),
+                )),
               ),
             ),
           ),

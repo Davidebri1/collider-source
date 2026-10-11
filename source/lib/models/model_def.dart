@@ -66,6 +66,7 @@ class ModelDef {
 class ModelRoster {
   /// models.ts MODELS, in source order.
   static const List<ModelDef> source = [
+    ModelDef(id: 'free/pollinations-openai', label: 'Pollinations GPT-OSS 20B', provider: 'Pollinations', desc: 'Keyless Pollinations text endpoint (gpt-oss-20b).', tier: ModelTier.free, categories: [ModelCategory.general], weight: 0, providerColor: Color(0xFF8FE3A0)),
     ModelDef(id: 'free/gemini-3-6-flash-lite', label: 'Gemini 3.6 Flash Lite', provider: 'Google', desc: 'Google\'s lightweight flash model.', tier: ModelTier.free, categories: [ModelCategory.general], weight: 1, providerColor: Color(0xFF7FD8C4)),
     ModelDef(id: 'free/mistral-small', label: 'Mistral Small 3.2', provider: 'Mistral AI', desc: 'Mistral\'s current small model.', tier: ModelTier.free, categories: [ModelCategory.general], weight: 1, providerColor: Color(0xFFFFB066)),
     ModelDef(id: 'free/command-r', label: 'Command R', provider: 'Cohere', desc: 'Cohere\'s generalist model.', tier: ModelTier.free, categories: [ModelCategory.general], weight: 1, providerColor: Color(0xFFF2C14E)),

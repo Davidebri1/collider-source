@@ -22,15 +22,26 @@ class ConsensusRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final label = agreementRatio.contains('Consensus') ? agreementRatio : '$agreementRatio Consensus';
+    // v8.3.1: elevated above the model list: finer glass, luminous hairline
+    // edge, deeper two-layer shadow, refined type; one line of agreed answer.
     return VPress(
       onTap: onTap ?? onGenerateConsensus,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(VSpace.sm, 10, VSpace.xs, VSpace.sm),
+        margin: const EdgeInsets.only(bottom: 4),
+        padding: const EdgeInsets.fromLTRB(12, 9, 8, 10),
         decoration: BoxDecoration(
-          color: VColors.glassElevated,
-          borderRadius: BorderRadius.circular(VRadius.lg - 4),
-          border: Border.all(color: VColors.borderHeavy, width: 0.5),
-          boxShadow: VShadow.medium,
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0x38FFFFFF), Color(0x14FFFFFF)],
+          ),
+          borderRadius: BorderRadius.circular(VRadius.lg - 2),
+          border: Border.all(color: const Color(0x66FFFFFF), width: 0.7),
+          boxShadow: const [
+            BoxShadow(color: Color(0x59000000), blurRadius: 28, offset: Offset(0, 14)),
+            BoxShadow(color: Color(0x33000000), blurRadius: 6, offset: Offset(0, 2)),
+            BoxShadow(color: Color(0x1FFFFFFF), blurRadius: 10, spreadRadius: -4),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -38,25 +49,16 @@ class ConsensusRow extends StatelessWidget {
           children: [
             Row(
               children: [
-                Container(
-                  height: 26,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  decoration: BoxDecoration(color: VColors.fillActive, borderRadius: BorderRadius.circular(VRadius.full)),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.balance_rounded, size: 14, color: VColors.textPrimary),
-                      const SizedBox(width: 6),
-                      Text(label, style: VType.callout(weight: FontWeight.w600)),
-                    ],
-                  ),
-                ),
+                const Icon(Icons.balance_rounded, size: 13, color: Color(0xE6FFFFFF)),
+                const SizedBox(width: 6),
+                Text(label.toUpperCase(),
+                    style: VType.caption(color: const Color(0xE6FFFFFF), weight: FontWeight.w600).copyWith(letterSpacing: 1.2)),
                 const Spacer(),
-                Icon(isGenerating ? Icons.sync_rounded : Icons.chevron_right_rounded, size: 20, color: VColors.textTertiary),
+                Icon(isGenerating ? Icons.sync_rounded : Icons.chevron_right_rounded, size: 18, color: VColors.textTertiary),
               ],
             ),
-            if (isGenerating) ...[
-              const SizedBox(height: VSpace.xs),
+            const SizedBox(height: 4),
+            if (isGenerating)
               ClipRRect(
                 borderRadius: BorderRadius.circular(VRadius.full),
                 child: const LinearProgressIndicator(
@@ -64,14 +66,10 @@ class ConsensusRow extends StatelessWidget {
                   backgroundColor: VColors.fillCell,
                   valueColor: AlwaysStoppedAnimation<Color>(VColors.textSecondary),
                 ),
-              ),
-            ],
-            const SizedBox(height: VSpace.xs),
-            AnimatedSwitcher(
-              duration: VMotion.base,
-              layoutBuilder: (cur, prev) => Stack(alignment: Alignment.topLeft, children: [...prev, if (cur != null) cur]),
-              child: Text(summary, key: ValueKey(summary), style: VType.callout(weight: FontWeight.w500).copyWith(height: 1.35)),
-            ),
+              )
+            else
+              Text(summary.split('\n').first, maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: VType.callout(color: Colors.white, weight: FontWeight.w500).copyWith(height: 1.3, letterSpacing: 0.1)),
           ],
         ),
       ),

@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../core/vision/vision_kit.dart';
 import '../../core/audio/music_player.dart';
@@ -32,7 +33,7 @@ class SettingsDrawer extends StatelessWidget {
       fit: StackFit.expand,
       children: [
         // Figma 1:2 has no dimming behind the menu: a clear tap-to-close layer.
-        Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: onClose)),
+        Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: onClose, child: ClipRect(child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18), child: const ColoredBox(color: Color(0x14000000)))))),
         Center(
           child: ListenableBuilder(
             listenable: Listenable.merge([FloatingMusic.enabled, ThemeCatalog.instance]),

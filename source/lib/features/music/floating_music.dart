@@ -167,11 +167,41 @@ class _FloatingMusicState extends State<FloatingMusic> {
                   final o = _want ?? want;
                   _save(o);
                 },
-                child: MusicWidget(
-                  onOpenCollection: widget.onOpenCollection,
-                  expanded: showExpanded,
-                  canExpand: expanded != null,
-                  onToggleExpanded: () => setState(() => _expanded = !_expanded),
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    MusicWidget(
+                      onOpenCollection: widget.onOpenCollection,
+                      expanded: showExpanded,
+                      canExpand: expanded != null,
+                      onToggleExpanded: () => setState(() => _expanded = !_expanded),
+                    ),
+                    // v8.3.1: close button; turns the widget off (Settings turns it back on).
+                    Positioned(
+                      top: -6,
+                      right: -6,
+                      child: Semantics(
+                        button: true,
+                        label: 'Close music widget',
+                        child: GestureDetector(
+                          onTap: () {
+                            MusicPlayer.instance.close();
+                            FloatingMusic.setEnabled(false);
+                          },
+                          child: Container(
+                            width: 22,
+                            height: 22,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: const Color(0xCC2A2A2E),
+                              border: Border.all(color: const Color(0x55FFFFFF), width: 0.8),
+                            ),
+                            child: const Icon(Icons.close_rounded, size: 14, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),

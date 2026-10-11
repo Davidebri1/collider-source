@@ -57,6 +57,8 @@ const Map<String, _Route> _routes = {
   'elite/kimi-k2-7-code': _Route('openrouter', 'moonshotai/kimi-k2.7-code'),
   'elite/kimi-k3': _Route('openrouter', 'moonshotai/kimi-k3', crazy: true),
   'elite/qwen-3-7-max': _Route('openrouter', 'qwen/qwen3.7-max', crazy: true),
+  // Keyless text (Pollinations OpenAI-compatible endpoint)
+  'free/pollinations-openai': _Route('pollinations-text', 'openai'),
   // Image
   'img/flux-free': _Route('pollinations-image', 'flux'),
   'img/gemini-3-1-flash-image': _Route('openrouter-image', 'google/gemini-3.1-flash-image-preview'),
@@ -146,7 +148,7 @@ class MediaGen {
   bool hasCredentials(String modelId) {
     final r = _routes[modelId];
     if (r == null) return false;
-    if (r.provider == 'pollinations-image') return true;
+    if (r.provider == 'pollinations-image' || r.provider == 'pollinations-text') return true;
     return _wire(r).key.isNotEmpty;
   }
 
@@ -217,13 +219,37 @@ class MediaGen {
   /// callOpenRouter (non-streaming): text answer for General / Coding.
   Future<String> chat(String modelId, List<Map<String, String>> messages) async {
     final r = _routes[modelId];
-    if (r == null || r.provider != 'openrouter' || !hasCredentials(modelId)) throw const MediaGenError('no credentials');
+    if (r == null) throw const MediaGenError('this model has no chat route in this build');
+    if (r.provider == 'pollinations-text') {
+      try {
+        final res = await _dio.post('https://text.pollinations.ai/openai',
+            data: {'model': r.remote, 'messages': messages}, options: Options(headers: {'Content-Type': 'application/json'}));
+        final text = res.data['choices']?[0]?['message']?['content'] as String? ?? '';
+        if (text.trim().isEmpty) throw const MediaGenError('Pollinations returned an empty answer');
+        return text;
+      } on DioException catch (e) {
+        throw MediaGenError('Pollinations ${e.response?.statusCode ?? 'unreachable'}: ${_errBody(e)}');
+      }
+    }
+    if (r.provider != 'openrouter') throw const MediaGenError('this model has no chat route in this build');
+    if (!hasCredentials(modelId)) throw const MediaGenError('no OpenRouter API key in this build');
     final w = _wire(r);
-    final res = await _dio.post('${w.base}/chat/completions',
-        data: {'model': _slug(r), 'messages': messages}, options: Options(headers: _headers(w.key)));
-    final text = res.data['choices']?[0]?['message']?['content'] as String? ?? '';
-    if (text.trim().isEmpty) throw const MediaGenError('empty');
-    return text;
+    try {
+      final res = await _dio.post('${w.base}/chat/completions',
+          data: {'model': _slug(r), 'messages': messages}, options: Options(headers: _headers(w.key)));
+      final text = res.data['choices']?[0]?['message']?['content'] as String? ?? '';
+      if (text.trim().isEmpty) throw const MediaGenError('provider returned an empty answer');
+      return text;
+    } on DioException catch (e) {
+      throw MediaGenError('provider ${e.response?.statusCode ?? 'unreachable'}: ${_errBody(e)}');
+    }
+  }
+
+  static String _errBody(DioException e) {
+    final d = e.response?.data;
+    if (d is Map) return '${d['error'] is Map ? d['error']['message'] : d['error'] ?? d['message'] ?? d}';
+    if (d is String && d.isNotEmpty) return d.length > 200 ? d.substring(0, 200) : d;
+    return e.message ?? e.type.name;
   }
 
   // callOpenRouterImage

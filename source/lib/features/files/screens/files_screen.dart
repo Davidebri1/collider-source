@@ -36,6 +36,7 @@ class FilesScreen extends StatefulWidget {
 }
 
 class _FilesScreenState extends State<FilesScreen> {
+  static const double _mw = 600;
   final TextEditingController _searchCtrl = TextEditingController();
   final FileStore _store = FileStore.instance;
   String _q = '';
@@ -105,21 +106,24 @@ class _FilesScreenState extends State<FilesScreen> {
                     (q.isEmpty || f.name.toLowerCase().contains(q)))
                 .toList();
         final title = cat == 'music' ? 'Music' : (_typeLabel[_type] ?? _type);
+        // v8.3.1: portrait shape: same sidebar + main panel, the main panel
+        // narrower (3 columns) and the window as tall as the phone allows.
+        final scr = MediaQuery.sizeOf(context);
+        const cw = 295.0 + _mw + 20;
+        final hh = (scr.height * cw / scr.width - 380).clamp(740.0, 2400.0);
         return FigmaStage(
-          frame: FilesScreen.frame,
-          cropWidth: FilesScreen.cropWidth,
-          center: FilesScreen.center,
+          frame: Size(95.4 + 295 + _mw + 40, hh + 120),
+          cropWidth: cw,
+          center: Offset(95.4 + (295 + _mw) / 2, (hh + 100) / 2 + 30),
           children: [
-            // Sidebar 4253_frame at (95.4, 0), 295 x 740.
-            Positioned(left: 95.4, top: 0, width: 295, height: 740, child: _sidebar(all)),
-            // Main panel 3004_frame at (390.4, 0), 946 x 740.
-            Positioned(left: 390.4, top: 0, width: 946, height: 740, child: _main(title, files, cat)),
+            Positioned(left: 95.4, top: 0, width: 295, height: hh, child: _sidebar(all)),
+            Positioned(left: 390.4, top: 0, width: _mw, height: hh, child: _main(title, files, cat)),
             // Segmented ornament 3231_frame at (518.8, 721), 394.1 x 60.2.
-            Positioned(left: 518.8, top: 721, width: 394.1, height: 60.2, child: _segments()),
+            Positioned(left: 390.4 + (_mw - 394.1) / 2, top: hh - 19, width: 394.1, height: 60.2, child: _segments()),
             // Window controls 2686_frame at (625.4, 821.2): dot (close) + bar.
             Positioned(
-              left: 625.4,
-              top: 815,
+              left: 95.4 + (295 + _mw) / 2 - 90,
+              top: hh + 75,
               width: 181,
               height: 26,
               child: Row(children: [
@@ -298,7 +302,7 @@ class _FilesScreenState extends State<FilesScreen> {
         Positioned(
           left: 40,
           top: 22,
-          width: 760,
+          width: _mw - 186,
           height: 34,
           child: cat == 'search'
               ? TextField(
@@ -314,7 +318,7 @@ class _FilesScreenState extends State<FilesScreen> {
         // Adding files is the real storage path (D22/D32); Figma has no add
         // control, so it sits on the title row's end (v8.4 note in D22).
         Positioned(
-          left: 862,
+          left: _mw - 84,
           top: 17,
           width: 44,
           height: 44,
@@ -335,13 +339,13 @@ class _FilesScreenState extends State<FilesScreen> {
         Positioned(
           left: 40,
           top: 75,
-          width: 866,
+          width: _mw - 80,
           bottom: 0,
           child: CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
               SliverGrid(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 5, mainAxisSpacing: 13, crossAxisSpacing: 4, childAspectRatio: 170 / 217),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, mainAxisSpacing: 13, crossAxisSpacing: 4, childAspectRatio: 170 / 217),
                 delegate: SliverChildBuilderDelegate((_, i) => _tile(files[i]), childCount: files.length),
               ),
               if (lib.isNotEmpty)

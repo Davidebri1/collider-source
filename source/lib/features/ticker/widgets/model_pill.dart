@@ -196,8 +196,6 @@ class _ModelPillState extends State<ModelPill> {
             onTap: widget.onToggleExpand,
             child: Row(
               children: [
-                VAvatar(label: item.modelDef.label, color: c, size: 18),
-                const SizedBox(width: 6),
                 // Full model name, wrapping (D44).
                 Expanded(
                   child: Text(item.modelDef.label, maxLines: 2, style: VType.footnote(color: VColors.textPrimary, weight: FontWeight.w600)),
@@ -223,7 +221,7 @@ class _ModelPillState extends State<ModelPill> {
                   : Text(
                       item.summary,
                       key: ValueKey(item.summary),
-                      maxLines: widget.narrow ? 1 : 2,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: VType.footnote(color: VColors.textSecondary, weight: FontWeight.w400).copyWith(height: 1.3),
                     ),
