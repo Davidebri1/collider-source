@@ -441,7 +441,14 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     }
     final c = j.consensus;
     _isConsensusGenerating = !j.done;
-    _consensusRatio = c.status == 'done' && c.score.isNotEmpty ? c.score : 'Consensus';
+    // Headcount ratio (Master Spec §5.1): models that converged over
+    // models that answered. A raw score is a percentage, which the
+    // spec permanently forbids — so count, never scale.
+    final answered = j.results.values.where((r) => r.status != 'error' && r.status != 'pending').length;
+    final converged = (answered - c.dissent.length).clamp(0, answered);
+    _consensusRatio = c.status == 'done' && answered > 0
+        ? '$converged/$answered'
+        : 'Consensus';
     _consensusSummary = c.summary;
   }
 
@@ -1155,7 +1162,10 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             Positioned(
               left: 0,
               right: 0,
-              bottom: 148, // above the floating composer (74 + ~60) + gap
+              // wechat 0:639 — the window floats over the wallpaper,
+              // halfway up the screen ("probably halfway up is
+              // sufficient"), not pinned above the composer.
+              top: MediaQuery.sizeOf(context).height * 0.30,
               child: SafeArea(
                 child: Builder(builder: (context) {
                   final open = _openPill(activePills);
@@ -1173,7 +1183,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                     openId: open?.modelDef.id,
                     joined: open != null,
                     onOpen: _onTogglePill,
-                    consensusTitle: _consensusRatio.contains('Consensus') ? _consensusRatio : '$_consensusRatio Consensus',
+                    consensusTitle: _consensusRatio.contains('Consensus')
+                        ? '✦ $_consensusRatio'
+                        : '✦ $_consensusRatio Consensus',
                     consensusLine: _isConsensusGenerating ? 'Comparing answers' : _consensusSummary,
                     onConsensus: () => setState(() => _activeDrawer = 'consensus'),
                     activeIds: _selectedModelIds.toSet(),

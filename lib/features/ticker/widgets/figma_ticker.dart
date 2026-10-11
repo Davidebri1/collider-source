@@ -225,8 +225,8 @@ class _WindowShell extends StatelessWidget {
         child: Container(
           decoration: BoxDecoration(
             borderRadius: radius,
-            color: const Color(0x1EFFFFFF),
-            border: Border.all(color: const Color(0x2EFFFFFF), width: 0.5),
+            color: const Color(0x14FFFFFF),
+            border: Border.all(color: const Color(0x26FFFFFF), width: 0.5),
           ),
           padding: const EdgeInsets.fromLTRB(14, 10, 10, 8),
           child: child,
@@ -236,10 +236,11 @@ class _WindowShell extends StatelessWidget {
   }
 }
 
-/// One model row: name, time, one-line takeaway. Press toggles the model on
-/// or off with a graduated decay (dim + settle on deactivate, spring-back on
-/// activate). No discs, no badges, no row chrome (D20). The chevron opens the
-/// conversation (D17/D18).
+/// One model row: name, time, one-line takeaway, tinted across
+/// the whole card in the model's own colour (Master Spec §3.3 —
+/// the "left border only" restriction was struck). Press toggles
+/// the model on/off with a graduated decay. No discs, no badges
+/// (D20). The chevron opens the conversation (D17/D18).
 class _TickerRow extends StatelessWidget {
   final TickerItem item;
   final bool selected;
@@ -254,6 +255,7 @@ class _TickerRow extends StatelessWidget {
     final last = item.conversation.isNotEmpty ? item.conversation.last : null;
     final time = item.isStreaming ? '…' : (last != null ? _clock(last.timestamp) : item.relativeTime);
     final msg = item.summary.isNotEmpty ? item.summary : (last?.text ?? '');
+    final tint = item.modelDef.providerColor;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onToggle,
@@ -267,7 +269,15 @@ class _TickerRow extends StatelessWidget {
           scale: active ? 1.0 : 0.96,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 5),
-            child: Row(children: [
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Color.alphaBlend(
+                  tint.withOpacity(selected ? 0.28 : 0.16),
+                  const Color(0x0AFFFFFF),
+                ),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(children: [
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
                   SizedBox(
@@ -292,17 +302,18 @@ class _TickerRow extends StatelessWidget {
                   ),
                 ]),
               ),
-              // Open affordance: the conversation expands from here.
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: onOpen,
-                child: Padding(
-                  padding: const EdgeInsets.all(4),
-                  child: Icon(item.modelDef.id == item.modelDef.id && selected ? Icons.close_rounded : Icons.chevron_right_rounded,
-                      size: 18, color: const Color(0x99FFFFFF)),
+                // Open affordance: the conversation expands from here.
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onOpen,
+                  child: const Padding(
+                    padding: EdgeInsets.all(4),
+                    child: Icon(Icons.chevron_right_rounded,
+                        size: 18, color: Color(0x99FFFFFF)),
+                  ),
                 ),
-              ),
-            ]),
+              ]),
+            ),
           ),
         ),
       ),
@@ -383,7 +394,7 @@ class _TickerAnswerCompactState extends State<TickerAnswerCompact> {
                               constraints: const BoxConstraints(maxWidth: 300),
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                               decoration: const BoxDecoration(
-                                color: Color(0x66347F52),
+                                color: Color(0x4DFFFFFF),
                                 borderRadius: BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(3), bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12)),
                               ),
                               child: Text(msg.text, style: const TextStyle(fontSize: 12.5, height: 1.3, fontWeight: FontWeight.w600, color: Colors.white)),
@@ -625,7 +636,7 @@ class _Outgoing extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             decoration: const BoxDecoration(
-              color: Color(0xFF347552),
+              color: Color(0x4DFFFFFF),
               borderRadius: BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(4), bottomLeft: Radius.circular(20), bottomRight: Radius.circular(20)),
             ),
             child: Column(crossAxisAlignment: CrossAxisAlignment.end, mainAxisSize: MainAxisSize.min, children: [
