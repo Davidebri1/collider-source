@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -1133,6 +1134,16 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                 _activeDrawer == 'themes' ? 0.10 : 0.0,
               ),
             ),
+          ),
+          // Composer focus = depth of field: while the composer is summoned
+          // the ROOM falls out of focus (blur-only, no dim — nothing is
+          // hidden, just pushed back). Sits above Plane 0 only, so every
+          // ornament (rail, dock, composer) stays sharp above it.
+          if (_isComposerSummoned && !_browserOpen)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18), child: const SizedBox.expand()),
+              ),
           ),
           // ================= PLANE 1: RESTING WORKSPACE =================
           // v8.4 scaled-frame method: the model ticker is wechat CHAT 2013:75
