@@ -19,6 +19,64 @@ import '../../models/media_specs.dart';
 const String _openRouterKey = String.fromEnvironment('OPENROUTER_KEY');
 const String _crazyRouterKey = String.fromEnvironment('CRAZYROUTER_KEY');
 const String _openRouterBase = 'https://openrouter.ai/api/v1';
+// v8.5 text wires (David's keys, given at build time with --dart-define).
+const String _nvidiaKey = String.fromEnvironment('NVIDIA_KEY');
+const String _commandCodeKey = String.fromEnvironment('COMMANDCODE_KEY');
+const String _openCodeKey = String.fromEnvironment('OPENCODE_KEY');
+const String _minimaxKey = String.fromEnvironment('MINIMAX_KEY');
+/// Server that forwards to providers that refuse browser calls (NVIDIA, OpenCode).
+const String _proxy = String.fromEnvironment('COLLIDER_PROXY');
+const Map<String, ({String base, String key, bool cors})> _textWires = {
+  'nv': (base: 'https://integrate.api.nvidia.com/v1', key: _nvidiaKey, cors: false),
+  'cc': (base: 'https://api.commandcode.ai/provider/v1', key: _commandCodeKey, cors: true),
+  'oc': (base: 'https://opencode.ai/zen/v1', key: _openCodeKey, cors: false),
+  'mm': (base: 'https://api.minimax.io/v1', key: _minimaxKey, cors: true),
+};
+const Map<String, String> _proxyRoute = {'nv': 'nvidia', 'oc': 'opencode'};
+
+/// Each text model's ordered list of (wire, remote id) attempts.
+const Map<String, List<(String, String)>> _text = {
+  'free/glm-5-3-flash': [('nv', 'z-ai/glm-5.3-flash'), ('oc', 'glm-5.3-flash')],
+  'free/laguna-s-2-1': [('cc', 'poolside/laguna-s-2.1-free')],
+  'free/laguna-xs-2-1': [('nv', 'poolside/laguna-xs-2.1')],
+  'free/ling-3-1-flash': [('cc', 'inclusionai/ling-3.1-flash:free')],
+  'free/nemotron-3-5-lightning': [('nv', 'nvidia/nemotron-3.5-lightning-30b-a3b')],
+  'pro/glm-5-3': [('nv', 'z-ai/glm-5.3'), ('oc', 'glm-5.3'), ('cc', 'zai-org/GLM-5.3')],
+  'pro/deepseek-4-1-flash': [('nv', 'deepseek-ai/deepseek-v4.1-flash'), ('oc', 'deepseek-v4.1-flash'), ('cc', 'deepseek/deepseek-v4.1-flash')],
+  'pro/minimax-m3': [('mm', 'MiniMax-M3'), ('cc', 'MiniMaxAI/MiniMax-M3'), ('oc', 'minimax-m3')],
+  'pro/mimo-v2-6-flash': [('cc', 'xiaomi/mimo-v2.6-flash')],
+  'pro/nemotron-3-ultra': [('nv', 'nvidia/nemotron-3-ultra-550b-a55b'), ('cc', 'nvidia/nemotron-3-ultra-550b-a55b')],
+  'elite/kimi-k3': [('nv', 'moonshotai/kimi-k3'), ('oc', 'kimi-k3'), ('cc', 'moonshotai/Kimi-K3')],
+};
+
+/// Consensus agent (also writes every ticker's one-line summary). Smart Gen uses the same chain.
+const List<(String, String)> consensusChain = [
+  ('mm', 'MiniMax-M3'),
+  ('cc', 'MiniMaxAI/MiniMax-M3'),
+  ('oc', 'minimax-m3'),
+  ('nv', 'moonshotai/kimi-k3'),
+  ('nv', 'deepseek-ai/deepseek-v4.1-flash'),
+  ('nv', 'z-ai/glm-5.3'),
+  ('nv', 'z-ai/glm-5.3-flash'),
+  ('nv', 'nvidia/nemotron-3-ultra-550b-a55b'),
+  ('nv', 'nvidia/nemotron-3.5-lightning-30b-a3b'),
+];
+
+/// chat.ts friendlyErrorMessage, restored: our own words, never provider text.
+String friendlyErrorMessage(Object error) {
+  final msg = '$error';
+  if (msg.contains('no-key')) return "This model isn't connected in this build yet. Pick another model.";
+  if (msg.contains('cors')) return "Couldn't reach this model from the browser. Try again or switch models.";
+  if (RegExp(r'\b402\b|quota|insufficient|funds|balance|usage limit').hasMatch(msg)) return 'This model is temporarily unavailable. Try another.';
+  if (RegExp(r'\b429\b').hasMatch(msg)) return 'This model is getting a lot of requests right now — try again in a moment.';
+  if (RegExp(r'\b401\b|\b403\b').hasMatch(msg)) return "This model couldn't be reached with your current access — try again or switch models.";
+  if (RegExp(r'timeout|network|fetch|unreachable', caseSensitive: false).hasMatch(msg)) return "Couldn't reach this model — check your connection and try again.";
+  if (RegExp(r'\b5\d\d\b').hasMatch(msg)) return 'This model is temporarily unavailable. Try again shortly.';
+  if (msg.contains('empty')) return 'This model returned an empty reply. Try again, or pick another.';
+  return 'Something went wrong generating a response. Try again.';
+}
+
+String _stripThink(String t) => t.replaceAll(RegExp(r'<think>[\s\S]*?</think>'), '').replaceAll(RegExp(r'^[\s\S]*</think>'), '').trim();
 const String _crazyRouterBase = 'https://crazyrouter.com/v1';
 
 class _Route {
@@ -69,7 +127,7 @@ const Map<String, _Route> _routes = {
   'img/nano-banana-pro': _Route('openrouter-image', 'nano-banana-pro', crazy: true),
   'img/seedream-5-0': _Route('openrouter-image', 'doubao-seedream-5-0', crazy: true),
   'img/qwen-image-2-0': _Route('openrouter-image', 'qwen-image-2.0', crazy: true),
-  'img/gpt-image-2': _Route('openrouter-image', 'openai/gpt-5.4-image-2', crazy: true),
+  'img/gpt-image-2': _Route('openrouter-image', 'gpt-image-2', crazy: true),
   'img/dall-e-3': _Route('openrouter-image', 'dall-e-3', crazy: true),
   'img/kling-3-image': _Route('openrouter-image', 'aigc-image-kling-3.0', crazy: true),
   'img/mj-upscale': _Route('openrouter-image', 'mj_upscale', crazy: true),
@@ -141,11 +199,59 @@ class MediaGen {
 
   String _slug(_Route r) => r.crazy && _crazyRouterKey.isNotEmpty ? (_slugOverrides[r.remote] ?? r.remote) : r.remote;
 
-  bool isRoutable(String modelId) => _routes.containsKey(modelId);
+  bool isRoutable(String modelId) => _routes.containsKey(modelId) || _text.containsKey(modelId.replaceFirst('code-', ''));
+
+  bool _wireUsable(String w) {
+    final t = _textWires[w]!;
+    if (t.key.isEmpty) return false;
+    return t.cors || _proxy.isNotEmpty;
+  }
+
+  /// One OpenAI-compatible call on a text wire. Throws a raw error string.
+  Future<String> _textCall(String w, String remote, List<Map<String, String>> messages, {int? maxTokens}) async {
+    final t = _textWires[w]!;
+    if (t.key.isEmpty) throw const MediaGenError('no-key');
+    final viaProxy = !t.cors;
+    if (viaProxy && _proxy.isEmpty) throw const MediaGenError('cors');
+    final url = viaProxy ? '$_proxy/api/p?u=${_proxyRoute[w]}' : '${t.base}/chat/completions';
+    try {
+      final res = await _dio.post(url,
+          data: {'model': remote, 'messages': messages, if (maxTokens != null) 'max_tokens': maxTokens},
+          options: Options(headers: viaProxy ? {'Content-Type': 'application/json'} : {'Content-Type': 'application/json', 'Authorization': 'Bearer ${t.key}'}, receiveTimeout: const Duration(seconds: 90)));
+      final text = _stripThink(res.data['choices']?[0]?['message']?['content'] as String? ?? '');
+      if (text.isEmpty) throw const MediaGenError('empty');
+      return text;
+    } on DioException catch (e) {
+      if (e.type == DioExceptionType.receiveTimeout || e.type == DioExceptionType.connectionTimeout) throw const MediaGenError('timeout');
+      throw MediaGenError('provider ${e.response?.statusCode ?? 'unreachable'}: ${_errBody(e)}');
+    }
+  }
+
+  /// Tries each attempt in order; throws the first meaningful error.
+  Future<String> _chain(List<(String, String)> tries, List<Map<String, String>> messages, {int? maxTokens}) async {
+    Object? first;
+    for (final (w, remote) in tries) {
+      if (!_wireUsable(w)) {
+        first ??= MediaGenError(_textWires[w]!.key.isEmpty ? 'no-key' : 'cors');
+        continue;
+      }
+      try {
+        return await _textCall(w, remote, messages, maxTokens: maxTokens);
+      } catch (e) {
+        if (first == null || '$first'.contains('no-key') || '$first'.contains('cors')) first = e;
+      }
+    }
+    throw first ?? const MediaGenError('no-key');
+  }
+
+  /// The consensus agent (MiniMax M3.1 first, then the fallback chain).
+  Future<String> consensus(List<Map<String, String>> messages) => _chain(consensusChain, messages);
 
   /// chat.ts hasCredentials: is there a key for the wire this route uses?
   /// Pollinations is keyless in the source (it now answers 402, D61).
   bool hasCredentials(String modelId) {
+    final tx = _text[modelId.replaceFirst('code-', '')];
+    if (tx != null) return tx.any((t) => _wireUsable(t.$1));
     final r = _routes[modelId];
     if (r == null) return false;
     if (r.provider == 'pollinations-image' || r.provider == 'pollinations-text') return true;
@@ -218,6 +324,14 @@ class MediaGen {
 
   /// callOpenRouter (non-streaming): text answer for General / Coding.
   Future<String> chat(String modelId, List<Map<String, String>> messages) async {
+    final tx = _text[modelId.replaceFirst('code-', '')];
+    if (tx != null) {
+      try {
+        return await _chain(tx, messages);
+      } catch (e) {
+        throw MediaGenError(friendlyErrorMessage(e));
+      }
+    }
     final r = _routes[modelId];
     if (r == null) throw const MediaGenError('this model has no chat route in this build');
     if (r.provider == 'pollinations-text') {

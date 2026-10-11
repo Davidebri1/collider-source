@@ -661,10 +661,14 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       );
 
   /// Direct mode consensus: a real call to the keyless judge, over the real answers.
+  /// Error texts our system put in bubbles (never sent back to a model).
+  final Set<String> _errTexts = {};
+  bool _isErr(String t) => t.startsWith('Error: ') || _errTexts.contains(t);
+
   Future<void> _directConsensus(String prompt) async {
     final answers = [
       for (final t in _tickerItems)
-        if (t.conversation.isNotEmpty && t.conversation.last.sender == 'model' && !t.conversation.last.text.startsWith('Error: '))
+        if (t.conversation.isNotEmpty && t.conversation.last.sender == 'model' && !_isErr(t.conversation.last.text))
           (t.modelDef.label, t.conversation.last.text),
     ];
     final total = _tickerItems.length;
@@ -677,25 +681,25 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       });
       return;
     }
-    if (answers.length == 1) {
-      setState(() {
-        _isConsensusGenerating = false;
-        _consensusRatio = '1/$total Consensus';
-        _consensusSummary = answers.first.$2.split('\n').first;
-        _consensusFull = 'Only ${answers.first.$1} answered:\n\n${answers.first.$2}';
-      });
-      return;
-    }
     try {
-      final judge = await MediaGen.instance.chat('free/pollinations-openai', [
-        {'role': 'system', 'content': 'You compare answers. Reply exactly in this format:\nAGREE: <number of answers that agree with the majority>\nLINE: <the agreed answer in one short line>\nDETAIL: <the agreed answer in full, noting any disagreement>'},
-        {'role': 'user', 'content': 'Question: $prompt\n\n${[for (final a in answers) '### ${a.$1}\n${a.$2}'].join('\n\n')}'},
+      // Consensus agent: one-line summary per ticker, then the agreement.
+      final judge = await MediaGen.instance.consensus([
+        {'role': 'system', 'content': 'You are the Collider consensus agent. You compare answers from several models. Reply exactly in this format, nothing else:\n${[for (var i = 0; i < answers.length; i++) 'S${i + 1}: <one short line summarising answer ${i + 1}>'].join('\n')}\nAGREE: <number of answers that agree with the majority>\nLINE: <the agreed answer in one short line, built from the summaries>\nDETAIL: <the agreed answer in full, noting any disagreement>'},
+        {'role': 'user', 'content': 'Question: $prompt\n\n${[for (var i = 0; i < answers.length; i++) '### Answer ${i + 1} (${answers[i].$1})\n${answers[i].$2}'].join('\n\n')}'},
       ]);
-      final agree = RegExp(r'AGREE:\s*(\d+)').firstMatch(judge)?.group(1) ?? '?';
+      final agree = RegExp(r'AGREE:\s*(\d+)').firstMatch(judge)?.group(1) ?? '${answers.length}';
       final line = RegExp(r'LINE:\s*(.+)').firstMatch(judge)?.group(1)?.trim() ?? judge.split('\n').first;
       final detail = RegExp(r'DETAIL:\s*([\s\S]+)').firstMatch(judge)?.group(1)?.trim() ?? judge;
+      final sums = <String, String>{
+        for (var i = 0; i < answers.length; i++)
+          if (RegExp('S${i + 1}:\\s*(.+)').firstMatch(judge) case final m?) answers[i].$1: m.group(1)!.trim(),
+      };
       if (!mounted) return;
       setState(() {
+        for (var i = 0; i < _tickerItems.length; i++) {
+          final s1 = sums[_tickerItems[i].modelDef.label];
+          if (s1 != null) _tickerItems[i] = _tickerItems[i].copyWith(summary: s1);
+        }
         _isConsensusGenerating = false;
         _consensusRatio = '$agree/$total Consensus';
         _consensusSummary = line;
@@ -703,11 +707,12 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       });
     } catch (e) {
       if (!mounted) return;
+      final msg = friendlyErrorMessage(e).replaceFirst('This model', 'The consensus agent');
       setState(() {
         _isConsensusGenerating = false;
-        _consensusRatio = 'Consensus';
-        _consensusSummary = 'Error: $e';
-        _consensusFull = 'Error: $e';
+        _consensusRatio = '${answers.length}/$total answered';
+        _consensusSummary = msg;
+        _consensusFull = msg;
       });
     }
   }
@@ -799,7 +804,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       try {
         _answer(modelId, await MediaGen.instance.chat(modelId, msgs), false);
       } catch (e) {
-        _answer(modelId, 'Error: $e', true);
+        _answer(modelId, e is MediaGenError ? e.reason : friendlyErrorMessage(e), true);
       }
       return;
     }
@@ -889,6 +894,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   /// direct OpenRouter path (chat.ts callOpenRouter).
   void _answer(String id, String text, bool error) {
     if (!mounted) return;
+    if (error) _errTexts.add(text);
     setState(() {
       final i = _tickerItems.indexWhere((t) => t.modelDef.id == id);
       if (i == -1) return;
@@ -928,9 +934,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       for (final id in models)
         MediaGen.instance.chat(id, [
           {'role': 'system', 'content': 'You are Collider, a concise, helpful assistant.'},
-          for (final m in before[id]!) if (!m.text.startsWith('Error: ')) {'role': m.sender == 'user' ? 'user' : 'assistant', 'content': m.text},
+          for (final m in before[id]!) if (!_isErr(m.text)) {'role': m.sender == 'user' ? 'user' : 'assistant', 'content': m.text},
           {'role': 'user', 'content': prompt},
-        ]).then((text) => _answer(id, text, false), onError: (e) => _answer(id, 'Error: $e', true)),
+        ]).then((text) => _answer(id, text, false), onError: (e) => _answer(id, e is MediaGenError ? e.reason : friendlyErrorMessage(e), true)),
     ]);
     if (!mounted) return;
     setState(() => _busy = false);
