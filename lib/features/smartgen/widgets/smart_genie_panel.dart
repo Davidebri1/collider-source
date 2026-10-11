@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:collider_flutter/core/theme/app_fonts.dart';
+import '../services/genie_ai_client.dart';
 import '../theme/smartgen_glass.dart';
 import '../models/smartgen_models.dart';
 import '../state/smartgen_store.dart';
@@ -13,9 +14,11 @@ import '../state/smartgen_store.dart';
 /// Pro-gated for agentic actions; Elite unlocks attached coding agents.
 /// Icon is a subtle fog/mist — no lamp, no mascot, no theatrics.
 ///
-/// The Genie runs a local command interpreter by default. [callAiApi] is
-/// the hook where a real AI API plugs in: it returns null when no key is
-/// configured, and the panel says so honestly ("Local interpreter").
+/// The Genie prefers live models via [GenieAiClient]: Command Code and
+/// OpenCode Go first, then the NVIDIA NIM chain (GLM 5.3 → GLM 5.3 Flash →
+/// Kimi 3 → Nemotron Ultra → Nemotron Nano). Keys come from the machine's
+/// keys files or --dart-define. When no provider answers it falls back to
+/// the local command interpreter and the header says so honestly.
 class SmartGeniePanel extends StatefulWidget {
   final SmartGenStore store;
   final bool isPro;
@@ -71,11 +74,13 @@ class _SmartGeniePanelState extends State<SmartGeniePanel> {
   Future<String> Function()? _pendingConfirm;
   String? _pendingConfirmLabel;
 
-  /// Compile-time API key hook. Empty (the default) means the Genie runs
-  /// its local interpreter and says so. Set SMART_GENIE_API_KEY via
-  /// --dart-define to light up the live path in [callAiApi].
-  static const _apiKey =
-      String.fromEnvironment('SMART_GENIE_API_KEY', defaultValue: '');
+  /// Live-model chain (Command Code → OpenCode Go → NVIDIA NIM fallbacks).
+  /// Keys resolve from --dart-define or the machine's keys files.
+  final _ai = GenieAiClient();
+
+  /// Set to the provider/model that served the last live reply; null while
+  /// running local. The header chip must never overstate this.
+  String? _liveChip;
 
   @override
   void initState() {
@@ -110,21 +115,28 @@ class _SmartGeniePanelState extends State<SmartGeniePanel> {
     });
   }
 
-  /// Real-AI hook. Returns the model's reply text, or null when no API
-  /// key is configured — the panel then falls back to the local command
+  /// Live-AI path. Returns the model's reply text, or null when no
+  /// provider answers — the panel then falls back to the local command
   /// interpreter and reports "Local interpreter" in the header.
-  ///
-  /// To go live: pass --dart-define=SMART_GENIE_API_KEY=… at build time
-  /// and implement the POST below against your provider.
   Future<String?> callAiApi(String userText) async {
-    if (_apiKey.isEmpty) return null;
-    // TODO: POST to the provider with the conversation and return the text.
-    // Until this is implemented, the Genie stays in local mode even with a
-    // key present — it must never claim to be live when it isn't.
-    return null;
+    // _history's last entry is the message being sent; the rest is context.
+    final ctx = _history.length > 1
+        ? _history.sublist(0, _history.length - 1)
+        : const <_GenieMessage>[];
+    final window = ctx.length > 12 ? ctx.sublist(ctx.length - 12) : ctx;
+    final history = <Map<String, String>>[
+      for (final m in window)
+        {'role': m.fromUser ? 'user' : 'assistant', 'content': m.text},
+    ];
+    final reply = await _ai.chat(userText, history: history);
+    if (reply == null) return null;
+    if (mounted) {
+      setState(() => _liveChip = reply.chip);
+    }
+    return reply.text;
   }
 
-  bool get _liveAi => _apiKey.isNotEmpty;
+  bool get _liveAi => _ai.hasAnyKey;
 
   Future<void> _send() async {
     final text = _inputCtrl.text.trim();
@@ -664,8 +676,9 @@ class _SmartGeniePanelState extends State<SmartGeniePanel> {
                       ),
                     ),
                     const SizedBox(width: 6),
-                    // Truthful engine status: local interpreter until a
-                    // real key is wired through callAiApi().
+                    // Truthful engine status: the chip shows the provider
+                    // that actually served the last reply; LIVE READY means
+                    // keys are loaded but no live reply yet; otherwise LOCAL.
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 6, vertical: 2),
@@ -674,7 +687,11 @@ class _SmartGeniePanelState extends State<SmartGeniePanel> {
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        _liveAi ? 'LIVE AI' : 'LOCAL',
+                        _liveChip != null
+                            ? 'LIVE · $_liveChip'
+                            : (_liveAi ? 'LIVE READY' : 'LOCAL'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: AppFonts.instrumentSans(
                             fontSize: 8.5,
                             fontWeight: FontWeight.w700,

@@ -86,63 +86,99 @@ class SGCardFace extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tint = tintFor(card.templateId);
+    // R1 + Figma 23 ("coloring"): the card's accent washes the whole
+    // surface as a soft optical gradient — strongest at the top edge,
+    // fading to clear — never a left stripe. Restrained (the reference's
+    // dark cards carry identity in a type tag pill, not a loud wash).
     return GlassPanel.card(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+      padding: EdgeInsets.zero,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(SGGlass.rCard),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                tint.withValues(alpha: 0.13),
+                tint.withValues(alpha: 0.06),
+                tint.withValues(alpha: 0.02),
+              ],
+              stops: const [0.0, 0.5, 1.0],
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: tint.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: Icon(iconFor(template?.iconName), size: 15, color: tint),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  // Figma 23 card anatomy: a type TAG PILL (small caps label)
+                  // carries identity — no icon disc, no emoji marker.
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: SGGlass.ink.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(SGGlass.rPill),
+                      border: Border.all(color: SGGlass.ink.withValues(alpha: 0.10), width: 0.5),
+                    ),
+                    child: Text(
+                      (template?.typeKey ?? 'card').toUpperCase(),
+                      style: AppFonts.instrumentSans(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.7,
+                          color: SGGlass.ink3),
+                    ),
+                  ),
+                  const Spacer(),
+                  if (card.urgent)
+                    Container(
+                      width: 8,
+                      height: 8,
+                      margin: const EdgeInsets.only(right: 7),
+                      decoration: const BoxDecoration(
+                        color: SGGlass.sysRed,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  if (onMenuAt != null)
+                    GestureDetector(
+                      onTapDown: (d) => onMenuAt!(d.globalPosition),
+                      behavior: HitTestBehavior.opaque,
+                      child: const Padding(
+                        padding: EdgeInsets.all(4),
+                        child: Icon(Icons.more_horiz_rounded,
+                            size: 16, color: SGGlass.ink3),
+                      ),
+                    ),
+                ],
               ),
-              const SizedBox(width: 9),
-              Expanded(child: title),
-              if (card.urgent)
-                Container(
-                  width: 8,
-                  height: 8,
-                  margin: const EdgeInsets.only(right: 7),
-                  decoration: const BoxDecoration(
-                    color: SGGlass.sysRed,
-                    shape: BoxShape.circle,
-                  ),
+              const SizedBox(height: 7),
+              DefaultTextStyle.merge(
+                style: AppFonts.instrumentSans(
+                    fontSize: 14, fontWeight: FontWeight.w600, color: SGGlass.ink, height: 1.25),
+                child: title,
+              ),
+              if (snippet.isNotEmpty) ...[
+                const SizedBox(height: 7),
+                Text(
+                  snippet,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppFonts.instrumentSans(
+                      fontSize: 12.5, color: SGGlass.ink2, height: 1.35),
                 ),
-              if (onMenuAt != null)
-                GestureDetector(
-                  onTapDown: (d) => onMenuAt!(d.globalPosition),
-                  behavior: HitTestBehavior.opaque,
-                  child: const Padding(
-                    padding: EdgeInsets.all(4),
-                    child: Icon(Icons.more_horiz_rounded,
-                        size: 16, color: SGGlass.ink3),
-                  ),
-                ),
+              ],
+              if (card.dueAt != null) ...[
+                const SizedBox(height: 8),
+                SGDueChip(dueAt: card.dueAt!),
+              ],
             ],
           ),
-          if (snippet.isNotEmpty) ...[
-            const SizedBox(height: 7),
-            Text(
-              snippet,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: AppFonts.instrumentSans(
-                  fontSize: 12.5, color: SGGlass.ink2, height: 1.35),
-            ),
-          ],
-          if (card.dueAt != null) ...[
-            const SizedBox(height: 8),
-            SGDueChip(dueAt: card.dueAt!),
-          ],
-        ],
+        ),
       ),
     );
   }
