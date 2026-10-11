@@ -1,10 +1,10 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../../core/audio/music_player.dart';
 import '../../core/vision/vision_kit.dart';
 
 /// REQ-01 App Grid (Vision OS Design System 2:6774, visionOS Home 97:34752):
 /// circular app icons float directly over the dimmed environment in offset
-/// rows — no platter. Escapes: scrim tap and the floating close circle.
+/// rows â€” no platter. Escapes: scrim tap and the floating close circle.
 class AppsPopupPane extends StatelessWidget {
   final VoidCallback onClose;
   final VoidCallback onOpenSmartGen;
@@ -34,7 +34,7 @@ class AppsPopupPane extends StatelessWidget {
     final apps = [
       // v8.3 (D45, D48): one-word names (an icon alone is ambiguous in a
       // launcher); full-colour icons and a Settings app, as in Figma 97-34752.
-      _App('Smart Gen', Icons.auto_awesome_mosaic_rounded, const [Color(0xFFC4B5FD), Color(0xFF7C3AED)], onOpenSmartGen),
+      _App('Smart Gen', Icons.view_kanban_rounded, const [Color(0xFFC4B5FD), Color(0xFF7C3AED)], onOpenSmartGen),
       _App('Market', Icons.explore_rounded, const [Color(0xFFFDBA74), Color(0xFFEA580C)], onOpenDiscoverMarket),
       _App('Themes', Icons.landscape_rounded, const [Color(0xFF6EE7B7), Color(0xFF059669)], onOpenThemeGallery),
       _App('Premium', Icons.diamond_rounded, const [Color(0xFFFDE68A), Color(0xFFD97706)], onOpenPremiumMarketplace),

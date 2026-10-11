@@ -134,11 +134,30 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                           ),
                         ),
                         const SizedBox(height: VSpace.sm),
-                        SizedBox(
+                        // The filmstrip gets its own glass shelf. Floating the
+                        // thumbnails straight on the blurred wallpaper left
+                        // them reading as part of the room instead of a control
+                        // layer above it.
+                        Container(
                           width: winW,
-                          height: 60,
-                          child: EdgeFadeHorizontal(
-                            child: ListView.separated(
+                          height: 76,
+                          padding: const EdgeInsets.symmetric(vertical: VSpace.xs),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(VRadius.md),
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.white.withValues(alpha: 0.10),
+                                Colors.white.withValues(alpha: 0.03),
+                              ],
+                            ),
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.10), width: 0.5),
+                          ),
+                          child: SizedBox(
+                            height: 60,
+                            child: EdgeFadeHorizontal(
+                              child: ListView.separated(
                               scrollDirection: Axis.horizontal,
                               physics: const BouncingScrollPhysics(),
                               itemCount: themes.length,
@@ -163,6 +182,7 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                                 );
                               },
                             ),
+                          ),
                           ),
                         ),
                       ],

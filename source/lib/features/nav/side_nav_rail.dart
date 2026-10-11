@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../../core/audio/music_player.dart';
 import '../../core/vision/vision_kit.dart';
 import 'contextual_side_nav.dart';
@@ -11,7 +11,7 @@ class SideRailEntry {
   const SideRailEntry(this.key, this.icon, this.label);
 }
 
-/// Master Spec §6.2: the side nav reshapes to the active work surface.
+/// Master Spec Â§6.2: the side nav reshapes to the active work surface.
 /// Surfaces themselves are reached from the Apps overlay, never from here.
 List<SideRailEntry> sideRailEntries(ActiveWorkSurface s) => switch (s) {
       ActiveWorkSurface.chat => const [
@@ -28,7 +28,8 @@ List<SideRailEntry> sideRailEntries(ActiveWorkSurface s) => switch (s) {
           SideRailEntry('new', Icons.add_rounded, 'New Card'),
         ],
       ActiveWorkSurface.market => const [
-          SideRailEntry('search', Icons.search_rounded, 'Search'),
+          // No Search entry: the market screen carries its own composer, and a
+          // rail key with nothing to select is a dead button.
           SideRailEntry('prompts', Icons.notes_rounded, 'Prompts'),
           SideRailEntry('visuals', Icons.image_outlined, 'Visuals'),
           SideRailEntry('video', Icons.movie_outlined, 'Video'),
@@ -48,7 +49,7 @@ List<SideRailEntry> sideRailEntries(ActiveWorkSurface s) => switch (s) {
         ],
       ActiveWorkSurface.files => const [
           SideRailEntry('all', Icons.folder_open_rounded, 'All Files'),
-          SideRailEntry('artifacts', Icons.auto_awesome_outlined, 'Artifacts'),
+          SideRailEntry('artifacts', Icons.inventory_2_rounded, 'Artifacts'),
           SideRailEntry('attachments', Icons.attach_file_rounded, 'Attachments'),
           SideRailEntry('outputs', Icons.output_rounded, 'Model Outputs'),
           SideRailEntry('system', Icons.settings_suggest_outlined, 'System'),

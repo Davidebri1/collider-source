@@ -1,4 +1,4 @@
-// Map row 17 (Image/Video/Music Gen Options Overlay/Expansion), Figma
+﻿// Map row 17 (Image/Video/Music Gen Options Overlay/Expansion), Figma
 // Vision OS Design System 417:15864, stacked for a phone: the big media card
 // with floating pills and a dots pager (one dot per selected model), the dark
 // detail panel (title, divider, detail lines, the task row with the model's
@@ -89,7 +89,7 @@ class _GenOptionsSheetState extends State<GenOptionsSheet> {
           _Opt('ar', Icons.crop_portrait_rounded, 'Aspect ratio', s.ar, [for (final r in sorted) (r, r)], (v) => s.ar = v),
           if (o != null && o.resolutions.isNotEmpty)
             _Opt('res', Icons.high_quality_outlined, 'Resolution', s.resolution ?? o.resolutions.first, [for (final r in o.resolutions) (r, r)], (v) => s.resolution = v),
-          _Opt('quality', Icons.auto_awesome_outlined, 'Quality', _q(s.quality), const [('standard', 'Standard'), ('hd', 'HD'), ('ultra', 'Ultra')], (v) => s.quality = v,
+          _Opt('quality', Icons.tune_rounded, 'Quality', _q(s.quality), const [('standard', 'Standard'), ('hd', 'HD'), ('ultra', 'Ultra')], (v) => s.quality = v,
               (v) => GenFlags(task: s.task, ar: s.ar, quality: v, count: 1)),
           _Opt('style', Icons.palette_outlined, 'Style', _style(s.style), const [('neutral', 'Neutral'), ('photorealistic', 'Realistic'), ('3d-render', '3D Render'), ('anime', 'Anime'), ('cyberpunk', 'Cyberpunk')], (v) => s.style = v),
         ];
@@ -306,7 +306,7 @@ class _GenOptionsSheetState extends State<GenOptionsSheet> {
                 const SizedBox(height: 4),
                 if (spec != null) Text(spec, style: VType.footnote()),
                 const SizedBox(height: 2),
-                if (cost != null) Text('${cost.credits} credit${cost.credits == 1 ? '' : 's'}${cost.basis.isEmpty ? '' : ' · ${cost.basis}'}', style: VType.footnote()),
+                if (cost != null) Text('${cost.credits} credit${cost.credits == 1 ? '' : 's'}${cost.basis.isEmpty ? '' : ' Â· ${cost.basis}'}', style: VType.footnote()),
               ],
               const SizedBox(height: VSpace.lg),
               // Task row (Figma: "Room in a rental unit hosted by Jamie" + badge).
@@ -344,7 +344,7 @@ class _GenOptionsSheetState extends State<GenOptionsSheet> {
                 Wrap(spacing: 6, runSpacing: 6, children: [
                   for (final (v, shown) in open.choices)
                     VChip(
-                      label: open.price == null ? shown : '$shown · ${costOfAll(widget.models, open.price!(v))}',
+                      label: open.price == null ? shown : '$shown Â· ${costOfAll(widget.models, open.price!(v))}',
                       selected: _isOn(open, v),
                       onTap: () => _set(() => open.apply(v)),
                     ),
@@ -358,7 +358,7 @@ class _GenOptionsSheetState extends State<GenOptionsSheet> {
   }
 
 
-  // Total pill with the red action (Figma: "£978 total / July 7-11" + Reserve),
+  // Total pill with the red action (Figma: "Â£978 total / July 7-11" + Reserve),
   // pinned over the panel's foot so Generate is always on screen.
   Widget _totalPill(int total) => VGlass(
               material: VMaterial.elevated,
@@ -395,9 +395,9 @@ class _GenOptionsSheetState extends State<GenOptionsSheet> {
     final n = widget.models.length;
     final models = '$n model${n == 1 ? '' : 's'}';
     return switch (cat) {
-      ModelCategory.video => '$models · ${s.duration}s · ${s.quality}',
-      ModelCategory.image => '$models · ${s.ar}',
-      ModelCategory.audio => '$models · ${formatDuration(s.duration)}',
+      ModelCategory.video => '$models Â· ${s.duration}s Â· ${s.quality}',
+      ModelCategory.image => '$models Â· ${s.ar}',
+      ModelCategory.audio => '$models Â· ${formatDuration(s.duration)}',
       _ => models,
     };
   }
@@ -410,15 +410,15 @@ class _GenOptionsSheetState extends State<GenOptionsSheet> {
         if (i.resolutions.isNotEmpty) i.resolutions.join(' / '),
         if (i.maxReferences > 0) 'up to ${i.maxReferences} references',
       ];
-      return parts.isEmpty ? null : parts.join(' • ');
+      return parts.isEmpty ? null : parts.join(' â€¢ ');
     }
     final v = kVideoSpecs[m.id];
     if (v != null) {
       return [
-        '${v.durations.first}–${v.durations.last}s',
+        '${v.durations.first}â€“${v.durations.last}s',
         v.resolutions.join(' / '),
         if (v.generatesAudio) 'audio',
-      ].join(' • ');
+      ].join(' â€¢ ');
     }
     final c = capabilitiesFor(m);
     if (cat == ModelCategory.audio) return c.outputFormats.map((f) => f.toUpperCase()).join(' / ');

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../../../core/api/media_gen.dart';
 import '../../../core/vision/vision_kit.dart';
 import '../../../core/vision/work_surface.dart';
@@ -248,7 +248,7 @@ class _MarketScreenState extends State<MarketScreen> {
                 Row(children: [
                   VButton(label: 'Open', icon: Icons.play_arrow_rounded, dense: true, onTap: () => setState(() => _open = t)),
                   const SizedBox(width: VSpace.xs),
-                  VButton(label: 'Remix', icon: Icons.auto_awesome_rounded, dense: true, onTap: () => _remix(t)),
+                  VButton(label: 'Remix', icon: Icons.refresh_rounded, dense: true, onTap: () => _remix(t)),
                 ]),
               ],
             ),
@@ -279,7 +279,7 @@ class _MarketScreenState extends State<MarketScreen> {
               radius: VRadius.full,
               padding: const EdgeInsets.all(4),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
-                VCircleButton(icon: Icons.auto_awesome_rounded, size: 44, tooltip: 'Remix', onTap: () => _remix(t)),
+                VCircleButton(icon: Icons.refresh_rounded, size: 44, tooltip: 'Remix', onTap: () => _remix(t)),
                 VCircleButton(icon: Icons.close_rounded, size: 44, tooltip: 'Close', onTap: () => setState(() => _open = null)),
               ]),
             ),
