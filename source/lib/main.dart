@@ -527,7 +527,10 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     return null;
   }
 
-  ModelPill _pill(TickerItem item, {required double elevation, bool pane = false, bool narrow = false}) => ModelPill(
+  ModelPill _pill(TickerItem item,
+      {required double elevation, bool pane = false, bool narrow = false, bool groupEdge = false}) =>
+      ModelPill(
+        groupEdge: groupEdge,
         narrow: narrow,
         key: ValueKey('${pane ? 'pane' : 'card'}-${item.modelDef.id}'),
         item: item,
@@ -574,13 +577,15 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           ),
       ];
 
-  Widget _tickerRow(ModelCategory c, TickerItem item, double elevation, bool narrow) {
+  Widget _tickerRow(ModelCategory c, TickerItem item, double elevation, bool narrow,
+      {bool groupEdge = false}) {
     final selected = _selByCat[c]!.contains(item.modelDef.id);
     final hasAnswer = item.conversation.isNotEmpty || item.isStreaming;
-    final pill = _pill(item, elevation: elevation, narrow: narrow);
+    final pill = _pill(item, elevation: elevation, narrow: narrow, groupEdge: groupEdge);
     final card = hasAnswer
         ? pill
         : ModelPill(
+            groupEdge: groupEdge,
             narrow: narrow,
             key: ValueKey('card-${item.modelDef.id}'),
             item: item,
@@ -629,7 +634,16 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               physics: const BouncingScrollPhysics(),
               itemCount: rows.length,
               separatorBuilder: (_, __) => const SizedBox(height: 6),
-              itemBuilder: (_, i) => _tickerRow(c, rows[i], rows.length <= 1 ? 1.0 : 1.0 - i / (rows.length - 1), open != null),
+              // A card starts a new group when the card above it has a different
+        // isolation state. R41: isolated models are out of the shared query,
+        // not off — so they are set apart, never dimmed.
+        itemBuilder: (_, i) => _tickerRow(
+          c,
+          rows[i],
+          rows.length <= 1 ? 1.0 : 1.0 - i / (rows.length - 1),
+          open != null,
+          groupEdge: i > 0 && rows[i].isIsolated != rows[i - 1].isIsolated,
+        ),
             ),
           ),
         );
@@ -1323,7 +1337,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                                   : (MediaQuery.of(context).size.width - (_isComposerSummoned || _expandedModelIds.isNotEmpty ? 24 : 120)).clamp(220.0, _expandedModelIds.isNotEmpty ? 560.0 : 330.0))
                               : (_expandedModelIds.isNotEmpty ? 760.0 : 480.0),
                           // Map row 13: a generation gets the room to show the media and its panel.
-                          maxHeight: MediaQuery.of(context).size.height * (_mediaShowing ? 0.80 : _isComposerSummoned ? 0.62 : 0.52),
+                          maxHeight: MediaQuery.of(context).size.height * (_mediaShowing ? 0.80 : _isComposerSummoned ? 0.62 : 0.40),
                         ),
                         margin: isMobile && _railVisible
                             ? const EdgeInsets.only(left: 69, right: 12)
