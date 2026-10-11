@@ -89,31 +89,80 @@ class ColliderApi {
   bool webSearch = false;
   int nvidiaKeys = 0;
 
+  /// Demo mode (flutter run --dart-define=COLLIDER_DEMO=true): a canned
+  /// roster and one finished session, so the screenshot tour works on a link
+  /// with no backend behind it.
+  static const bool demo = bool.fromEnvironment('COLLIDER_DEMO');
+
+  static const _demoModels = [
+    {'id': 'gpt', 'label': 'GPT-5', 'provider': 'OpenAI', 'color': '#0A84FF'},
+    {'id': 'claude', 'label': 'Claude', 'provider': 'Anthropic', 'color': '#BF5AF2'},
+    {'id': 'gemini', 'label': 'Gemini', 'provider': 'Google', 'color': '#30D158'},
+  ];
+
+  static const Map<String, dynamic> _demoJob = {
+    'id': 'demo1',
+    'prompt': 'Design the constellation wallpaper',
+    'mode': 'chat',
+    'stage': 'done',
+    'created': 1760000000,
+    'results': {
+      'gpt': {
+        'status': 'done',
+        'text': 'Constellation study: seven star clusters on deep indigo, parallax depth between the layers, starlight keyed to the cockpit glass.',
+        'essence': 'Seven star clusters, parallax indigo',
+      },
+      'claude': {
+        'status': 'done',
+        'text': 'Anchor Orion low-left with a slow drift; the nebula haze reads behind the glass and keeps the chair legible.',
+        'essence': 'Orion anchored, drifting haze',
+      },
+      'gemini': {
+        'status': 'done',
+        'text': 'Photoreal Milky Way band with particle starlight that reacts to scroll velocity.',
+        'essence': 'Milky Way band, reactive starlight',
+      },
+    },
+    'consensus': {'status': 'done', 'score': '92'},
+    'sources': [],
+  };
+
   static Color _hex(String h) => Color(int.parse('FF${h.replaceAll('#', '')}', radix: 16));
 
   /// Loads the live roster from the server into [ModelRoster]. Returns true when connected.
   Future<bool> loadRoster() async {
+    if (demo) {
+      _applyRoster(_demoModels);
+      webSearch = false;
+      nvidiaKeys = 1;
+      return true;
+    }
     try {
       final r = await _dio.get('$_base/api/models');
       final list = (r.data['models'] as List).cast<Map>();
+      _applyRoster(list);
       webSearch = r.data['search'] == true;
       nvidiaKeys = (r.data['keys'] as num?)?.toInt() ?? 0;
-      ModelRoster.setLive([
-        for (final m in list)
-          ModelDef(
-            id: m['id'] as String,
-            label: m['label'] as String,
-            provider: m['provider'] as String,
-            tier: ModelTier.free,
-            categories: const [ModelCategory.general],
-            providerColor: _hex(m['color'] as String),
-          ),
-      ]);
       online = true;
     } catch (_) {
       online = false;
     }
     return online;
+  }
+
+  void _applyRoster(List<Map<dynamic, dynamic>> list) {
+    ModelRoster.setLive([
+      for (final m in list)
+        ModelDef(
+          id: m['id'] as String,
+          label: m['label'] as String,
+          provider: m['provider'] as String,
+          tier: ModelTier.free,
+          categories: const [ModelCategory.general],
+          providerColor: _hex(m['color'] as String),
+        ),
+    ]);
+    online = true;
   }
 
   Future<String> ask({required String prompt, required List<String> models, required AskMode mode, required bool autosave, required bool incognito}) async {
@@ -144,6 +193,7 @@ class ColliderApi {
   }
 
   Future<List<JobState>> history() async {
+    if (demo) return [JobState.fromJson(Map<String, dynamic>.from(_demoJob))];
     try {
       final r = await _dio.get('$_base/api/history');
       return [
