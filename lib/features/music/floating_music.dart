@@ -10,6 +10,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/api/collider_api.dart';
 import '../../core/audio/music_player.dart';
 import '../../core/media/theme_catalog.dart';
 import '../theme/premium_market_ambient.dart' show AmbientGlass;
@@ -38,6 +39,13 @@ class FloatingMusic extends StatefulWidget {
   static Future<void>? _loading;
 
   static Future<void> loadEnabled() => _loading ??= () async {
+        // Demo builds never restore the widget ON: a capture session must not
+        // leave user-visible state behind (the alt market shows in lieu of
+        // the main one while the widget is on, and the flag persists).
+        if (ColliderApi.demo) {
+          enabled.value = false;
+          return;
+        }
         try {
           enabled.value = (await SharedPreferences.getInstance()).getBool(enabledKey) ?? false;
         } catch (_) {}
