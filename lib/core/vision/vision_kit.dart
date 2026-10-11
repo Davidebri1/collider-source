@@ -1,5 +1,4 @@
 import 'dart:ui';
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:collider_flutter/core/theme/app_fonts.dart';
 import 'package:flutter/services.dart';
@@ -104,25 +103,26 @@ class VGlass extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final r = BorderRadius.circular(radius);
-    // Layering (the Smart Gen measured recipe, now canonical): gradient edge
-    // shell, clipped backdrop blur, gradient fill, specular rim, content.
+    // Layering: shadow, clipped backdrop blur, gradient fill, specular rim +
+    // gradient edge stroke painted ON the edge (a stroke, not a padding
+    // shell — the shell's 1.5 px consumed layout and overflowed every
+    // fixed-size pill, e.g. the music widget's exact-fit row).
     return DecoratedBox(
       decoration: BoxDecoration(borderRadius: r, boxShadow: shadow ? material.shadow : null),
-      child: Container(
-        decoration: BoxDecoration(borderRadius: r, gradient: VMaterialX.edgeStroke),
-        padding: const EdgeInsets.all(0.75),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(math.max(0, radius - 0.75)),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: material.blur, sigmaY: material.blur),
+      child: ClipRRect(
+        borderRadius: r,
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: material.blur, sigmaY: material.blur),
+          child: CustomPaint(
+            foregroundPainter: SpecularRimPainter(borderRadius: radius, strokeWidth: 0.6),
             child: CustomPaint(
-              foregroundPainter: SpecularRimPainter(borderRadius: radius, strokeWidth: 0.6),
+              foregroundPainter: _EdgeStrokePainter(radius: radius, gradient: VMaterialX.edgeStroke),
               child: Container(
                 padding: padding,
                 decoration: BoxDecoration(
                   gradient: material.fillGradient,
                   color: fill,
-                  borderRadius: BorderRadius.circular(math.max(0, radius - 0.75)),
+                  borderRadius: r,
                 ),
                 child: child,
               ),
@@ -132,6 +132,32 @@ class VGlass extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The signature gradient edge stroke, painted just inside the widget's edge.
+/// Zero layout cost — unlike a padding shell, fixed-size children keep their
+/// exact footprint.
+class _EdgeStrokePainter extends CustomPainter {
+  final double radius;
+  final Gradient gradient;
+  const _EdgeStrokePainter({required this.radius, required this.gradient});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final rrect = RRect.fromRectAndRadius(rect, Radius.circular(radius));
+    canvas.drawRRect(
+      rrect.deflate(0.45),
+      Paint()
+        ..shader = gradient.createShader(rect)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 0.9,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _EdgeStrokePainter old) =>
+      old.radius != radius || old.gradient != gradient;
 }
 
 /// Click-away layer behind an overlay: a light, unblurred dim (VOverlay.scrim)
