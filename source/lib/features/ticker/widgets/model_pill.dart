@@ -32,6 +32,11 @@ class ModelPill extends StatefulWidget {
   /// A card in the narrow column beside an open answer: no time, one line.
   final bool narrow;
 
+  /// True when this card is the first of a new group, i.e. the card above it
+  /// has a different isolation state. Renders a separating gap and hairline so
+  /// the stack reads as two blocks rather than one continuous run.
+  final bool groupEdge;
+
   const ModelPill({
     super.key,
     required this.item,
@@ -44,6 +49,7 @@ class ModelPill extends StatefulWidget {
     this.elevation = 0,
     this.pane = false,
     this.narrow = false,
+    this.groupEdge = false,
   });
 
   @override
@@ -165,6 +171,10 @@ class _ModelPillState extends State<ModelPill> {
 
   /// A collapsed card in the left column.
   Widget _buildCard(BuildContext context) {
+    // An isolated model is not off, not unavailable, not broken — it answered,
+    // and stays fully lit. Only its MEMBERSHIP changes, so only the grouping
+    // changes. Dimming here would imitate a disabled control and tell the
+    // reader to skip an answer that is real.
     final item = widget.item;
     final c = item.modelDef.providerColor;
     final e = widget.isExpanded ? 1.0 : widget.elevation.clamp(0.0, 1.0);
@@ -173,14 +183,20 @@ class _ModelPillState extends State<ModelPill> {
     final bottom = Color.lerp(c.withValues(alpha: 0.07), c.withValues(alpha: 0.12), e)!;
     final waiting = item.isStreaming;
 
-    return AnimatedContainer(
+    final card = AnimatedContainer(
       duration: VMotion.base,
       curve: Curves.easeOutCubic,
       padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
       decoration: BoxDecoration(
         gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [top, bottom]),
         borderRadius: BorderRadius.circular(VRadius.lg - 4),
-        border: Border.all(color: c.withValues(alpha: 0.18 + 0.14 * e), width: 0.6),
+        border: Border.all(
+          color: c.withValues(alpha: 0.18 + 0.14 * e),
+          width: 0.6,
+          // An isolated card keeps its own hue at full strength; only a left
+          // edge marks that it sits outside the shared block.
+          left: item.isIsolated ? BorderSide(color: c.withValues(alpha: 0.85), width: 2.5) : BorderSide.none,
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.10 + 0.16 * e),
@@ -244,6 +260,34 @@ class _ModelPillState extends State<ModelPill> {
           ],
         ],
       ),
+    );
+
+    // The group edge. A gap and a hairline so the stack reads as two blocks,
+    // not one continuous run. No label, no word — the separation is the
+    // entire message, and the isolated card keeps its full luminance and its
+    // own hue so it still reads as a live, usable answer.
+    if (!widget.groupEdge) return card;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 10),
+        Container(
+          height: 1,
+          margin: const EdgeInsets.symmetric(horizontal: 2),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Colors.white.withValues(alpha: 0),
+                Colors.white.withValues(alpha: 0.16),
+                Colors.white.withValues(alpha: 0),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        card,
+      ],
     );
   }
 
