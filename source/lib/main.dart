@@ -214,7 +214,10 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
   /// The rail ornament shows on the resting canvas and durable work surfaces only.
   bool get _railVisible {
-    if (_localHistoryModel != null || _zoomedMessage != null || _isComposerSummoned || _browserOpen || _genOptionsOpen) return false;
+    if (_localHistoryModel != null || _zoomedMessage != null || _browserOpen || _genOptionsOpen) return false;
+    // Summoning the composer no longer hides the rail: "New Chat" was making
+    // the navigation disappear. Focus comes from depth — the world blurs
+    // behind the composer — not from deleting the frame.
     // An open answer takes the phone's full width (row 15); closing it brings the rail back.
     if (_activeDrawer == null && MediaQuery.of(context).size.width < 768 && _openPill(_tickerItems) != null) return false;
     // Home (chat) and themes only: the Smart Gen, Market and Files rails
@@ -553,6 +556,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   ];
   static const double _rowH = 62;
   late final PageController _catPager = PageController(initialPage: _tickerOrder.indexOf(_activeCategory).clamp(0, 4));
+  /// Keeps the named category strip aligned with the paged ticker above it.
+  late final ScrollController _catLabelCtl = ScrollController();
   final Map<ModelCategory, ScrollController> _tickerScroll = {for (final c in ModelCategory.values) c: ScrollController()};
 
   void _toggleSelect(ModelCategory c, String id) {
@@ -618,22 +623,54 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             ? _consensusItem()
             : _openPill(rows);
     final sc = _tickerScroll[c]!;
-    Widget column() => Scrollbar(
-          controller: sc,
-          thumbVisibility: true,
-          child: EdgeFade(
-            fadeHeight: 16,
-            child: ListView.separated(
-              controller: sc,
-              padding: const EdgeInsets.only(right: 8),
-              physics: const BouncingScrollPhysics(),
-              itemCount: rows.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 6),
-              itemBuilder: (_, i) => _tickerRow(c, rows[i], rows.length <= 1 ? 1.0 : 1.0 - i / (rows.length - 1), open != null),
-            ),
+    // No Scrollbar: a hard grey track on a glass surface reads as a debug
+    // affordance and flattens the illusion. The EdgeFade plus the cinematic
+    // scroll cue below carry the affordance instead.
+    Widget column() => EdgeFade(
+          fadeHeight: 22,
+          child: Stack(
+            children: [
+              ListView.separated(
+                controller: sc,
+                padding: const EdgeInsets.only(right: 8, bottom: 4),
+                physics: const BouncingScrollPhysics(),
+                itemCount: rows.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 6),
+                itemBuilder: (_, i) => _tickerRow(c, rows[i], rows.length <= 1 ? 1.0 : 1.0 - i / (rows.length - 1), open != null),
+              ),
+              if (rows.length > 3 && sc.hasClients && sc.position.maxScrollExtent > 0)
+                Positioned(
+                  right: 2,
+                  bottom: 2,
+                  child: IgnorePointer(
+                    child: AnimatedBuilder(
+                      animation: sc,
+                      builder: (_, __) {
+                        final p = sc.hasClients && sc.position.maxScrollExtent > 0
+                            ? (sc.offset / sc.position.maxScrollExtent).clamp(0.0, 1.0)
+                            : 0.0;
+                        final more = 1 - p;
+                        return Opacity(
+                          opacity: (0.18 + 0.62 * more).clamp(0.0, 0.85),
+                          child: const Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: Colors.white),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+            ],
           ),
         );
-    if (open == null) return column();
+    if (open == null) {
+      // Collapsed: a card column, not a full-bleed panel. The resting ticker
+      // ran the full viewport width, which read as a sheet of content rather
+      // than a stack of cards floating over the room.
+      final w = MediaQuery.of(context).size.width;
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: SizedBox(width: (w * 0.62).clamp(200.0, 300.0), child: column()),
+      );
+    }
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -676,34 +713,67 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       setState(() {
         _isConsensusGenerating = false;
         _consensusRatio = '0/$total Consensus';
-        _consensusSummary = 'No model answered.';
-        _consensusFull = 'No model answered, so there is nothing to compare.';
+        _consensusSummary = 'Nothing to compare yet.';
+        _consensusFull = total == 0
+            ? 'No models were selected, so there is nothing to compare.'
+            : 'None of the $total selected models returned an answer to compare.';
       });
       return;
     }
     try {
-      // Consensus agent: one-line summary per ticker, then the agreement.
+      // Consensus Agent (per the Consensus Agent spec): the agent reads only
+      // the responses. It is never told which model produced which response,
+      // because source identity is not an input it uses — need and intent are
+      // derived from the prompt, and the responses are read against that.
       final judge = await MediaGen.instance.consensus([
-        {'role': 'system', 'content': 'You are the Collider consensus agent. You compare answers from several models. Reply exactly in this format, nothing else:\n${[for (var i = 0; i < answers.length; i++) 'S${i + 1}: <one short line summarising answer ${i + 1}>'].join('\n')}\nAGREE: <number of answers that agree with the majority>\nLINE: <the agreed answer in one short line, built from the summaries>\nDETAIL: <the agreed answer in full, noting any disagreement>'},
-        {'role': 'user', 'content': 'Question: $prompt\n\n${[for (var i = 0; i < answers.length; i++) '### Answer ${i + 1} (${answers[i].$1})\n${answers[i].$2}'].join('\n\n')}'},
+        {
+          'role': 'system',
+          'content': 'What is the derived need, and how can you serve it?\n\n'
+              'Derive the need from the prompt. Read each response against that need and '
+              'reduce it to its base distinction: the actionable portion. Resolve democratically '
+              'by counting each unique sentiment; the sentiment with the largest count is the '
+              'consensus summary, verbatim.\n\n'
+              'Also count each response\'s logical chains: explicit (sequential '
+              'clarifications that extend meaning) and implicit (definitions, statements or '
+              'narrative that support a logical conclusion). Count meaning, never words. Report '
+              'the count and the longest chain. Split chains do not exist — what looks like a '
+              'split is clarification and counts as one.\n\n'
+              'Reply in exactly this format, nothing else:\n'
+              'NEED: <the derived need, one line>\n'
+              'SERVE: <how the consensus serves it, one line>\n'
+              'CONSENSUS: <the agreed sentiment, verbatim from the winning group>\n'
+              'RATIO: <agreed responses>/<total responses>\n'
+              'CHAINS: <response> <count> (max <n>) — one per response, then a CONSENSUS line '
+              'using the longest chain among the agreed group\n'
+              'DETAIL: <the agreed answer in full, noting real disagreement>'
+        },
+        {
+          'role': 'user',
+          'content': 'Prompt:\n$prompt\n\nResponses:\n${[for (var i = 0; i < answers.length; i++) '--- ${i + 1} ---\n${answers[i].$2}'].join('\n\n')}'
+        },
       ]);
-      final agree = RegExp(r'AGREE:\s*(\d+)').firstMatch(judge)?.group(1) ?? '${answers.length}';
-      final line = RegExp(r'LINE:\s*(.+)').firstMatch(judge)?.group(1)?.trim() ?? judge.split('\n').first;
+      final agree = RegExp(r'RATIO:\s*(\d+)').firstMatch(judge)?.group(1) ?? '${answers.length}';
+      final line = RegExp(r'CONSENSUS:\s*(.+)').firstMatch(judge)?.group(1)?.trim() ?? judge.split('\n').first;
       final detail = RegExp(r'DETAIL:\s*([\s\S]+)').firstMatch(judge)?.group(1)?.trim() ?? judge;
-      final sums = <String, String>{
-        for (var i = 0; i < answers.length; i++)
-          if (RegExp('S${i + 1}:\\s*(.+)').firstMatch(judge) case final m?) answers[i].$1: m.group(1)!.trim(),
-      };
       if (!mounted) return;
       setState(() {
-        for (var i = 0; i < _tickerItems.length; i++) {
-          final s1 = sums[_tickerItems[i].modelDef.label];
-          if (s1 != null) _tickerItems[i] = _tickerItems[i].copyWith(summary: s1);
-        }
+        // NEED / SERVE lead, because the agent derives them from the prompt
+        // before it reads anything. Per-response one-liners are deliberately
+        // NOT written back onto individual tickers: the agent never sees which
+        // model said what, so attributing a summary back to a named model
+        // would be a fabrication.
+        final need = RegExp(r'NEED:\s*(.+)').firstMatch(judge)?.group(1)?.trim();
+        final serve = RegExp(r'SERVE:\s*(.+)').firstMatch(judge)?.group(1)?.trim();
+        final chains = RegExp(r'CHAINS:\s*([\s\S]+?)(?=\nDETAIL:|\n*$)').firstMatch(judge)?.group(1)?.trim();
         _isConsensusGenerating = false;
         _consensusRatio = '$agree/$total Consensus';
         _consensusSummary = line;
-        _consensusFull = detail;
+        _consensusFull = [
+          if (need != null && need.isNotEmpty) 'Need: $need',
+          if (serve != null && serve.isNotEmpty) 'Serve: $serve',
+          detail,
+          if (chains != null && chains.isNotEmpty) chains,
+        ].join('\n\n');
       });
     } catch (e) {
       if (!mounted) return;
@@ -754,36 +824,61 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           ),
         ),
         const SizedBox(height: 6),
+        // Categories are named, not dotted. Anonymous dots gave the user no way
+        // to know which set of models a swipe was about to land on.
         AnimatedBuilder(
           animation: _catPager,
           builder: (_, __) {
             final page = _catPager.hasClients && _catPager.page != null ? _catPager.page! : idx.toDouble();
-            return Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                for (int i = 0; i < _tickerOrder.length; i++)
-                  GestureDetector(
-                    onTap: () => _catPager.animateToPage(i, duration: VMotion.base, curve: Curves.easeOutCubic),
-                    child: Builder(builder: (_) {
-                      final t = (1 - (page - i).abs()).clamp(0.0, 1.0);
-                      return Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 4),
-                        width: 7 + 9 * t,
-                        height: 7,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.35 + 0.6 * t),
-                          borderRadius: BorderRadius.circular(4),
+            return EdgeFadeHorizontal(
+              child: SizedBox(
+                height: 26,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  controller: _catLabelCtl,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  itemCount: _tickerOrder.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 4),
+                  itemBuilder: (_, i) {
+                    final t = (1 - (page - i).abs()).clamp(0.0, 1.0);
+                    final on = i == page.round();
+                    return VPress(
+                      onTap: () => _catPager.animateToPage(i, duration: VMotion.base, curve: Curves.easeOutCubic),
+                      child: AnimatedOpacity(
+                        duration: VMotion.fast,
+                        opacity: 0.42 + 0.58 * t,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(VRadius.full),
+                            color: on ? Colors.white.withValues(alpha: 0.16) : Colors.transparent,
+                            border: Border.all(
+                              color: on ? Colors.white.withValues(alpha: 0.30) : Colors.white.withValues(alpha: 0.10),
+                              width: 0.5,
+                            ),
+                          ),
+                          child: Text(
+                            _tickerOrder[i].label,
+                            style: VType.caption(
+                              color: on ? Colors.white : Colors.white70,
+                              weight: on ? FontWeight.w600 : FontWeight.w400,
+                            ),
+                          ),
                         ),
-                      );
-                    }),
-                  ),
-              ],
+                      ),
+                    );
+                  },
+                ),
+              ),
             );
           },
         ),
       ],
     );
   }
+
+  /// Plain-word name for a category tab comes from [ModelCategoryX.label],
+  /// so the tab strip and the roster can never drift apart.
 
   Future<void> _onSendInlineReply(String modelId, String text) async {
     final idx = _tickerItems.indexWhere((it) => it.modelDef.id == modelId);
@@ -933,7 +1028,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     await Future.wait([
       for (final id in models)
         MediaGen.instance.chat(id, [
-          {'role': 'system', 'content': 'You are Collider, a concise, helpful assistant.'},
+          // No shared system prompt. Each model answers with its own house
+          // behaviour; a single persona here flattened them into one voice.
           for (final m in before[id]!) if (!_isErr(m.text)) {'role': m.sender == 'user' ? 'user' : 'assistant', 'content': m.text},
           {'role': 'user', 'content': prompt},
         ]).then((text) => _answer(id, text, false), onError: (e) => _answer(id, e is MediaGenError ? e.reason : friendlyErrorMessage(e), true)),
@@ -1285,6 +1381,39 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // the theme gallery keeps a light tint.
           if (_activeDrawer == 'themes')
             Positioned.fill(child: BackdropFilter(filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24), child: const SizedBox.expand())),
+
+          // Depth of field for the summoned composer: the world falls out of
+          // focus behind the writing surface. Previously summoning only
+          // reflowed the layout, so the composer read as a flat overlay stuck
+          // on top of the room rather than a nearer plane in it.
+          Positioned.fill(
+            child: IgnorePointer(
+              ignoring: !_isComposerSummoned,
+              child: AnimatedOpacity(
+                duration: VMotion.base,
+                curve: Curves.easeOutCubic,
+                opacity: _isComposerSummoned ? 1 : 0,
+                child: BackdropFilter(
+                  filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.22),
+                          Colors.black.withValues(alpha: 0.34),
+                          Colors.black.withValues(alpha: 0.58),
+                        ],
+                        stops: const [0.0, 0.55, 1.0],
+                      ),
+                    ),
+                    child: const SizedBox.expand(),
+                  ),
+                ),
+              ),
+            ),
+          ),
           Positioned.fill(
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 250),
