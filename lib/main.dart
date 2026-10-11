@@ -3,7 +3,7 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:collider_flutter/core/theme/app_fonts.dart';
 import 'package:provider/provider.dart';
 
 import 'core/theme/edge_fade.dart';
@@ -77,7 +77,7 @@ class ColliderApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark(useMaterial3: true).copyWith(
         scaffoldBackgroundColor: const Color(0xFF07080B),
-        textTheme: GoogleFonts.instrumentSansTextTheme(ThemeData.dark().textTheme),
+        textTheme: AppFonts.instrumentSansTextTheme(ThemeData.dark().textTheme),
       ),
       // Remote theme posters resolve through the same bundle as local assets.
       builder: (context, child) => DefaultAssetBundle(
@@ -1146,51 +1146,98 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               ),
           ),
           // ================= PLANE 1: RESTING WORKSPACE =================
-          // v8.4 scaled-frame method: the model ticker is wechat CHAT 2013:75
-          // at its own size, scaled as one unit (map row 15).
+          // Master Spec §4.2: the ticker is a bounded window — width of the
+          // dock, height ≤ 40% of the screen, ~5 rows visible with internal
+          // scroll, page dots, category swipe, press-to-toggle rows. D17: on
+          // a phone the opened conversation takes the rows' place; wide, it
+          // sits beside the window.
           if (!_browserOpen && !(isMobile && _isMobileSideNavOpen) && !const {'premium', 'themes', 'apps', 'smartgen', 'market', 'files', 'consensus', 'music'}.contains(_activeDrawer) && !_activeCategory.isMedia && activePills.isNotEmpty)
-            Positioned.fill(
-              child: Builder(builder: (context) {
-                final open = _openPill(activePills);
-                return FigmaStage(
-                  frame: Row15.frame,
-                  cropWidth: Row15.cropWidth,
-                  center: Row15.center,
-                  children: [
-                    // "Chat" window title 59:464 (643,282).
-                    const Positioned(left: 643, top: 282, child: FText('Answers', size: 28, height: 33, weight: FontWeight.w700)),
-                    Positioned.fromRect(
-                      rect: Row15.leftWin,
-                      child: TickerColumnWindow(
-                        items: activePills,
-                        openId: open?.modelDef.id,
-                        joined: open != null,
-                        onOpen: _onTogglePill,
-                        consensusTitle: _consensusRatio.contains('Consensus') ? _consensusRatio : '$_consensusRatio Consensus',
-                        consensusLine: _isConsensusGenerating ? 'Comparing answers' : _consensusSummary,
-                        onConsensus: () => setState(() => _activeDrawer = 'consensus'),
-                      ),
-                    ),
-                    if (open != null)
-                      Positioned(
-                        left: Row15.midWin.left,
-                        top: Row15.midWin.top,
-                        width: 791,
-                        height: 739,
-                        child: TickerAnswerWindow(
-                          key: ValueKey('answer-${open.modelDef.id}'),
-                          item: open,
-                          onClose: () => _onTogglePill(open.modelDef.id),
-                          onReply: (t) => _onSendInlineReply(open.modelDef.id, t),
-                          onTapMessage: (msg) => setState(() {
-                            _zoomedMessage = msg;
-                            _zoomedModelDef = open.modelDef;
-                          }),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 148, // above the floating composer (74 + ~60) + gap
+              child: SafeArea(
+                child: Builder(builder: (context) {
+                  final open = _openPill(activePills);
+                  final screenH = MediaQuery.sizeOf(context).height;
+                  final maxH = screenH * 0.40;
+                  const windowW = 260.0;
+                  // All of the category's models render; toggled-off rows dim
+                  // in place (David: press to toggle, dimming the row) — the
+                  // roster never shrinks away from the user.
+                  final roster = _tickerItems
+                      .where((it) => it.modelDef.categories.contains(_activeCategory))
+                      .toList();
+                  Widget rows = TickerColumnWindow(
+                    items: roster,
+                    openId: open?.modelDef.id,
+                    joined: open != null,
+                    onOpen: _onTogglePill,
+                    consensusTitle: _consensusRatio.contains('Consensus') ? _consensusRatio : '$_consensusRatio Consensus',
+                    consensusLine: _isConsensusGenerating ? 'Comparing answers' : _consensusSummary,
+                    onConsensus: () => setState(() => _activeDrawer = 'consensus'),
+                    activeIds: _selectedModelIds.toSet(),
+                    onToggle: (id) => setState(() {
+                      if (_selectedModelIds.contains(id)) {
+                        if (_selectedModelIds.length > 1) _selectedModelIds.remove(id);
+                      } else {
+                        _selectedModelIds.add(id);
+                      }
+                    }),
+                    categoryLabel: _activeCategory.label,
+                    onCategorySwipe: (dir) {
+                      const order = ModelCategory.values;
+                      final i = order.indexOf(_activeCategory);
+                      setState(() => _activeCategory = order[(i + dir) % order.length]);
+                    },
+                  );
+                  Widget window;
+                  if (open == null) {
+                    window = rows;
+                  } else if (!isMobile) {
+                    window = Row(mainAxisSize: MainAxisSize.min, children: [
+                      SizedBox(width: windowW, child: rows),
+                      const SizedBox(width: 10),
+                      Flexible(
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(maxHeight: maxH),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: TickerAnswerWindow(
+                              key: ValueKey('answer-${open.modelDef.id}'),
+                              item: open,
+                              onClose: () => _onTogglePill(open.modelDef.id),
+                              onReply: (t) => _onSendInlineReply(open.modelDef.id, t),
+                              onTapMessage: (msg) => setState(() {
+                                _zoomedMessage = msg;
+                                _zoomedModelDef = open.modelDef;
+                              }),
+                            ),
+                          ),
                         ),
                       ),
-                  ],
-                );
-              }),
+                    ]);
+                  } else {
+                    // D17: the opened conversation takes the rows' place.
+                    window = TickerAnswerCompact(
+                      key: ValueKey('answer-c-${open.modelDef.id}'),
+                      item: open,
+                      onClose: () => _onTogglePill(open.modelDef.id),
+                      onReply: (t) => _onSendInlineReply(open.modelDef.id, t),
+                      onTapMessage: (msg) => setState(() {
+                        _zoomedMessage = msg;
+                        _zoomedModelDef = open.modelDef;
+                      }),
+                    );
+                  }
+                  return Center(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: isMobile ? windowW : 760, maxHeight: maxH),
+                      child: window,
+                    ),
+                  );
+                }),
+              ),
             ),
           // Map row 13: the media ticker (wechat IMAGE 2013:71) at its own size.
           if (!_browserOpen && !(isMobile && _isMobileSideNavOpen) && !const {'premium', 'themes', 'apps', 'smartgen', 'market', 'files', 'consensus', 'music'}.contains(_activeDrawer) && _activeCategory.isMedia && (_mediaGens[_activeCategory]?.isNotEmpty ?? false))

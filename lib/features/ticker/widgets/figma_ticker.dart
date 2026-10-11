@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 
 import '../../../core/figma/figma_stage.dart';
@@ -33,8 +35,13 @@ String initials(String label) {
   return '$a$b';
 }
 
-/// Left column window (collapsed answers).
-class TickerColumnWindow extends StatelessWidget {
+/// Left column window (collapsed answers) — Master Spec §4.2 edition: a
+/// bounded, app-coordinate window (width = the dock's, height ≤ 40% of the
+/// screen, ~5 rows visible, the rest on internal scroll). Non-interactive
+/// surface, zero row chrome. Press a row to toggle its model on/off with a
+/// graduated decay; the row's chevron opens the conversation. Horizontal
+/// swipe changes the model category. Page indicator dots sit under the list.
+class TickerColumnWindow extends StatefulWidget {
   const TickerColumnWindow({
     super.key,
     required this.items,
@@ -44,6 +51,10 @@ class TickerColumnWindow extends StatelessWidget {
     required this.consensusLine,
     required this.onConsensus,
     required this.joined,
+    required this.activeIds,
+    required this.onToggle,
+    required this.categoryLabel,
+    required this.onCategorySwipe,
   });
   final List<TickerItem> items;
   final String? openId;
@@ -52,117 +63,382 @@ class TickerColumnWindow extends StatelessWidget {
   final String consensusLine;
   final VoidCallback onConsensus;
   final bool joined; // middle window open: right corners square (0:646)
+  final Set<String> activeIds;
+  final ValueChanged<String> onToggle;
+  final String categoryLabel;
+  final ValueChanged<int> onCategorySwipe; // +1 next category, -1 previous
+
+  static const double rowExtent = 66;
+  static const int visibleRows = 5;
+
+  @override
+  State<TickerColumnWindow> createState() => _TickerColumnWindowState();
+}
+
+class _TickerColumnWindowState extends State<TickerColumnWindow> {
+  final ScrollController _scroll = ScrollController();
+  double _offset = 0;
+
+  int get _pages => (widget.items.length / TickerColumnWindow.visibleRows).ceil().clamp(1, 99);
+  int get _page => (_offset / (TickerColumnWindow.visibleRows * TickerColumnWindow.rowExtent)).round().clamp(0, _pages - 1);
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final r = joined
-        ? const BorderRadius.only(topLeft: Radius.circular(46), bottomLeft: Radius.circular(46))
-        : BorderRadius.circular(46);
-    return FGlass(
-      width: 476,
-      height: 720,
-      radius: r,
-      stroke: const Color(0x66FFFFFF),
-      child: Stack(clipBehavior: Clip.hardEdge, children: [
-        // Chat Summary Container 9:174 (32,31) 411 x 54 -> consensus.
-        Positioned(
-          left: 32,
-          top: 31,
-          width: 411,
-          height: 54,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onConsensus,
-            child: Stack(children: [
-              Positioned(left: 0, top: 3, right: 70, child: FText(consensusTitle, size: 24, height: 24, weight: FontWeight.w700, opacity: 0.6)),
-              Positioned(left: 0, top: 34, right: 70, child: FText(consensusLine, size: 15, height: 20, weight: FontWeight.w700, opacity: 0.4)),
-              Positioned(
-                right: 0,
-                top: 0,
-                width: 53,
-                height: 53,
-                child: Container(
-                  decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0x4D808080)),
-                  child: const Icon(Icons.balance_rounded, size: 26, color: Colors.white),
+    final r = widget.joined
+        ? const BorderRadius.only(topLeft: Radius.circular(28), bottomLeft: Radius.circular(28))
+        : BorderRadius.circular(28);
+    final rows = widget.items;
+    final listExtent = (rows.length < TickerColumnWindow.visibleRows
+            ? rows.length
+            : TickerColumnWindow.visibleRows) *
+        TickerColumnWindow.rowExtent;
+    return GestureDetector(
+      // Category swipe: right = next, left = previous.
+      onHorizontalDragEnd: (d) {
+        final v = d.primaryVelocity ?? 0;
+        if (v < -350) widget.onCategorySwipe(1);
+        if (v > 350) widget.onCategorySwipe(-1);
+      },
+      child: _WindowShell(
+        radius: r,
+        child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Consensus (pinned row) + the current category name.
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: widget.onConsensus,
+                  child: SizedBox(
+                    height: 46,
+                    child: Row(children: [
+                      Expanded(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+                          Text(widget.consensusTitle,
+                              maxLines: 1, overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 15, height: 1.15, fontWeight: FontWeight.w700, color: Colors.white)),
+                          const SizedBox(height: 2),
+                          Text(widget.consensusLine,
+                              maxLines: 1, overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 11, height: 1.15, fontWeight: FontWeight.w600, color: Color(0x99FFFFFF))),
+                        ]),
+                      ),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 240),
+                        child: Container(
+                          key: ValueKey(widget.categoryLabel),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0x14FFFFFF),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(widget.categoryLabel.toUpperCase(),
+                              style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, letterSpacing: 0.8, color: Color(0xB3FFFFFF))),
+                        ),
+                      ),
+                    ]),
+                  ),
                 ),
-              ),
-            ]),
-          ),
-        ),
-        // Rows: 420 x 96 at x 27, y 105 + 108 i (9:127, 9:231, 9:239 ...).
-        // The list dissolves into the window's glass at both ends instead of
-        // ending on a hard line (wechat reference edge-fading).
-        Positioned(
-          left: 0,
-          top: 105,
-          right: 0,
-          bottom: 0,
-          child: EdgeFade(
-            fadeHeight: 26,
-            child: ListView.builder(
-              padding: const EdgeInsets.only(bottom: 24),
-              physics: const BouncingScrollPhysics(),
-              itemCount: items.length,
-              itemBuilder: (c, i) => Padding(
-                padding: const EdgeInsets.only(left: 27, right: 29, bottom: 12),
-                child: _Row(item: items[i], selected: items[i].modelDef.id == openId, onTap: () => onOpen(items[i].modelDef.id)),
-              ),
+                const SizedBox(height: 6),
+                // Rows: ~5 visible, the rest on internal momentum scroll,
+                // dissolving into the glass at both ends.
+                SizedBox(
+                  height: listExtent,
+                  child: EdgeFade(
+                    fadeTopFraction: 0.10,
+                    fadeBottomFraction: 0.10,
+                    child: ListView.builder(
+                      controller: _scroll
+                        ..addListener(() {
+                          final p = (_scroll.offset / (TickerColumnWindow.visibleRows * TickerColumnWindow.rowExtent)).round();
+                          if (p != _page) setState(() => _offset = _scroll.offset);
+                        }),
+                      physics: const BouncingScrollPhysics(),
+                      itemExtent: TickerColumnWindow.rowExtent,
+                      itemCount: rows.length,
+                      itemBuilder: (c, i) => _TickerRow(
+                        item: rows[i],
+                        selected: rows[i].modelDef.id == widget.openId,
+                        active: widget.activeIds.contains(rows[i].modelDef.id),
+                        onToggle: () => widget.onToggle(rows[i].modelDef.id),
+                        onOpen: () => widget.onOpen(rows[i].modelDef.id),
+                      ),
+                    ),
+                  ),
+                ),
+                // Page indicator dots (one per page of five).
+                SizedBox(
+                  height: 18,
+                  child: Center(
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      for (var p = 0; p < _pages; p++) ...[
+                        if (p > 0) const SizedBox(width: 5),
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 240),
+                          curve: Curves.easeOutCubic,
+                          width: p == _page ? 14 : 5,
+                          height: 5,
+                          decoration: BoxDecoration(
+                            color: Color.fromRGBO(255, 255, 255, p == _page ? 0.85 : 0.30),
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                        ),
+                      ],
+                    ]),
+                  ),
+                ),
+                // visionOS window grabber.
+                Center(
+                  child: Container(
+                    width: 42,
+                    height: 4.5,
+                    margin: const EdgeInsets.only(top: 2),
+                    decoration: BoxDecoration(color: const Color(0x3DFFFFFF), borderRadius: BorderRadius.circular(3)),
+                  ),
+                ),
+              ],
             ),
-          ),
-        ),
-      ]),
+      ),
     );
   }
 }
 
-class _Row extends StatelessWidget {
-  const _Row({required this.item, required this.selected, required this.onTap});
+/// The ticker window's optical shell: one-pass glass — blur, resting fill,
+/// hairline rim (Plane 2). Both the rows and the opened conversation render
+/// inside this same shell.
+class _WindowShell extends StatelessWidget {
+  final BorderRadius radius;
+  final Widget child;
+  const _WindowShell({required this.radius, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: radius,
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: radius,
+            color: const Color(0x1EFFFFFF),
+            border: Border.all(color: const Color(0x2EFFFFFF), width: 0.5),
+          ),
+          padding: const EdgeInsets.fromLTRB(14, 10, 10, 8),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+/// One model row: name, time, one-line takeaway. Press toggles the model on
+/// or off with a graduated decay (dim + settle on deactivate, spring-back on
+/// activate). No discs, no badges, no row chrome (D20). The chevron opens the
+/// conversation (D17/D18).
+class _TickerRow extends StatelessWidget {
   final TickerItem item;
   final bool selected;
-  final VoidCallback onTap;
+  final bool active;
+  final VoidCallback onToggle;
+  final VoidCallback onOpen;
+
+  const _TickerRow({required this.item, required this.selected, required this.active, required this.onToggle, required this.onOpen});
+
   @override
   Widget build(BuildContext context) {
     final last = item.conversation.isNotEmpty ? item.conversation.last : null;
     final time = item.isStreaming ? '…' : (last != null ? _clock(last.timestamp) : item.relativeTime);
     final msg = item.summary.isNotEmpty ? item.summary : (last?.text ?? '');
-    return Semantics(
-      button: true,
-      label: item.modelDef.label,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: FGlass(
-          width: 420,
-          height: 96,
-          radius: BorderRadius.circular(20),
-          stroke: selected ? const Color(0x66FFFFFF) : null,
-          shadow: selected ? const [BoxShadow(color: Color(0x2B000000), offset: Offset(0, 52), blurRadius: 25.8, spreadRadius: -9)] : null,
-          gradient: selected
-              ? const RadialGradient(center: Alignment(-0.92, -1), radius: 1.6, colors: [Color(0x809C8585), Color(0x806C6C6C)])
-              : null,
-          padding: const EdgeInsets.all(16),
-          child: Center(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-              SizedBox(
-                height: 24,
-                child: Row(children: [
-                  Expanded(child: FText(item.modelDef.label, size: 20, height: 24, weight: FontWeight.w700)),
-                  const SizedBox(width: 8),
-                  Opacity(
-                    opacity: 0.6,
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      Container(width: 5, height: 5, decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.white)),
-                      const SizedBox(width: 6),
-                      FText(time, size: 16, height: 24, weight: FontWeight.w700),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onToggle,
+      child: AnimatedOpacity(
+        duration: Duration(milliseconds: active ? 280 : 340),
+        curve: active ? Curves.easeOutCubic : Curves.easeInCubic,
+        opacity: active ? 1.0 : 0.38,
+        child: AnimatedScale(
+          duration: Duration(milliseconds: active ? 280 : 340),
+          curve: active ? Curves.easeOutBack : Curves.easeInCubic,
+          scale: active ? 1.0 : 0.96,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 5),
+            child: Row(children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+                  SizedBox(
+                    height: 18,
+                    child: Row(children: [
+                      Expanded(child: Text(item.modelDef.label,
+                          maxLines: 1, overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 14, height: 1.15, fontWeight: FontWeight.w700, color: Colors.white))),
+                      const SizedBox(width: 8),
+                      Opacity(opacity: 0.55, child: Text(time, style: const TextStyle(fontSize: 10.5, height: 1.15, fontWeight: FontWeight.w600, color: Colors.white))),
                     ]),
+                  ),
+                  const SizedBox(height: 3),
+                  SizedBox(
+                    height: 16,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(msg.replaceAll('\n', ' '),
+                          style: const TextStyle(fontSize: 12, height: 1.15, fontWeight: FontWeight.w600, color: Color(0x99FFFFFF))),
+                    ),
                   ),
                 ]),
               ),
-              const SizedBox(height: 8),
-              FText(msg.replaceAll('\n', ' '), size: 16, height: 16, weight: FontWeight.w700, opacity: 0.6),
+              // Open affordance: the conversation expands from here.
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onOpen,
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Icon(item.modelDef.id == item.modelDef.id && selected ? Icons.close_rounded : Icons.chevron_right_rounded,
+                      size: 18, color: const Color(0x99FFFFFF)),
+                ),
+              ),
             ]),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// The opened conversation in app coordinates — D17: on a phone it takes the
+/// rows' place inside the same bounded window (never full-width); D18: it is
+/// closeable from the header. Reply sends an isolated branch to this model.
+class TickerAnswerCompact extends StatefulWidget {
+  final TickerItem item;
+  final VoidCallback onClose;
+  final ValueChanged<String> onReply;
+  final void Function(TickerMessage) onTapMessage;
+
+  const TickerAnswerCompact({super.key, required this.item, required this.onClose, required this.onReply, required this.onTapMessage});
+
+  @override
+  State<TickerAnswerCompact> createState() => _TickerAnswerCompactState();
+}
+
+class _TickerAnswerCompactState extends State<TickerAnswerCompact> {
+  final _reply = TextEditingController();
+
+  @override
+  void dispose() {
+    _reply.dispose();
+    super.dispose();
+  }
+
+  void _send() {
+    final t = _reply.text.trim();
+    if (t.isEmpty) return;
+    _reply.clear();
+    widget.onReply(t);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final m = widget.item.modelDef;
+    return _WindowShell(
+      radius: BorderRadius.circular(28),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Header: the model's name + close (D18).
+          SizedBox(
+            height: 30,
+            child: Row(children: [
+              Expanded(
+                child: Text(m.label, maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white)),
+              ),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: widget.onClose,
+                child: const Padding(padding: EdgeInsets.all(4), child: Icon(Icons.close_rounded, size: 18, color: Color(0xB3FFFFFF))),
+              ),
+            ]),
+          ),
+        const SizedBox(height: 4),
+        Expanded(
+          child: EdgeFade(
+            fadeTopFraction: 0.08,
+            fadeBottomFraction: 0.08,
+            child: ListView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              children: [
+                for (final msg in widget.item.conversation)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: msg.sender == 'user'
+                        ? Align(
+                            alignment: Alignment.centerRight,
+                            child: Container(
+                              constraints: const BoxConstraints(maxWidth: 300),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              decoration: const BoxDecoration(
+                                color: Color(0x66347F52),
+                                borderRadius: BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(3), bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12)),
+                              ),
+                              child: Text(msg.text, style: const TextStyle(fontSize: 12.5, height: 1.3, fontWeight: FontWeight.w600, color: Colors.white)),
+                            ),
+                          )
+                        : GestureDetector(
+                            onTap: () => widget.onTapMessage(msg),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Container(
+                                constraints: const BoxConstraints(maxWidth: 320),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                decoration: const BoxDecoration(
+                                  color: Color(0x26FFFFFF),
+                                  borderRadius: BorderRadius.only(topLeft: Radius.circular(3), topRight: Radius.circular(12), bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12)),
+                                ),
+                                child: Text(msg.text, style: const TextStyle(fontSize: 12.5, height: 1.3, fontWeight: FontWeight.w600, color: Colors.white)),
+                              ),
+                            ),
+                          ),
+                  ),
+                if (widget.item.isStreaming)
+                  const Padding(padding: EdgeInsets.only(left: 8), child: Text('…', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0x99FFFFFF)))),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        // Isolated branch composer (Master Spec §3.3).
+        Container(
+          height: 38,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: const Color(0x26000000),
+            borderRadius: BorderRadius.circular(19),
+            border: Border.all(color: const Color(0x33FFFFFF), width: 0.5),
+          ),
+          child: Row(children: [
+            Expanded(
+              child: TextField(
+                controller: _reply,
+                cursorColor: Colors.white,
+                style: const TextStyle(fontSize: 12.5, color: Colors.white, fontWeight: FontWeight.w600),
+                decoration: const InputDecoration(border: InputBorder.none, isCollapsed: true, hintText: 'Reply', hintStyle: TextStyle(fontSize: 12.5, color: Color(0x66FFFFFF))),
+                onSubmitted: (_) => _send(),
+              ),
+            ),
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _send,
+              child: const Icon(Icons.arrow_upward_rounded, size: 18, color: Colors.white),
+            ),
+          ]),
+        ),
+        ],
       ),
     );
   }
