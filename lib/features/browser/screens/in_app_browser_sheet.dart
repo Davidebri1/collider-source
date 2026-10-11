@@ -1,11 +1,15 @@
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/figma/figma_stage.dart';
+import '../../../core/kit/collider_kit.dart';
 import '../../../core/vision/vision_kit.dart';
+import '../../nav/contextual_side_nav.dart';
+import '../../nav/side_nav_rail.dart';
 import '../models/browser_tab.dart';
 import '../browser_urls.dart';
 import '../web_frame.dart';
@@ -35,9 +39,21 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
   late String _activeTabId;
   bool _overview = false;
   final TextEditingController _addr = TextEditingController();
+  final FocusNode _addrFocus = FocusNode();
   final Map<String, List<String>> _back = {};
   int _reload = 0;
   String? _shownUrl;
+
+  // Rail controls (user directive, 2026-10-10): item 1 opens the address bar;
+  // Find on Page is its own button. Find advances per request on the native
+  // build; the web preview frames cross-origin pages, so find says so quietly
+  // instead of pretending.
+  final ValueNotifier<String?> _findRequests = ValueNotifier<String?>(null);
+  final ValueNotifier<int> _clearRequests = ValueNotifier<int>(0);
+  final TextEditingController _findCtrl = TextEditingController();
+  bool _findOpen = false;
+  BrowserEngine _engine = defaultBrowserEngine();
+  bool _engineMenuOpen = false;
 
   BrowserTab get _tab => widget.tabs.firstWhere((t) => t.id == _activeTabId, orElse: () => widget.tabs.first);
 
@@ -45,6 +61,16 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
   void initState() {
     super.initState();
     _activeTabId = widget.initialTabId;
+  }
+
+  @override
+  void dispose() {
+    _addr.dispose();
+    _addrFocus.dispose();
+    _findCtrl.dispose();
+    _findRequests.dispose();
+    _clearRequests.dispose();
+    super.dispose();
   }
 
   void _switchTab(String id) => setState(() {
@@ -56,7 +82,7 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
     final t = BrowserTab(
       id: 'user_${DateTime.now().millisecondsSinceEpoch}',
       title: 'New Tab',
-      url: browserStartUrl(),
+      url: browserStartUrl(_engine),
       isModelAssigned: false,
       isUserControlling: true,
     );
@@ -66,12 +92,57 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
 
   String _host(String url) => url.replaceFirst(RegExp(r'^https?://'), '');
 
+  // ── the browser's own side rail (user directive, 2026-10-10) ────────────
+  // The sheet is its own route, so the shell's rail does not reach it; the
+  // browser carries the same contract: item 1 is search, Find on Page is its
+  // own button.
+  void _onRailSelect(String key) {
+    switch (key) {
+      case 'search':
+        setState(() => _overview = false);
+        _addrFocus.requestFocus();
+      case 'find':
+        setState(() => _findOpen = !_findOpen);
+        if (_findOpen && kIsWeb) _say('Find on page needs the app build.');
+      case 'tabs':
+        setState(() => _overview = !_overview);
+      case 'engine':
+        setState(() => _engineMenuOpen = !_engineMenuOpen);
+      case 'clear':
+        if (kIsWeb) {
+          _say('Cache clearing needs the app build.');
+        } else {
+          _clearRequests.value++;
+          _say('Cache cleared.');
+        }
+    }
+  }
+
+  void _findNext() {
+    final q = _findCtrl.text.trim();
+    if (q.isEmpty) return;
+    if (kIsWeb) {
+      _say('Find on page needs the app build.');
+      return;
+    }
+    // The marker forces a fresh notification for repeated queries.
+    _findRequests.value = '$q\u200b${DateTime.now().microsecondsSinceEpoch}';
+  }
+
+  String? _notice;
+  void _say(String s) {
+    setState(() => _notice = s);
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted && _notice == s) setState(() => _notice = null);
+    });
+  }
+
   /// Address bar: a web address opens directly; anything else is searched.
   void _go(String input) {
     final q = input.trim();
     if (q.isEmpty) return;
     final isUrl = !q.contains(' ') && (q.contains('.') || q.startsWith('http'));
-    final url = isUrl ? (q.startsWith('http') ? q : 'https://$q') : browserSearchUrl(q);
+    final url = isUrl ? (q.startsWith('http') ? q : 'https://$q') : browserSearchUrl(q, _engine);
     final tab = _tab;
     (_back[tab.id] ??= []).add(tab.url);
     widget.onTabUpdated?.call(tab.copyWith(url: url, title: isUrl ? _host(url) : q));
@@ -157,7 +228,70 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
         autofocus: true,
         child: Material(
           type: MaterialType.transparency,
-          child: FigmaStage(frame: _frame, cropWidth: _crop, center: _center, children: [
+          child: Stack(children: [
+            // The browser's side rail — the same contract as every surface:
+            // item 1 is search, Find on Page is its own button (user
+            // directive, 2026-10-10). The browser is its own route, so the
+            // rail lives here, at the screen's left edge, vertically centred.
+            Positioned(
+              left: 12,
+              top: 0,
+              bottom: 0,
+              child: Center(
+                child: VOrnamentRail(
+                  size: Kit.controlCircle,
+                  items: [
+                    for (final e in sideRailEntries(ActiveWorkSurface.browser)) VRailItem(e.icon, e.label),
+                  ],
+                  active: sideRailEntries(ActiveWorkSurface.browser).indexWhere(
+                    (e) => e.key == (_overview ? 'tabs' : (_engineMenuOpen ? 'engine' : null)),
+                  ),
+                  onSelect: (i) => _onRailSelect(sideRailEntries(ActiveWorkSurface.browser)[i].key),
+                ),
+              ),
+            ),
+            // Engine picker: the rail's Search Engine control.
+            if (_engineMenuOpen)
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => setState(() => _engineMenuOpen = false),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 68),
+                      child: GlassMenu(
+                        rows: [
+                          for (final e in BrowserEngine.values)
+                            GlassMenuRow(
+                              icon: switch (e) {
+                                BrowserEngine.google => Icons.language_rounded,
+                                BrowserEngine.duckduckgo => Icons.travel_explore_rounded,
+                                BrowserEngine.wikipedia => Icons.menu_book_rounded,
+                              },
+                              label: switch (e) {
+                                BrowserEngine.google => 'Google',
+                                BrowserEngine.duckduckgo => 'DuckDuckGo',
+                                BrowserEngine.wikipedia => 'Wikipedia',
+                              },
+                              on: e == _engine,
+                              onTap: () {
+                                setState(() {
+                                  _engine = e;
+                                  _engineMenuOpen = false;
+                                });
+                                final tab = _tab;
+                                (_back[tab.id] ??= []).add(tab.url);
+                                widget.onTabUpdated?.call(tab.copyWith(url: browserStartUrl(_engine), title: 'Search'));
+                              },
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            FigmaStage(frame: _frame, cropWidth: _crop, center: _center, children: [
             // Toolbar ornament.
             Positioned(
               left: 1280,
@@ -223,6 +357,7 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
                                         12,
                                     child: TextField(
                                       controller: _addr,
+                                      focusNode: _addrFocus,
                                       textAlign: TextAlign.center,
                                       cursorColor: Colors.white,
                                       style: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.w500, color: Colors.white),
@@ -302,16 +437,112 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
                 ),
               ]),
             ),
-          ]),
+            ]),
+            // Find-on-page bar (rail ▸ Find on Page): floats over the page
+            // window while open. Enter or the arrow repeats window.find, which
+            // advances the selection natively.
+            if (_findOpen)
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 96,
+                child: Center(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(26),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                      child: Container(
+                        width: 320,
+                        height: 52,
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        decoration: BoxDecoration(
+                          color: const Color(0x66808080),
+                          borderRadius: BorderRadius.circular(26),
+                          border: Border.all(color: const Color(0x33FFFFFF), width: 1),
+                        ),
+                        child: Row(children: [
+                          const Icon(Icons.find_in_page_rounded, size: 20, color: Colors.white70),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: TextField(
+                              controller: _findCtrl,
+                              autofocus: true,
+                              cursorColor: Colors.white,
+                              style: GoogleFonts.inter(fontSize: 15, color: Colors.white, decoration: TextDecoration.none),
+                              textInputAction: TextInputAction.search,
+                              onSubmitted: (_) => _findNext(),
+                              decoration: const InputDecoration(
+                                border: InputBorder.none,
+                                isDense: true,
+                                hintText: 'Find on page',
+                                hintStyle: TextStyle(color: Color(0x59FFFFFF), fontSize: 15),
+                              ),
+                            ),
+                          ),
+                          _smallCircle(Icons.arrow_downward_rounded, 'Next match', _findNext),
+                          const SizedBox(width: 8),
+                          _smallCircle(Icons.close_rounded, 'Close find bar', () => setState(() => _findOpen = false)),
+                        ]),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            // The quiet line (D59 idiom): what a control did, or why it cannot.
+            if (_notice != null)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 36,
+                child: Center(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(18),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(color: const Color(0x66808080), borderRadius: BorderRadius.circular(18)),
+                        child: Text(
+                          _notice!,
+                          style: GoogleFonts.inter(fontSize: 13, color: Colors.white, decoration: TextDecoration.none),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+          ),
         ),
       ),
     );
   }
 
+  Widget _smallCircle(IconData icon, String tip, VoidCallback onTap) => Semantics(
+        button: true,
+        label: tip,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(color: const Color(0x33FFFFFF), borderRadius: BorderRadius.circular(18)),
+            child: Icon(icon, size: 20, color: Colors.white),
+          ),
+        ),
+      );
+
   Widget _page(BrowserTab tab) {
     return KeyedSubtree(
       key: ValueKey('page-${tab.url}-$_reload-$_zoom'),
-      child: WebFrame(key: ValueKey('${tab.url}#$_reload#$_zoom'), url: _reload == 0 ? tab.url : '${tab.url}${tab.url.contains('?') ? '&' : '?'}_r=$_reload', zoom: _zoom),
+      child: WebFrame(
+        key: ValueKey('${tab.url}#$_reload#$_zoom'),
+        url: _reload == 0 ? tab.url : '${tab.url}${tab.url.contains('?') ? '&' : '?'}_r=$_reload',
+        zoom: _zoom,
+        findRequests: _findRequests,
+        clearRequests: _clearRequests,
+      ),
     );
   }
 

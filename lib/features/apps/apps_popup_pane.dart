@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../core/audio/music_player.dart';
 import '../../core/figma/figma_stage.dart';
+import '../../core/vision/vision_kit.dart';
 
 /// REQ-01 App Grid (Vision OS Design System 2:6774, visionOS Home 97:34752):
 /// circular app icons float directly over the dimmed environment in offset
@@ -14,7 +14,6 @@ class AppsPopupPane extends StatelessWidget {
   final VoidCallback onOpenFiles;
   final VoidCallback onOpenMusicPlayer;
   final VoidCallback onOpenBrowser;
-  final VoidCallback onOpenSettings;
   /// The tab bar's Account tab (People in 97:34752).
   final VoidCallback? onOpenAccount;
 
@@ -29,23 +28,22 @@ class AppsPopupPane extends StatelessWidget {
     required this.onOpenFiles,
     required this.onOpenMusicPlayer,
     required this.onOpenBrowser,
-    required this.onOpenSettings,
   });
 
   @override
   Widget build(BuildContext context) {
+    // Seven apps (R13 / Surfaces). Settings is deliberately absent: it is a
+    // Dock surface (R11 — Compose, Settings, Apps), not an app. An app's
+    // place in the launcher never depends on transient content, so Music is
+    // always present (v8.4 supersedes D46); the surface degrades cleanly.
     final apps = [
-      // v8.3 (D45, D48): one-word names (an icon alone is ambiguous in a
-      // launcher); full-colour icons and a Settings app, as in Figma 97-34752.
       _App('Smart Gen', Icons.auto_awesome_mosaic_rounded, const [Color(0xFFC4B5FD), Color(0xFF7C3AED)], onOpenSmartGen),
       _App('Market', Icons.explore_rounded, const [Color(0xFFFDBA74), Color(0xFFEA580C)], onOpenDiscoverMarket),
       _App('Themes', Icons.landscape_rounded, const [Color(0xFF6EE7B7), Color(0xFF059669)], onOpenThemeGallery),
       _App('Premium', Icons.diamond_rounded, const [Color(0xFFFDE68A), Color(0xFFD97706)], onOpenPremiumMarketplace),
       _App('Files', Icons.folder_rounded, const [Color(0xFF93C5FD), Color(0xFF2563EB)], onOpenFiles),
-      // No songs in the catalog: no Music app (v8.3, D46).
-      if (MusicPlayer.library.isNotEmpty) _App('Music', Icons.music_note_rounded, const [Color(0xFFFF7A90), Color(0xFFF2213B)], onOpenMusicPlayer),
+      _App('Music', Icons.music_note_rounded, const [Color(0xFFFF7A90), Color(0xFFF2213B)], onOpenMusicPlayer),
       _App('Browser', Icons.explore_outlined, const [Color(0xFF7DD3FC), Color(0xFF0369A1)], onOpenBrowser),
-      _App('Settings', Icons.settings_rounded, const [Color(0xFFE5E7EB), Color(0xFF8E8E93)], onOpenSettings, glyph: const Color(0xFF3A3A3C)),
     ];
 
     // v8.4: visionOS Home 97:34752 (1920 x 1080) at its own geometry,
@@ -78,8 +76,10 @@ class AppsPopupPane extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        // The frame has no dimming: a clear tap-to-close layer.
-        Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: onClose)),
+        // R13: the platter dims the environment, and a covering layer
+        // separates planes with blur (user directive, 2026-10-10). The scrim
+        // is also the click-away escape.
+        Positioned.fill(child: VScrim(onTap: onClose)),
         FigmaStage(
           frame: frame,
           cropWidth: cropWidth,
@@ -153,8 +153,7 @@ class _App {
   /// Top and bottom of the icon's colour fill.
   final List<Color> colors;
   final VoidCallback onTap;
-  final Color glyph;
-  const _App(this.label, this.icon, this.colors, this.onTap, {this.glyph = Colors.white});
+  const _App(this.label, this.icon, this.colors, this.onTap);
 }
 
 class _AppIcon extends StatelessWidget {
@@ -199,7 +198,7 @@ class _AppIcon extends StatelessWidget {
                   colors: [Colors.white.withValues(alpha: 0.28), Colors.white.withValues(alpha: 0)],
                 ),
               ),
-              child: Icon(app.icon, size: size * 0.5, color: app.glyph),
+              child: Icon(app.icon, size: size * 0.5, color: Colors.white),
             ),
             const SizedBox(height: 8),
             FText(app.label, size: 12, weight: FontWeight.w500, align: TextAlign.center, maxLines: 1),

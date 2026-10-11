@@ -1,6 +1,6 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../../core/files/file_blobs.dart';
@@ -23,8 +23,10 @@ class FilesScreen extends StatefulWidget {
   final VoidCallback onClose;
   /// Rail selection (source filter / 'music' / 'search').
   final String category;
+  /// Rail 'Add Files' pushes: each increment opens the file picker once.
+  final ValueListenable<int>? uploadTick;
 
-  const FilesScreen({super.key, required this.onClose, this.category = 'all'});
+  const FilesScreen({super.key, required this.onClose, this.category = 'all', this.uploadTick});
 
   static const frame = Size(1336.4, 835.2);
   // The group's own width (rail at 0 .. main panel right 1336.4), no margin.
@@ -49,10 +51,14 @@ class _FilesScreenState extends State<FilesScreen> {
   void initState() {
     super.initState();
     _store.init();
+    // The rail's Add Files: runs the same picker the surface's own add control
+    // uses. Bumped once per rail press.
+    widget.uploadTick?.addListener(_pickFile);
   }
 
   @override
   void dispose() {
+    widget.uploadTick?.removeListener(_pickFile);
     _searchCtrl.dispose();
     super.dispose();
   }

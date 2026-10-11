@@ -3,6 +3,7 @@
 // still render. Without that server (static hosting, /api 404) the page is
 // framed directly instead of showing the host's 404 (v8.3, D41).
 import 'dart:ui_web' as ui_web;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:web/web.dart' as web;
 
@@ -16,7 +17,12 @@ class WebFrame extends StatelessWidget {
   /// Page zoom (the address bar's aA): the page lays out at 1/zoom of the
   /// frame and is scaled up, like a browser's zoom.
   final double zoom;
-  const WebFrame({super.key, required this.url, this.zoom = 1});
+  /// Unsupported on the web build: the page is a cross-origin frame, so its
+  /// contents are not reachable. Accepted for API parity; ignored.
+  final ValueListenable<String?>? findRequests;
+  final ValueListenable<int>? clearRequests;
+
+  const WebFrame({super.key, required this.url, this.zoom = 1, this.findRequests, this.clearRequests});
 
   @override
   Widget build(BuildContext context) {

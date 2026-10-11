@@ -10,7 +10,6 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/audio/music_player.dart';
 import '../../core/media/theme_catalog.dart';
-import '../../core/theme/specular_border.dart';
 import '../../core/vision/vision_kit.dart';
 import '../../models/theme_def.dart';
 import '../music/song_wheel.dart';
@@ -174,9 +173,6 @@ const double _kGlassSigma = 28;
 const double _kSongRowExtent = 44;
 const int _kSongSlots = 3;
 const double _kSongsBlockHeight = _kSongSlots * _kSongRowExtent;
-const double _kActionHeight = 36;
-const double _kNoSongsGap = 12;
-const double _kCapsuleHeight = 34;
 // v8.4 (Figma 1:11): p8, heading 28, +8 subtitle 24, +4 line 20, +16 player
 // 80 (+ the theme's songs when it has any).
 const double _kLabelsBlockHeight =
@@ -616,23 +612,6 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
           ],
         ),
       ),
-    );
-  }
-
-  /// Buy / Apply theme capsule.
-  Widget _buildAction(WallpaperTheme t) {
-    if (_owned(t)) {
-      return _GlassCapsule(
-        key: _capsuleKey,
-        label: 'Apply',
-        onTap: () => widget.onApplyTheme(t),
-      );
-    }
-    final price = _store.priceLabelFor(t.id, catalogPrice: t.priceLabel);
-    return _GlassCapsule(
-      key: _capsuleKey,
-      label: 'Buy · $price',
-      onTap: () => _confirmBuy(t, price),
     );
   }
 
@@ -1692,75 +1671,6 @@ class _FloorPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _FloorPainter old) => old.opacity != opacity;
-}
-
-TextStyle _actionTextStyle(Color color, FontWeight weight) => _inter(TextStyle(
-      fontSize: 14,
-      height: 20 / 14,
-      fontWeight: weight,
-      letterSpacing: 14 * 0.025,
-      color: color,
-    ));
-
-/// Tappable capsule in the app's glass (VMaterial.elevated, the bottom bar's
-/// VOrnament material): fill, 0.5px rim, specular rim, VPress physics. Native
-/// blurs with a BackdropFilter; web gets the blur from the ambient's CSS
-/// element at the same rect (the video is DOM content under Flutter).
-class _GlassCapsule extends StatelessWidget {
-  final String label;
-  final VoidCallback onTap;
-  final bool small;
-  const _GlassCapsule({super.key, required this.label, required this.onTap, this.small = false});
-
-  @override
-  Widget build(BuildContext context) {
-    final h = small ? 28.0 : _kCapsuleHeight;
-    final r = BorderRadius.circular(h / 2);
-    const material = VMaterial.elevated;
-    Widget body = CustomPaint(
-      foregroundPainter: SpecularRimPainter(borderRadius: h / 2, strokeWidth: 0.6),
-      child: Container(
-        height: h,
-        padding: EdgeInsets.symmetric(horizontal: small ? 12 : 20),
-        decoration: BoxDecoration(
-          color: material.fill,
-          borderRadius: r,
-          border: Border.all(color: material.rim, width: 0.5),
-        ),
-        // widthFactor 1: the capsule hugs its label instead of filling the row.
-        child: Align(
-          widthFactor: 1,
-          child: Text(
-            label,
-            maxLines: 1,
-            style: _actionTextStyle(
-                const Color(0xFFFFFFFF), small ? FontWeight.w400 : FontWeight.w500)
-                .copyWith(fontSize: small ? 13 : 14),
-          ),
-        ),
-      ),
-    );
-    body = ClipRRect(
-      borderRadius: r,
-      child: kIsWeb
-          ? body
-          : BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: material.blur, sigmaY: material.blur),
-              child: body,
-            ),
-    );
-    return Semantics(
-      button: true,
-      label: label,
-      child: VPress(
-        onTap: onTap,
-        child: DecoratedBox(
-          decoration: BoxDecoration(borderRadius: r, boxShadow: material.shadow),
-          child: body,
-        ),
-      ),
-    );
-  }
 }
 
 // ---------------------------------------------------------------------------

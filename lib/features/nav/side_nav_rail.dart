@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../core/audio/music_player.dart';
 import '../../core/kit/collider_kit.dart';
 import '../../core/vision/vision_kit.dart';
 import 'contextual_side_nav.dart';
@@ -12,17 +11,23 @@ class SideRailEntry {
   const SideRailEntry(this.key, this.icon, this.label);
 }
 
-/// Master Spec §6.2: the side nav reshapes to the active work surface.
-/// Surfaces themselves are reached from the Apps overlay, never from here.
+/// The rail contract (user directive, 2026-10-10): the side nav is the
+/// module's control surface. Item 1 is always the search of the active face —
+/// chat searches history, files searches files, themes search the catalog,
+/// the browser opens its address bar, the market opens its search view.
+/// The rest are that surface's major local controls. Surfaces themselves are
+/// reached from the Apps overlay, never from here.
 List<SideRailEntry> sideRailEntries(ActiveWorkSurface s) => switch (s) {
       ActiveWorkSurface.chat => const [
+          SideRailEntry('search', Icons.search_rounded, 'Search'),
           SideRailEntry('new', Icons.add_rounded, 'New Chat'),
           SideRailEntry('local', Icons.history_rounded, 'Local History'),
           SideRailEntry('global', Icons.public_rounded, 'Global History'),
-          SideRailEntry('consensus', Icons.balance_rounded, 'Consensus History'),
+          SideRailEntry('consensus', Icons.balance_rounded, 'Consensus'),
           SideRailEntry('models', Icons.hub_outlined, 'Models'),
         ],
       ActiveWorkSurface.smartgen => const [
+          SideRailEntry('search', Icons.search_rounded, 'Search'),
           SideRailEntry('cards', Icons.style_rounded, 'Cards'),
           SideRailEntry('boards', Icons.dashboard_rounded, 'Boards'),
           SideRailEntry('canvas', Icons.crop_free_rounded, 'Canvas'),
@@ -30,32 +35,39 @@ List<SideRailEntry> sideRailEntries(ActiveWorkSurface s) => switch (s) {
           SideRailEntry('new', Icons.add_rounded, 'New Card'),
         ],
       ActiveWorkSurface.market => const [
-          // v8.4 (rail 290:4411, four tabs): discover, search, this
-          // session's generations, the theme gallery.
-          SideRailEntry('discover', Icons.play_arrow_rounded, 'Discover'),
+          // 'search' is the market's own search view (R20): live filters by
+          // type and model. Discover is the Imagine-layout feed.
           SideRailEntry('search', Icons.search_rounded, 'Search'),
+          SideRailEntry('discover', Icons.play_arrow_rounded, 'Discover'),
           SideRailEntry('mine', Icons.bookmark_rounded, 'My Generations'),
           SideRailEntry('gallery', Icons.collections_rounded, 'Theme Gallery'),
         ],
-      ActiveWorkSurface.themes => [
-          const SideRailEntry('premium', Icons.workspace_premium_rounded, 'Premium Marketplace'),
-          const SideRailEntry('gallery', Icons.collections_rounded, 'Theme Gallery'),
-          // No songs in the catalog: no Music entry (v8.3, D46).
-          if (MusicPlayer.library.isNotEmpty) const SideRailEntry('music', Icons.library_music_rounded, 'Music Collection'),
+      ActiveWorkSurface.themes => const [
+          SideRailEntry('search', Icons.search_rounded, 'Search'),
+          SideRailEntry('premium', Icons.workspace_premium_rounded, 'Premium'),
+          SideRailEntry('gallery', Icons.collections_rounded, 'Gallery'),
+          // Always present (v8.4): the catalog ships real tracks; an entry's
+          // place must not depend on transient content.
+          SideRailEntry('music', Icons.library_music_rounded, 'Music'),
         ],
       ActiveWorkSurface.browser => const [
+          // Item 1 opens the address bar (the start page is the search home).
+          // Find on Page is its own button (user directive): the web build
+          // frames cross-origin pages, so find works in the app build and
+          // says so quietly on web.
+          SideRailEntry('search', Icons.search_rounded, 'Search'),
+          SideRailEntry('find', Icons.find_in_page_rounded, 'Find on Page'),
           SideRailEntry('tabs', Icons.tab_rounded, 'Tabs'),
           SideRailEntry('engine', Icons.travel_explore_rounded, 'Search Engine'),
           SideRailEntry('clear', Icons.cleaning_services_outlined, 'Clear Cache'),
         ],
-      // v8.4 (Files 71:7502 rail): where the files came from, plus search.
-      ActiveWorkSurface.files => [
-          const SideRailEntry('all', Icons.folder_open_rounded, 'All Files'),
-          const SideRailEntry('files', Icons.upload_file_rounded, 'Added Here'),
-          const SideRailEntry('composer', Icons.attach_file_rounded, 'Attachments'),
-          const SideRailEntry('model', Icons.auto_awesome_outlined, 'Model Outputs'),
-          if (MusicPlayer.library.isNotEmpty) const SideRailEntry('music', Icons.library_music_rounded, 'Music'),
-          const SideRailEntry('search', Icons.search_rounded, 'Search'),
+      ActiveWorkSurface.files => const [
+          SideRailEntry('search', Icons.search_rounded, 'Search'),
+          // Categories opens the panel with the source filters — the rail
+          // itself stays four items, like the references.
+          SideRailEntry('categories', Icons.category_rounded, 'Categories'),
+          SideRailEntry('upload', Icons.file_upload_outlined, 'Add Files'),
+          SideRailEntry('music', Icons.library_music_rounded, 'Music'),
         ],
     };
 

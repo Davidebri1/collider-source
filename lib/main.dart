@@ -216,6 +216,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   String _themeSection = 'gallery';
   String _filesCategory = 'all';
   String _chatSection = 'global';
+  /// Rail 'Add Files' push: FilesScreen listens and opens the file picker.
+  final ValueNotifier<int> _filesUploadTick = ValueNotifier<int>(0);
 
   /// The rail ornament shows on the resting canvas and durable work surfaces only.
   bool get _railVisible {
@@ -269,6 +271,22 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     if (cq != null) _activeCategory = ModelCategory.values.firstWhere((c) => c.name == cq, orElse: () => ModelCategory.general);
     if (Uri.base.queryParameters['genopts'] == '1' && _activeCategory.isMedia) _genOptionsOpen = true;
     if (Uri.base.queryParameters['rail'] == '1') _isMobileSideNavOpen = true;
+    // Panel deep link (?nav=search|local|global|consensus|models|categories):
+    // opens the contextual panel on that section for the active surface.
+    final nv = Uri.base.queryParameters['nav'];
+    if (nv != null) {
+      _isMobileSideNavOpen = true;
+      switch (_currentActiveSurface) {
+        case ActiveWorkSurface.chat:
+          if (const {'search', 'local', 'global', 'consensus', 'models'}.contains(nv)) _chatSection = nv;
+        case ActiveWorkSurface.themes:
+          if (const {'search', 'gallery', 'premium', 'music'}.contains(nv)) _themeSection = nv;
+        // Files' panel is the Categories panel by definition — no section
+        // state to set; _isMobileSideNavOpen already opens it.
+        default:
+          break;
+      }
+    }
     if (Uri.base.queryParameters['media'] == '1' && _activeCategory.isMedia) _seedMediaDemo();
     _initializeTickerItems();
     _initializeHistorySessions();
@@ -290,6 +308,16 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     }
     if (qp['browser'] == '1') {
       WidgetsBinding.instance.addPostFrameCallback((_) => _openBrowserForTab('user_default'));
+    }
+    // Surface deep links used by the launcher and the verification tour:
+    // market view (?mkt=search|discover|mine) and files category (?fcat=).
+    if (qp['mkt'] != null) {
+      final m = qp['mkt']!;
+      if (const {'search', 'discover', 'mine'}.contains(m)) _marketCategory = m;
+    }
+    if (qp['fcat'] != null) {
+      final f = qp['fcat']!;
+      if (const {'all', 'files', 'composer', 'model', 'music', 'search'}.contains(f)) _filesCategory = f;
     }
   }
 
@@ -478,8 +506,11 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
   void _initializeBrowserTabs() {
     // One user tab; research sources are added as tabs when a question uses the web.
+    // The home page is the search engine (browser_urls.dart): Google on the
+    // native build (PRD D6 — DuckDuckGo home lost, X2), the frameable engine
+    // on the web preview.
     _browserTabs = [
-      BrowserTab(id: 'user_default', title: 'Search', url: 'https://html.duckduckgo.com/html/', isUserControlling: true),
+      BrowserTab(id: 'user_default', title: 'Search', url: browserStartUrl(), isUserControlling: true),
     ];
   }
 
@@ -883,9 +914,10 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       ActiveWorkSurface.chat => _isMobileSideNavOpen ? _chatSection : null,
       ActiveWorkSurface.smartgen => _smartGenView,
       ActiveWorkSurface.market => _marketCategory,
-      ActiveWorkSurface.themes => _activeDrawer == 'premium' ? 'premium' : (_activeDrawer == 'music' ? 'music' : 'gallery'),
+      ActiveWorkSurface.themes =>
+        _isMobileSideNavOpen && _themeSection == 'search' ? 'search' : (_activeDrawer == 'premium' ? 'premium' : (_activeDrawer == 'music' ? 'music' : 'gallery')),
       ActiveWorkSurface.browser => null,
-      ActiveWorkSurface.files => _filesCategory,
+      ActiveWorkSurface.files => _isMobileSideNavOpen ? 'categories' : _filesCategory,
     };
 
     return railKey;
@@ -904,6 +936,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
     switch (surface) {
       case ActiveWorkSurface.chat:
+        // 'search' is item 1 (user contract): the panel opens on the search
+        // section, which spans local + global history.
         if (key == 'new') {
           setState(() => _isMobileSideNavOpen = false);
           _openHomeComposer();
@@ -912,8 +946,12 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         }
       case ActiveWorkSurface.smartgen:
         setState(() {
-          _isMobileSideNavOpen = false;
-          if (key != 'new') _smartGenView = key;
+          if (key == 'search') {
+            _isMobileSideNavOpen = true; // panel: card search
+          } else {
+            _isMobileSideNavOpen = false;
+            if (key != 'new') _smartGenView = key;
+          }
         });
       case ActiveWorkSurface.market:
         if (key == 'gallery') {
@@ -921,21 +959,32 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         } else {
           setState(() {
             _isMobileSideNavOpen = false;
-            _marketCategory = key;
+            _marketCategory = key; // 'search' | 'discover' | 'mine' — real views
           });
         }
       case ActiveWorkSurface.themes:
-        setState(() {
-          _isMobileSideNavOpen = false;
-          _themeSection = key;
-          _activeDrawer = key == 'gallery' ? 'themes' : key;
-        });
+        if (key == 'search') {
+          _togglePanel(() => _themeSection = 'search', _themeSection == 'search');
+        } else {
+          setState(() {
+            _isMobileSideNavOpen = false;
+            _themeSection = key;
+            _activeDrawer = key == 'gallery' ? 'themes' : key;
+          });
+        }
       case ActiveWorkSurface.browser:
-        break;
+        break; // the browser carries its own rail inside the sheet
       case ActiveWorkSurface.files:
         setState(() {
-          _isMobileSideNavOpen = false;
-          _filesCategory = key;
+          if (key == 'categories') {
+            _isMobileSideNavOpen = !_isMobileSideNavOpen; // panel: source filters
+          } else if (key == 'upload') {
+            _isMobileSideNavOpen = false;
+            _filesUploadTick.value++; // FilesScreen listens and runs the picker
+          } else {
+            _isMobileSideNavOpen = false;
+            _filesCategory = key; // 'search' | 'music' — real FilesScreen modes
+          }
         });
     }
   }
@@ -1002,12 +1051,11 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       );
 
   Widget _buildSideNav({required bool isMobile}) {
-    final surface = _currentActiveSurface;
     return Row(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        if (_isMobileSideNavOpen && surface == ActiveWorkSurface.chat) ...[
+        if (_isMobileSideNavOpen) ...[
           const SizedBox(width: 10),
           ContextualSideNav(
             activeSurface: _currentActiveSurface,
@@ -1044,6 +1092,16 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       activeMarketCategory: _marketCategory,
       onSelectMarketCategory: (c) => setState(() => _marketCategory = c),
       activeThemeSection: _themeSection,
+      onPreviewTheme: (t) {
+        // A theme search result previews in the gallery: the live preview
+        // swaps the wallpaper behind the gallery window.
+        setState(() {
+          _currentTheme = t;
+          _themeSection = 'gallery';
+          _activeDrawer = 'themes';
+          _isMobileSideNavOpen = false;
+        });
+      },
       onSelectThemeSection: (s) {
         setState(() {
           _themeSection = s;
@@ -1247,7 +1305,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                 onOpenFiles: () => _requestSwitchSurface('files'),
                 onOpenMusicPlayer: () => _requestSwitchSurface('music'),
                 onOpenBrowser: () => _openBrowserForTab('user_default'),
-                onOpenSettings: () => _openDrawer('settings'),
                 onOpenAccount: () => setState(() => _activeDrawer = 'account'),
               ),
             ),
@@ -1396,19 +1453,32 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
           if (_activeDrawer == 'settings')
             Positioned.fill(
-              child: SettingsDrawer(
-                onClose: () => setState(() => _activeDrawer = null),
-                incognito: _incognito,
-                autosave: _autosave,
-                onIncognito: (v) => setState(() => _incognito = v),
-                onAutosave: (v) => setState(() => _autosave = v),
-                onAccount: () => setState(() => _activeDrawer = 'account'),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // Full-screen covers separate planes: blur + dim, tap to close.
+                  VScrim(onTap: () => setState(() => _activeDrawer = null)),
+                  SettingsDrawer(
+                    onClose: () => setState(() => _activeDrawer = null),
+                    incognito: _incognito,
+                    autosave: _autosave,
+                    onIncognito: (v) => setState(() => _incognito = v),
+                    onAutosave: (v) => setState(() => _autosave = v),
+                    onAccount: () => setState(() => _activeDrawer = 'account'),
+                  ),
+                ],
               ),
             ),
 
           if (_activeDrawer == 'account')
             Positioned.fill(
-              child: AccountSheet(tier: ModelTier.free, onClose: () => setState(() => _activeDrawer = null)),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  VScrim(onTap: () => setState(() => _activeDrawer = null)),
+                  AccountSheet(tier: ModelTier.free, onClose: () => setState(() => _activeDrawer = null)),
+                ],
+              ),
             ),
 
           // Durable work surfaces sit over one shared scrim (kit overlay + medium blur).
@@ -1450,6 +1520,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             Positioned.fill(
               child: FilesScreen(
                 category: _filesCategory,
+                uploadTick: _filesUploadTick,
                 onClose: () => _requestSwitchSurface(null),
               ),
             ),
@@ -1492,7 +1563,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             ),
           // The tab bar ornament: the screen's own Figma tab bar (v8.4).
           if (_railVisible) Positioned.fill(child: _buildRailLayer(tickerLayout)),
-          if (_railVisible && _isMobileSideNavOpen && _currentActiveSurface == ActiveWorkSurface.chat)
+          // The contextual panel follows the surface: chat history / search,
+          // Smart Gen card search, theme search, Files categories.
+          if (_railVisible && _isMobileSideNavOpen)
             Positioned(
               left: 10,
               bottom: 84,

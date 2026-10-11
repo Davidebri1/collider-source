@@ -20,6 +20,9 @@ analyzer:
     - windows/**
     - macos/**
     - linux/**
+    # A stale snapshot copy of the project made 2026-10-08. It is kept as
+    # reference data, not built (only the root lib/ builds) and not analyzed.
+    - Collider Source COS/**
 
 linter:
   # The lint rules applied to this project can be customized in the

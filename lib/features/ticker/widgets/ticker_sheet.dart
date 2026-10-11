@@ -134,7 +134,14 @@ class TickerSheet extends StatelessWidget {
     // a narrow window never grows into a tall one.
     final h = math.min(capH, w / _panelAspect);
 
-    final threadW = expanded ? math.max(0.0, viewport.width - gutter * 2 - w - 1.0) : 0.0;
+    // The expansion is a window, not a sheet (user directive, 2026-10-10):
+    // the thread pane is capped so the two-up never swallows the canvas —
+    // the background image keeps the majority of the screen at every size.
+    // Portrait: it takes what is left beside the dock-width summaries column.
+    // Wider scenes: it stops at a window proportion (reference 476:791 within
+    // the frame, ~0.42 of the viewport) rather than filling the remainder.
+    final remaining = math.max(0.0, viewport.width - gutter * 2 - w - 1.0);
+    final threadW = expanded ? math.min(remaining, math.max(w * 1.6, viewport.width * 0.42)) : 0.0;
     final groupW = w + (expanded ? threadW + 1.0 : 0.0);
     final groupLeft = (viewport.width - groupW) / 2;
     final top = viewport.height - (dockTop + gutter) - h;
@@ -307,6 +314,12 @@ class TickerLayout {
 }
 
 /// Consensus — pinned here and nowhere else.
+///
+/// The one line of colour on an otherwise glass-neutral surface (user
+/// directive, 2026-10-10): the score reads red→green by agreement strength
+/// (R16/R17 — a count, never a percent; incomplete shows the empty score),
+/// carried as a glowing chip over a diagonal wash of the same tint. Cinematic
+/// but quiet: one hue, low alpha, no particles.
 class _ConsensusRow extends StatelessWidget {
   const _ConsensusRow({required this.title, required this.line, required this.onTap, required this.m});
   final String title;
@@ -314,11 +327,27 @@ class _ConsensusRow extends StatelessWidget {
   final VoidCallback onTap;
   final TickerMetrics m;
 
+  /// "4/7" out of a title like "4/7 Consensus". Null when incomplete (–/–).
+  static final RegExp _ratioRe = RegExp(r'(\d+)\s*/\s*(\d+)');
+
   @override
   Widget build(BuildContext context) {
     // The consensus strip is Collider's addition, so it takes the row rhythm at
     // a reduced weight rather than a height invented on its own.
     final h = m.rowH * 0.62;
+    final match = _ratioRe.firstMatch(title);
+    final int? n = match == null ? null : int.tryParse(match.group(1)!);
+    final int? d = match == null ? null : int.tryParse(match.group(2)!);
+    final complete = n != null && d != null && d > 0 && n >= 0;
+    final f = (complete ? n / d : 0.0).clamp(0.0, 1.0);    // Alignment strength: crimson at total dissent → spring green at
+    // unanimity. Incomplete is neutral silver (R17: the empty score).
+    final tint = complete
+        ? Color.lerp(const Color(0xFFDC2626), const Color(0xFF4ADE80), f)!
+        : const Color(0xFFE2E8F0);
+    final scoreText = complete ? '${match!.group(1)}/${match.group(2)}' : '–/–';
+    final label = title.replaceFirst(_ratioRe, '').trim();
+    final chipH = h * 0.62;
+
     return Semantics(
       button: true,
       label: line.isEmpty ? title : '$title. $line',
@@ -328,21 +357,52 @@ class _ConsensusRow extends StatelessWidget {
         child: Container(
           height: h,
           margin: EdgeInsets.fromLTRB(m.inset, m.gap, m.inset, m.gap),
-          padding: EdgeInsets.symmetric(horizontal: m.pad),
+          padding: EdgeInsets.symmetric(horizontal: m.pad * 0.8),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.12),
+            // The tint as a low wash, brighter at the chip and falling off to
+            // the right — light emitted, not painted on.
+            gradient: LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [tint.withValues(alpha: 0.30), tint.withValues(alpha: 0.10), Colors.white.withValues(alpha: 0.04)],
+            ),
             borderRadius: BorderRadius.circular(m.radius),
+            border: Border.all(color: tint.withValues(alpha: 0.45), width: 0.75),
           ),
           child: Row(children: [
-            Icon(Icons.balance_rounded, size: m.name * 1.15, color: Colors.white70),
-            SizedBox(width: m.pad * 0.55),
+            // The score chip: the fraction, glowing in the alignment colour.
+            Container(
+              height: chipH,
+              padding: EdgeInsets.symmetric(horizontal: m.pad * 0.62),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(m.radius * 0.85),
+                border: Border.all(color: tint.withValues(alpha: 0.8), width: 0.9),
+                boxShadow: [BoxShadow(color: tint.withValues(alpha: 0.45), blurRadius: m.radius * 0.6, spreadRadius: m.radius * 0.08)],
+              ),
+              child: Center(
+                child: Text(
+                  scoreText,
+                  maxLines: 1,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: m.summary * 0.95,
+                    height: 1.0,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.2,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(width: m.pad * 0.62),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    title,
+                    label.isEmpty ? 'Consensus' : label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -363,12 +423,14 @@ class _ConsensusRow extends StatelessWidget {
                         fontSize: m.summary * 0.85,
                         height: 1.2,
                         fontWeight: FontWeight.w500,
-                        color: Colors.white.withValues(alpha: 0.4),
+                        color: Colors.white.withValues(alpha: 0.45),
                       ),
                     ),
                 ],
               ),
             ),
+            // A quiet forward cue in the same emitted tint.
+            Icon(Icons.chevron_right_rounded, size: m.name * 0.9, color: tint.withValues(alpha: 0.9)),
           ]),
         ),
       ),
@@ -376,8 +438,9 @@ class _ConsensusRow extends StatelessWidget {
   }
 }
 
-/// One model: name, response summary, time. No provider line, no initials, no
-/// model colour — the name is the identity.
+/// One model: name, response summary, time. The name is still the identity;
+/// the disc carries the model's own colour as its light (user directive,
+/// 2026-10-10 — a premium, at-a-glance distinction, PRD-exempt hues).
 class ResponseRow extends StatelessWidget {
   const ResponseRow({super.key, required this.item, required this.m, required this.selected, required this.onTap});
   final TickerItem item;
@@ -416,9 +479,18 @@ class ResponseRow extends StatelessWidget {
           decoration: BoxDecoration(
             color: selected ? Colors.white.withValues(alpha: 0.16) : Colors.white.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(m.radius),
+            // The model's identity colour (exempt from the palette rule by
+            // design — it distinguishes models at a glance). Emitted, not
+            // painted: a left edge that glows only on the open row.
+            border: selected
+                ? Border(left: BorderSide(color: item.modelDef.providerColor.withValues(alpha: 0.95), width: 2.5))
+                : null,
+            boxShadow: selected
+                ? [BoxShadow(color: item.modelDef.providerColor.withValues(alpha: 0.30), blurRadius: m.radius * 0.7, spreadRadius: m.radius * 0.05)]
+                : null,
           ),
           child: Row(children: [
-            _Disc(size: m.avatar, dim: !selected),
+            _Disc(size: m.avatar, dim: !selected, color: item.modelDef.providerColor),
             SizedBox(width: m.gap * 2),
             Expanded(
               child: Column(
@@ -478,22 +550,28 @@ class ResponseRow extends StatelessWidget {
 }
 
 /// The reference row leads with a 56 disc. Collider has no avatar artwork, so
-/// the disc is a quiet placeholder that holds the rhythm - it is never a model
-/// colour and never carries the name.
+/// the disc is the model's identity light: a quiet glass bead that carries the
+/// model's own colour at a whisper — never the name, never a loud fill.
 class _Disc extends StatelessWidget {
-  const _Disc({required this.size, required this.dim});
+  const _Disc({required this.size, required this.dim, this.color});
   final double size;
   final bool dim;
+  final Color? color;
 
   @override
-  Widget build(BuildContext context) => Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: Colors.white.withValues(alpha: dim ? 0.06 : 0.12),
-        ),
-      );
+  Widget build(BuildContext context) {
+    final c = color ?? Colors.white;
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.white.withValues(alpha: dim ? 0.06 : 0.12),
+        border: Border.all(color: c.withValues(alpha: dim ? 0.35 : 0.8), width: 1.4),
+        boxShadow: dim ? null : [BoxShadow(color: c.withValues(alpha: 0.35), blurRadius: size * 0.35)],
+      ),
+    );
+  }
 }
 
 /// The right portion: one model's full thread.

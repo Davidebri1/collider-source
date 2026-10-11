@@ -1,10 +1,14 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../core/audio/music_player.dart';
+import '../../core/media/theme_catalog.dart';
 import '../../core/vision/vision_kit.dart';
 import '../../models/model_def.dart';
+import '../../models/theme_def.dart';
 import '../../models/ticker_item.dart';
 import '../browser/models/browser_tab.dart';
+import '../smartgen/kanban_store.dart';
+import '../theme/theme_living_media.dart';
 
 enum ActiveWorkSurface {
   chat,
@@ -51,6 +55,8 @@ class ContextualSideNav extends StatefulWidget {
   // Themes props
   final String activeThemeSection;
   final ValueChanged<String>? onSelectThemeSection;
+  /// Theme search result tapped: preview it in the gallery.
+  final ValueChanged<WallpaperTheme>? onPreviewTheme;
 
   // Browser props
   final List<BrowserTab>? browserTabs;
@@ -91,6 +97,7 @@ class ContextualSideNav extends StatefulWidget {
     this.onSelectMarketCategory,
     this.activeThemeSection = 'gallery',
     this.onSelectThemeSection,
+    this.onPreviewTheme,
     this.browserTabs,
     this.activeBrowserTabId,
     this.onSelectBrowserTab,
@@ -119,12 +126,18 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
 
   List<ConversationHistorySession> _sessions() {
     final q = _chatQuery.toLowerCase().trim();
-    final source = widget.chatSection == 'local'
-        ? widget.localHistory.entries
-            .expand((e) => e.value)
-            .where((s) => widget.selectedModelIds.contains(s.targetModelId))
-            .toList()
-        : widget.globalHistory;
+    // 'search' spans both stores — the rail's item 1 searches the whole face.
+    final source = switch (widget.chatSection) {
+      'local' => widget.localHistory.entries
+          .expand((e) => e.value)
+          .where((s) => widget.selectedModelIds.contains(s.targetModelId))
+          .toList(),
+      'search' => [
+          ...widget.localHistory.entries.expand((e) => e.value).where((s) => widget.selectedModelIds.contains(s.targetModelId)),
+          ...widget.globalHistory,
+        ],
+      _ => widget.globalHistory,
+    };
     if (q.isEmpty) return source;
     return source
         .where((s) =>
@@ -145,16 +158,17 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
     final (title, _) = switch (widget.activeSurface) {
       ActiveWorkSurface.chat => (switch (widget.chatSection) {
           'local' => 'Local History',
+          'search' => 'Search',
           'consensus' => 'Consensus History',
           'models' => 'Models',
           _ => 'Global History',
         }, 0),
-      ActiveWorkSurface.smartgen => ('Smart Gen', 0),
+      ActiveWorkSurface.smartgen => ('Search', 0),
       // v8.3 (D45): one or two words, only to tell the panels apart.
       ActiveWorkSurface.market => ('Market', 0),
-      ActiveWorkSurface.themes => ('Themes', 0),
+      ActiveWorkSurface.themes => (widget.activeThemeSection == 'search' ? 'Search' : 'Themes', 0),
       ActiveWorkSurface.browser => ('Tabs', 0),
-      ActiveWorkSurface.files => ('Files', 0),
+      ActiveWorkSurface.files => ('Categories', 0),
     };
 
     return SizedBox(
@@ -193,11 +207,14 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
 
   Widget _content() => switch (widget.activeSurface) {
         ActiveWorkSurface.chat => _chat(),
-        ActiveWorkSurface.themes => _themes(),
+        ActiveWorkSurface.themes => widget.activeThemeSection == 'search' ? _themesSearch() : _themes(),
         ActiveWorkSurface.browser => _browser(),
-        // v8.2 fix pass (D31): the Smart Gen views / boards, Market categories
-        // and Files categories selected nothing; those panels are deleted.
-        ActiveWorkSurface.smartgen || ActiveWorkSurface.market || ActiveWorkSurface.files => const SizedBox.shrink(),
+        // v8.4 (user directive, 2026-10-10): the rail's item 1 is search, and
+        // Categories opens the source-filter panel. Both are wired — the D31
+        // deletion removed panels whose rows selected nothing; these do.
+        ActiveWorkSurface.smartgen => _smartgenSearch(),
+        ActiveWorkSurface.files => _files(),
+        ActiveWorkSurface.market => const SizedBox.shrink(),
       };
 
   // ---------------- AI Chat ----------------
@@ -325,6 +342,176 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
         ),
         const SizedBox(height: VSpace.sm),
         VButton(label: 'Open 3D Celestial Map', dense: true, expand: true, onTap: widget.onOpenConsensus),
+      ],
+    );
+  }
+
+  // ---------------- Smart Gen (search) ----------------
+  /// The rail's item 1: search the user's cards. The board is the store;
+  /// a result tap goes to Cards.
+  Widget _smartgenSearch() {
+    return ListenableBuilder(
+      listenable: KanbanStore.instance,
+      builder: (context, _) {
+        final q = _chatQuery.toLowerCase().trim();
+        final cards = KanbanStore.instance.all.where((c) => c.title.isNotEmpty || c.notes.isNotEmpty).toList();
+        final hits = q.isEmpty
+            ? cards
+            : cards
+                .where((c) => c.title.toLowerCase().contains(q) || c.notes.toLowerCase().contains(q))
+                .toList();
+        if (hits.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(VSpace.sm),
+              child: Text('No cards yet.', style: VType.footnote(color: VColors.textSecondary)),
+            ),
+          );
+        }
+        return EdgeFade(
+          fadeHeight: 12,
+          child: ListView.separated(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(vertical: VSpace.xxs),
+            itemCount: hits.length,
+            separatorBuilder: (_, __) => const SizedBox(height: VSpace.xxs),
+            itemBuilder: (_, i) {
+              final c = hits[i];
+              return VPress(
+                onTap: () {
+                  widget.onPaneInteraction();
+                  widget.onSelectSmartGenView?.call('cards');
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: VSpace.xs),
+                  decoration: BoxDecoration(color: VColors.fillCell, borderRadius: BorderRadius.circular(VRadius.md)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(c.title.isEmpty ? '(untitled)' : c.title,
+                          maxLines: 1, overflow: TextOverflow.ellipsis, style: VType.callout(weight: FontWeight.w600)),
+                      if (c.notes.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(c.notes, maxLines: 2, overflow: TextOverflow.ellipsis, style: VType.caption(color: VColors.textSecondary)),
+                      ],
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  // ---------------- Files (categories) ----------------
+  /// The Categories panel: where the files came from. The rows select the
+  /// Files surface's source filter (R33) — wired, unlike the D31-era panel.
+  Widget _files() {
+    final rows = [
+      ('all', 'All Files', Icons.folder_open_rounded),
+      ('files', 'Added Here', Icons.download_rounded),
+      ('composer', 'Attachments', Icons.attach_file_rounded),
+      ('model', 'Model Outputs', Icons.smart_toy_rounded),
+      if (MusicPlayer.library.isNotEmpty) ('music', 'Music', Icons.library_music_rounded),
+    ];
+    return ListView(
+      physics: const BouncingScrollPhysics(),
+      children: [
+        for (final (key, label, icon) in rows)
+          VSidebarItem(
+            icon: icon,
+            label: label,
+            selected: widget.activeFilesCategory == key,
+            onTap: () {
+              widget.onPaneInteraction();
+              widget.onSelectFilesCategory?.call(key);
+            },
+          ),
+      ],
+    );
+  }
+
+  // ---------------- Themes (search) ----------------
+  /// The rail's item 1 for the themes face: search the catalog. A result tap
+  /// previews the theme in the gallery.
+  Widget _themesSearch() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        VSearchField(controller: _chatSearchCtrl, hint: 'Search themes', height: 34, onChanged: (v) => setState(() => _chatQuery = v)),
+        const SizedBox(height: VSpace.xs),
+        Expanded(
+          child: Builder(builder: (context) {
+            final q = _chatQuery.toLowerCase().trim();
+            final themes = ThemeCatalog.instance.allThemes;
+            final hits = q.isEmpty
+                ? themes
+                : themes
+                    .where((t) =>
+                        t.name.toLowerCase().contains(q) ||
+                        t.collection.toLowerCase().contains(q) ||
+                        t.creator.toLowerCase().contains(q))
+                    .toList();
+            if (hits.isEmpty) {
+              return Center(child: Text('Nothing matches.', style: VType.footnote(color: VColors.textSecondary)));
+            }
+            return EdgeFade(
+              fadeHeight: 12,
+              child: ListView.separated(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.symmetric(vertical: VSpace.xxs),
+                itemCount: hits.length,
+                separatorBuilder: (_, __) => const SizedBox(height: VSpace.xxs),
+                itemBuilder: (_, i) {
+                  final t = hits[i];
+                  return VPress(
+                    onTap: () {
+                      widget.onPaneInteraction();
+                      widget.onPreviewTheme?.call(t);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(color: VColors.fillCell, borderRadius: BorderRadius.circular(VRadius.md)),
+                      child: Row(children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(VRadius.sm),
+                          child: SizedBox(
+                            width: 34,
+                            height: 48,
+                            child: Image(
+                              image: ThemeMedia.provider(t.posterUrl),
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const ColoredBox(color: VColors.fillCell),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(t.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: VType.callout(weight: FontWeight.w600)),
+                              const SizedBox(height: 2),
+                              Text(
+                                t.isPremium ? '${t.collection} · ${t.priceLabel ?? ''}' : t.collection,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: VType.caption(color: VColors.textSecondary),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (t.isPremium) const Icon(Icons.diamond_rounded, size: 13, color: VColors.textSecondary),
+                      ]),
+                    ),
+                  );
+                },
+              ),
+            );
+          }),
+        ),
       ],
     );
   }
