@@ -1094,8 +1094,12 @@ class _CoverFlowState extends State<_CoverFlow> {
                         return Opacity(
                           opacity: pose.opacity.clamp(0.0, 1.0),
                           child: Transform(
-                            // transform-origin: centre of the cover box
-                            alignment: const Alignment(0, -0.5),
+                            // transform-origin: centre of the cover box.
+                            // This must stay Alignment.center — _onScreen()
+                            // composes the same matrix about the centre, and
+                            // rotating about (0, -0.5) swung each card down
+                            // into its neighbour as it turned.
+                            alignment: Alignment.center,
                             transform: pose.matrix(),
                             child: child,
                           ),

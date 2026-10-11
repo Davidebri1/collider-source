@@ -59,40 +59,48 @@ class AppsPopupPane extends StatelessWidget {
       fit: StackFit.expand,
       children: [
         VScrim(onTap: onClose, blur: true),
+        // The launcher floats as one frosted pane rather than loose icons: the
+        // glass gives the grid separation from the wallpaper without hiding it,
+        // which matters because Apps is a transient hop, not a place to read.
         Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (int r = 0; r < rows.length; r++) ...[
-                if (r > 0) const SizedBox(height: VSpace.md),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    for (final a in rows[r])
-                      SizedBox(
-                        width: cell,
-                        child: _AppIcon(
-                          index: apps.indexOf(a),
-                          app: a,
-                          size: iconSize,
-                          onTap: () {
-                            onClose();
-                            a.onTap();
-                          },
-                        ),
-                      ),
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: VSpace.md),
+            child: VGlass(
+              material: VMaterial.elevated,
+              radius: VRadius.sheet,
+              padding: const EdgeInsets.fromLTRB(VSpace.sm, VSpace.xs, VSpace.sm, VSpace.md),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Align(
+                    alignment: Alignment.topRight,
+                    child: VCircleButton(icon: Icons.close_rounded, tooltip: 'Close Apps', onTap: onClose),
+                  ),
+                  for (int r = 0; r < rows.length; r++) ...[
+                    if (r > 0) const SizedBox(height: VSpace.md),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (final a in rows[r])
+                          SizedBox(
+                            width: cell,
+                            child: _AppIcon(
+                              index: apps.indexOf(a),
+                              app: a,
+                              size: iconSize,
+                              onTap: () {
+                                onClose();
+                                a.onTap();
+                              },
+                            ),
+                          ),
+                      ],
+                    ),
                   ],
-                ),
-              ],
-            ],
-          ),
-        ),
-        Positioned(
-          top: VSpace.md,
-          right: VSpace.md,
-          child: SafeArea(
-            child: VCircleButton(icon: Icons.close_rounded, tooltip: 'Close Apps', floating: true, onTap: onClose),
+                ],
+              ),
+            ),
           ),
         ),
       ],

@@ -1010,39 +1010,64 @@ class GlassMenu extends StatelessWidget {
   Widget build(BuildContext context) {
     final k = scale ?? scaleFor(context);
     final h = heightFor(rows.length);
-    return SizedBox(
-      width: width * k,
-      height: h * k,
-      child: FittedBox(
-        fit: BoxFit.fill,
+    // The menu reads as light summoned in mid-air rather than a card pasted
+    // on the wallpaper: a soft glow behind it, and the top/bottom edges
+    // dissolved so the glass has no hard terminus. Only the outer ~18% fades,
+    // so every row stays fully opaque and legible.
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(26),
+        boxShadow: [
+          BoxShadow(color: Colors.white.withValues(alpha: 0.10), blurRadius: 46, spreadRadius: 2),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.34), blurRadius: 30, offset: const Offset(0, 14)),
+        ],
+      ),
+      child: ShaderMask(
+        blendMode: BlendMode.dstIn,
+        shaderCallback: (rect) {
+          final f = (18 / (rect.height <= 0 ? 1 : rect.height)).clamp(0.0, 0.22);
+          return LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: const [Color(0x00FFFFFF), Colors.white, Colors.white, Color(0x00FFFFFF)],
+            stops: [0.0, f, 1 - f, 1.0],
+          ).createShader(rect);
+        },
         child: SizedBox(
-          width: width,
-          height: h,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 20 * k, sigmaY: 20 * k),
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Colors.white, width: 1),
-                  gradient: const LinearGradient(
-                    begin: Alignment(-0.8, -1),
-                    end: Alignment(0.8, 1),
-                    colors: [Color(0x1A4F4F4F), Color(0x1A4F4F4F), Color(0x1AFFFFFF), Color(0x1A4F4F4F)],
-                    stops: [0.017, 0.0175, 0.33, 0.97],
+          width: width * k,
+          height: h * k,
+          child: FittedBox(
+            fit: BoxFit.fill,
+            child: SizedBox(
+              width: width,
+              height: h,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 20 * k, sigmaY: 20 * k),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: Colors.white, width: 1),
+                      gradient: const LinearGradient(
+                        begin: Alignment(-0.8, -1),
+                        end: Alignment(0.8, 1),
+                        colors: [Color(0x1A4F4F4F), Color(0x1A4F4F4F), Color(0x1AFFFFFF), Color(0x1A4F4F4F)],
+                        stops: [0.017, 0.0175, 0.33, 0.97],
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (var i = 0; i < rows.length; i++) ...[
+                          if (i > 0) const SizedBox(height: 4),
+                          _row(rows[i]),
+                        ],
+                      ],
+                    ),
                   ),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    for (var i = 0; i < rows.length; i++) ...[
-                      if (i > 0) const SizedBox(height: 4),
-                      _row(rows[i]),
-                    ],
-                  ],
                 ),
               ),
             ),
