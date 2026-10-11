@@ -2,7 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:collider_flutter/core/theme/app_fonts.dart';
 
 /// v8.4 "scaled frame" method (David, Oct 5 3:49 PM): every screen is built at
 /// its Figma frame's own logical size, with the frame's positions, sizes,
@@ -228,7 +228,7 @@ class FText extends StatelessWidget {
       softWrap: maxLines != 1,
       overflow: ellipsis ? TextOverflow.ellipsis : TextOverflow.clip,
       textAlign: align,
-      style: GoogleFonts.inter(
+      style: AppFonts.inter(
         fontSize: size,
         height: height == null ? null : height! / size,
         fontWeight: weight,
@@ -278,7 +278,7 @@ class FigmaViewport extends StatelessWidget {
 /// The [FText] style as a TextStyle (for TextFields): Inter, Figma px.
 class FTextStyle {
   static TextStyle of({double size = 16, FontWeight weight = FontWeight.w400, Color color = Colors.white, double? height, double? letterSpacing}) =>
-      GoogleFonts.inter(
+      AppFonts.inter(
         fontSize: size,
         height: height == null ? null : height / size,
         fontWeight: weight,

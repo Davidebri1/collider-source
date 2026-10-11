@@ -49,8 +49,7 @@ class SettingsDrawer extends StatelessWidget {
         Center(
           child: ListenableBuilder(
             listenable: Listenable.merge([FloatingMusic.enabled, ThemeCatalog.instance]),
-            builder: (_, __) => VVignette(
-              child: GlassMenu(
+            builder: (_, __) => GlassMenu(
               rows: [
                 if (onAccount != null) GlassMenuRow(icon: Icons.person_outline_rounded, label: 'Account', onTap: onAccount, toggle: false),
                 GlassMenuRow(icon: Icons.visibility_off_outlined, label: 'Incognito', on: incognito, onTap: () => onIncognito(!incognito)),
@@ -65,7 +64,6 @@ class SettingsDrawer extends StatelessWidget {
                     onTap: () => FloatingMusic.setEnabled(!FloatingMusic.enabled.value),
                   ),
               ],
-            ),
             ),
           ),
         ),

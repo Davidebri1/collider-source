@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:collider_flutter/core/theme/app_fonts.dart';
 
 enum SpatialDepthPlane {
   /// Plane 0: Base Cosmos / Live Wallpaper
@@ -134,7 +134,7 @@ class SpatialTypography {
     Color color = Colors.white,
     double letterSpacing = 0.4,
   }) {
-    return GoogleFonts.cormorantGaramond(
+    return AppFonts.cormorantGaramond(
       fontSize: fontSize,
       fontWeight: fontWeight,
       color: color,
@@ -149,7 +149,7 @@ class SpatialTypography {
     Color color = Colors.white,
     double letterSpacing = -0.2,
   }) {
-    return GoogleFonts.instrumentSans(
+    return AppFonts.instrumentSans(
       fontSize: fontSize,
       fontWeight: fontWeight,
       color: color,
@@ -164,7 +164,7 @@ class SpatialTypography {
     Color? color,
     double height = 1.40,
   }) {
-    return GoogleFonts.instrumentSans(
+    return AppFonts.instrumentSans(
       fontSize: fontSize,
       fontWeight: fontWeight,
       color: color ?? Colors.white.withOpacity(0.92),
@@ -179,7 +179,7 @@ class SpatialTypography {
     FontWeight fontWeight = FontWeight.w400,
     Color? color,
   }) {
-    return GoogleFonts.instrumentSans(
+    return AppFonts.instrumentSans(
       fontSize: fontSize,
       fontWeight: fontWeight,
       color: color ?? Colors.white.withOpacity(0.55),

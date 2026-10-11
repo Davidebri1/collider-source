@@ -19,36 +19,35 @@ class VVignette extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Two multiplied linear ramps (vertical x horizontal). A transformed
+    // RadialGradient turned out to mask the whole child depending on how the
+    // shader resolves the transform; this composition is deterministic and
+    // reads as the same soft oval falloff.
+    List<double> stops(double extent) {
+      final ramp = ((1.0 - solid) / 2).clamp(0.0, 0.49);
+      return [ramp, ramp, 1.0 - ramp, 1.0 - ramp];
+    }
+
     return ShaderMask(
       blendMode: BlendMode.dstIn,
-      shaderCallback: (rect) {
-        if (rect.width <= 0 || rect.height <= 0) {
-          return const RadialGradient(colors: [Color(0xFFFFFFFF)])
-              .createShader(rect);
-        }
-        // Scale the gradient's y axis by h/w so the circular gradient maps to
-        // an ellipse matching the element's aspect (radius 0.5 then reaches
-        // the edge midpoints; corners fade to fully transparent).
-        final f = rect.height / rect.width;
-        return RadialGradient(
-          radius: 0.5,
-          colors: const [Color(0xFFFFFFFF), Color(0x00FFFFFF)],
-          stops: [solid * 0.5, 0.5],
-          transform: _ScaleYTransform(f),
-        ).createShader(rect);
-      },
-      child: child,
+      shaderCallback: (rect) => LinearGradient(
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        colors: const [Color(0x00FFFFFF), Color(0xFFFFFFFF), Color(0xFFFFFFFF), Color(0x00FFFFFF)],
+        stops: stops(rect.width),
+      ).createShader(rect),
+      child: ShaderMask(
+        blendMode: BlendMode.dstIn,
+        shaderCallback: (rect) => LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: const [Color(0x00FFFFFF), Color(0xFFFFFFFF), Color(0xFFFFFFFF), Color(0x00FFFFFF)],
+          stops: stops(rect.height),
+        ).createShader(rect),
+        child: child,
+      ),
     );
   }
-}
-
-class _ScaleYTransform extends GradientTransform {
-  final double f;
-  const _ScaleYTransform(this.f);
-
-  @override
-  Matrix4? transform(Rect bounds, {TextDirection? textDirection}) =>
-      Matrix4.diagonal3Values(1.0, f, 1.0);
 }
 
 /// A conjured floating element: the element reads as suspended in the lit

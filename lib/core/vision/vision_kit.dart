@@ -1,9 +1,10 @@
 import 'dart:ui';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:collider_flutter/core/theme/app_fonts.dart';
 import 'package:flutter/services.dart';
 import '../theme/edge_fade.dart';
+import '../theme/conjured.dart';
 import '../theme/specular_border.dart';
 import 'vision_tokens.dart';
 
@@ -908,14 +909,14 @@ class VAlert extends StatelessWidget {
                 width: 270,
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Column(children: [
-                  Text(title, textAlign: TextAlign.center, style: GoogleFonts.inter(fontSize: 19, height: 24 / 19, fontWeight: FontWeight.w700, color: const Color(0xF5FFFFFF))),
+                  Text(title, textAlign: TextAlign.center, style: AppFonts.inter(fontSize: 19, height: 24 / 19, fontWeight: FontWeight.w700, color: const Color(0xF5FFFFFF))),
                   if (message != null && message!.isNotEmpty) ...[
                     const SizedBox(height: 2),
                     Text(message!, textAlign: TextAlign.center, maxLines: messageLines, overflow: TextOverflow.ellipsis,
                         // Figma: #545454 with plus-lighter vibrancy, which reads as a
                         // light grey over the glass; Flutter text has no plus-lighter
                         // blend, so the rendered tone is used.
-                        style: GoogleFonts.inter(fontSize: 15, height: 20 / 15, color: const Color(0xA6FFFFFF))),
+                        style: AppFonts.inter(fontSize: 15, height: 20 / 15, color: const Color(0xA6FFFFFF))),
                   ],
                 ]),
               ),
@@ -942,7 +943,7 @@ class VAlert extends StatelessWidget {
                         actions[i].label,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(
+                        style: AppFonts.inter(
                           fontSize: 17,
                           fontWeight: FontWeight.w600,
                           color: actions[i].destructive ? const Color(0xFFFF6961) : const Color(0xF5FFFFFF),
@@ -1066,7 +1067,9 @@ class GlassMenu extends StatelessWidget {
 
   static const double frameWidth = 637;
   static double scaleFor(BuildContext context) => MediaQuery.sizeOf(context).width / frameWidth;
-  static double heightFor(int n) => 32 + n * 40 + (n > 0 ? (n - 1) * 4 : 0);
+  // 4 px of slack over the exact Figma arithmetic (32 + n*40 + (n-1)*4):
+  // FittedBox scale rounding ate 2 px on an 8-row menu and overflowed.
+  static double heightFor(int n) => 36 + n * 40 + (n > 0 ? (n - 1) * 4 : 0);
 
   @override
   Widget build(BuildContext context) {
@@ -1096,15 +1099,21 @@ class GlassMenu extends StatelessWidget {
                     stops: [0.017, 0.0175, 0.33, 0.97],
                   ),
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    for (var i = 0; i < rows.length; i++) ...[
-                      if (i > 0) const SizedBox(height: 4),
-                      _row(rows[i]),
+                // §41 atmospheric vignette: on the CONTENT, never on the
+                // glass — a ShaderMask above a BackdropFilter breaks the
+                // backdrop read on web and ghosts the menu.
+                child: VVignette(
+                  solid: 0.82,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (var i = 0; i < rows.length; i++) ...[
+                        if (i > 0) const SizedBox(height: 4),
+                        _row(rows[i]),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -1146,7 +1155,7 @@ class GlassMenu extends StatelessWidget {
                   r.label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.white.withValues(alpha: op)),
+                  style: AppFonts.inter(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.white.withValues(alpha: op)),
                 ),
               ),
             ],
