@@ -207,7 +207,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   String _smartGenView = 'cards';
   String _smartGenBoardType = 'kanban';
   String _marketCategory = 'prompts';
-  String _marketSearchQuery = '';
   String _themeSection = 'gallery';
   String _filesCategory = 'all';
   String _chatSection = 'global';
@@ -495,14 +494,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       _closeAllPanes();
       _expandedModelIds.clear();
       _isComposerSummoned = !_isComposerSummoned;
-    });
-  }
-
-  void _newConversation() {
-    setState(() {
-      _closeAllPanes();
-      _expandedModelIds.clear();
-      _isComposerSummoned = true;
     });
   }
 
@@ -1195,14 +1186,17 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       onSelectSmartGenBoardType: (b) => setState(() => _smartGenBoardType = b),
       activeMarketCategory: _marketCategory,
       onSelectMarketCategory: (c) => setState(() => _marketCategory = c),
-      onMarketSearch: (q) => setState(() => _marketSearchQuery = q),
       activeThemeSection: _themeSection,
       onSelectThemeSection: (s) {
         setState(() {
           _themeSection = s;
-          if (s == 'gallery') _activeDrawer = 'themes';
-          else if (s == 'premium') _activeDrawer = 'premium';
-          else if (s == 'music') _activeDrawer = 'music';
+          if (s == 'gallery') {
+            _activeDrawer = 'themes';
+          } else if (s == 'premium') {
+            _activeDrawer = 'premium';
+          } else if (s == 'music') {
+            _activeDrawer = 'music';
+          }
         });
       },
       browserTabs: _browserTabs,
@@ -1244,7 +1238,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           .toList();
     }
 
-    final activePills = categoryPills;
     final isMobile = MediaQuery.of(context).size.width < 768;
 
     return Scaffold(

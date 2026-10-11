@@ -151,7 +151,15 @@ class _VPressState extends State<VPress> {
       ),
     );
     if (widget.tooltip != null && widget.tooltip!.isNotEmpty) {
-      w = Tooltip(message: widget.tooltip!, waitDuration: const Duration(milliseconds: 400), child: w);
+      // excludeFromSemantics: the button already carries the tooltip as its
+      // Semantics label, so letting the Tooltip publish its own semantic too
+      // made every control announce twice ("New Chat New Chat").
+      w = Tooltip(
+        message: widget.tooltip!,
+        waitDuration: const Duration(milliseconds: 400),
+        excludeFromSemantics: true,
+        child: w,
+      );
     }
     return w;
   }

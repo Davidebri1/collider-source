@@ -47,11 +47,6 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
         _overview = false;
       });
 
-  void _toggleControl() {
-    widget.onTabUpdated?.call(_tab.copyWith(isUserControlling: !_tab.isUserControlling));
-    setState(() {});
-  }
-
   void _newTab() {
     final t = BrowserTab(
       id: 'user_${DateTime.now().millisecondsSinceEpoch}',

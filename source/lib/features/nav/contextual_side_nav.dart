@@ -15,8 +15,6 @@ enum ActiveWorkSurface {
   files,
 }
 
-enum SideNavTab { local, global, consensus }
-
 /// REQ-21 contextual panel beside the rail — the visionOS menu panel
 /// (visionOS Apps 97:34752 "Home / People / Environments"): a glass panel of
 /// icon-circle rows, selected row lit as a capsule; content follows the surface.
@@ -47,7 +45,6 @@ class ContextualSideNav extends StatefulWidget {
   // Market props
   final String activeMarketCategory;
   final ValueChanged<String>? onSelectMarketCategory;
-  final ValueChanged<String>? onMarketSearch;
 
   // Themes props
   final String activeThemeSection;
@@ -90,7 +87,6 @@ class ContextualSideNav extends StatefulWidget {
     this.onSelectSmartGenBoardType,
     this.activeMarketCategory = 'prompts',
     this.onSelectMarketCategory,
-    this.onMarketSearch,
     this.activeThemeSection = 'gallery',
     this.onSelectThemeSection,
     this.browserTabs,
@@ -110,15 +106,12 @@ class ContextualSideNav extends StatefulWidget {
 }
 
 class _ContextualSideNavState extends State<ContextualSideNav> {
-  SideNavTab _chatTab = SideNavTab.global;
   final TextEditingController _chatSearchCtrl = TextEditingController();
   String _chatQuery = '';
-  final TextEditingController _marketSearchCtrl = TextEditingController();
 
   @override
   void dispose() {
     _chatSearchCtrl.dispose();
-    _marketSearchCtrl.dispose();
     super.dispose();
   }
 
