@@ -180,13 +180,6 @@ const double _kCapsuleHeight = 34;
 const double _kLabelsBlockHeight =
     8 + 28 + 8 + _kSongsBlockHeight + 16 + _kActionHeight + 8;
 
-/// Same block without the song carousel, for packs with no tracks.
-const double _kLabelsBlockHeightNoSongs =
-    8 + 28 + _kNoSongsGap + _kActionHeight + 8;
-
-double _kLabelsBlockHeightFor(bool hasSongs) =>
-    hasSongs ? _kLabelsBlockHeight : _kLabelsBlockHeightNoSongs;
-
 // Not-owned dim on covers (DEVIATIONS.md D5): black 45% over the face, the
 // reflection multiplied by the same 0.55.
 const double _kUnownedCardDim = 0.45;
@@ -326,13 +319,8 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
       const mainTop =
           _kHeaderHeight + _kSearchPad + _kSearchHeight + _kSearchHintGap + _kSearchPad;
       final mainHeight = math.max(0.0, h - mainTop - barReserve);
-      // Only reserve the song carousel when the focused pack actually has
-      // songs. Most catalog entries ship none, and the fixed block left a
-      // ~144px void under the Apply button with the content stranded high.
-      final hasSongs = selected != null && selected.tracks.isNotEmpty;
-      final labelsBlockHeight = _kLabelsBlockHeightFor(hasSongs);
-      final contentHeight =
-          _kStageHeight + _kLabelsMarginTop + labelsBlockHeight;
+      const contentHeight =
+          _kStageHeight + _kLabelsMarginTop + _kLabelsBlockHeight;
       final contentTop =
           mainTop + math.max(0.0, (mainHeight - contentHeight) / 2);
       final stageTop = contentTop;
@@ -426,9 +414,9 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
                   left: 0,
                   right: 0,
                   top: labelsTop,
-                  height: labelsBlockHeight,
-                  // Top-aligned: the column fills the block exactly (with or
-                  // without songs), so nothing is left stranded below.
+                  height: _kLabelsBlockHeight,
+                  // Top-aligned: with songs the column fills the block exactly
+                  // (as before); without songs it ends under the name.
                   child: Align(
                     alignment: Alignment.topCenter,
                     child: _buildLabels(selected, contentWidth),
@@ -1094,12 +1082,8 @@ class _CoverFlowState extends State<_CoverFlow> {
                         return Opacity(
                           opacity: pose.opacity.clamp(0.0, 1.0),
                           child: Transform(
-                            // transform-origin: centre of the cover box.
-                            // This must stay Alignment.center — _onScreen()
-                            // composes the same matrix about the centre, and
-                            // rotating about (0, -0.5) swung each card down
-                            // into its neighbour as it turned.
-                            alignment: Alignment.center,
+                            // transform-origin: centre of the cover box
+                            alignment: const Alignment(0, -0.5),
                             transform: pose.matrix(),
                             child: child,
                           ),

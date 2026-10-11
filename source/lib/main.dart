@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'core/theme/edge_fade.dart';
+import 'core/theme/living_stardust_overlay.dart';
 import 'core/vision/vision_kit.dart';
 import 'core/api/collider_api.dart';
 import 'core/audio/music_player.dart';
@@ -206,6 +207,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   String _smartGenView = 'cards';
   String _smartGenBoardType = 'kanban';
   String _marketCategory = 'prompts';
+  String _marketSearchQuery = '';
   String _themeSection = 'gallery';
   String _filesCategory = 'all';
   String _chatSection = 'global';
@@ -215,11 +217,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     if (_localHistoryModel != null || _zoomedMessage != null || _isComposerSummoned || _browserOpen || _genOptionsOpen) return false;
     // An open answer takes the phone's full width (row 15); closing it brings the rail back.
     if (_activeDrawer == null && MediaQuery.of(context).size.width < 768 && _openPill(_tickerItems) != null) return false;
-    // The rail is the app's persistent frame, so it belongs on every work
-    // surface, not just Home and Themes. Entries whose surface reads no
-    // selected key (D31) are filtered in SideNavRail instead of hiding the
-    // whole ornament.
-    const surfaces = {null, 'themes', 'smartgen', 'market', 'files', 'premium'};
+    // Home (chat) and themes only: the Smart Gen, Market and Files rails
+    // selected nothing (no surface read their keys), so they are gone (D31).
+    const surfaces = {null, 'themes'};
     return surfaces.contains(_activeDrawer);
   }
 
@@ -495,6 +495,14 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       _closeAllPanes();
       _expandedModelIds.clear();
       _isComposerSummoned = !_isComposerSummoned;
+    });
+  }
+
+  void _newConversation() {
+    setState(() {
+      _closeAllPanes();
+      _expandedModelIds.clear();
+      _isComposerSummoned = true;
     });
   }
 
@@ -1123,20 +1131,18 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                 }
               case ActiveWorkSurface.smartgen:
                 setState(() {
-                  if (key != 'new') {
-                    _smartGenView = key;
-                    // The rail frames the surface; its panel is where the
-                    // sections are listed, so selecting opens the panel.
-                    _isMobileSideNavOpen = true;
-                  } else {
-                    _isMobileSideNavOpen = false;
-                  }
+                  _isMobileSideNavOpen = false;
+                  if (key != 'new') _smartGenView = key;
                 });
               case ActiveWorkSurface.market:
-                setState(() {
-                  _marketCategory = key;
-                  _isMobileSideNavOpen = true;
-                });
+                if (key == 'search') {
+                  togglePanel(() {}, true);
+                } else {
+                  setState(() {
+                    _isMobileSideNavOpen = false;
+                    _marketCategory = key;
+                  });
+                }
               case ActiveWorkSurface.themes:
                 setState(() {
                   _isMobileSideNavOpen = false;
@@ -1147,13 +1153,13 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                 break;
               case ActiveWorkSurface.files:
                 setState(() {
+                  _isMobileSideNavOpen = false;
                   _filesCategory = key;
-                  _isMobileSideNavOpen = true;
                 });
             }
           },
         ),
-        if (_isMobileSideNavOpen && surface != ActiveWorkSurface.browser) ...[
+        if (_isMobileSideNavOpen && surface == ActiveWorkSurface.chat) ...[
           const SizedBox(width: 10),
           ContextualSideNav(
             activeSurface: _currentActiveSurface,
@@ -1189,17 +1195,14 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       onSelectSmartGenBoardType: (b) => setState(() => _smartGenBoardType = b),
       activeMarketCategory: _marketCategory,
       onSelectMarketCategory: (c) => setState(() => _marketCategory = c),
+      onMarketSearch: (q) => setState(() => _marketSearchQuery = q),
       activeThemeSection: _themeSection,
       onSelectThemeSection: (s) {
         setState(() {
           _themeSection = s;
-          if (s == 'gallery') {
-            _activeDrawer = 'themes';
-          } else if (s == 'premium') {
-            _activeDrawer = 'premium';
-          } else if (s == 'music') {
-            _activeDrawer = 'music';
-          }
+          if (s == 'gallery') _activeDrawer = 'themes';
+          else if (s == 'premium') _activeDrawer = 'premium';
+          else if (s == 'music') _activeDrawer = 'music';
         });
       },
       browserTabs: _browserTabs,
@@ -1241,6 +1244,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           .toList();
     }
 
+    final activePills = categoryPills;
     final isMobile = MediaQuery.of(context).size.width < 768;
 
     return Scaffold(
@@ -1267,10 +1271,13 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               builderAmbient: _activeDrawer == 'premium',
             ),
           ),
-          // Ambient drifting stardust particles were removed 2026-10-11: never
-            // requested, and sparkles over the wallpaper read as noise on top of
-            // the world rather than part of it. The wallpaper is the only
-            // ambient layer.
+
+          // Ambient drifting stardust particles in Plane 0
+          const Positioned.fill(
+            child: IgnorePointer(
+              child: LivingStardustOverlay(),
+            ),
+          ),
           ],
 
           // Base ambient dim. Overlays and work surfaces bring their own VScrim

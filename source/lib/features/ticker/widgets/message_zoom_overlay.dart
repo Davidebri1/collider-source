@@ -68,17 +68,14 @@ class MessageZoomOverlay extends StatelessWidget {
         VScrim(onTap: onClose),
         SafeArea(
           child: Align(
-            // The focus view lives in the lower half: the message rises from
-            // the dock with its actions beneath it, instead of being pinned to
-            // the top of the window where it read as a banner.
-            alignment: Alignment.bottomCenter,
+            alignment: Alignment.topCenter,
             child: Padding(
-              padding: EdgeInsets.fromLTRB(VSpace.md, 0, VSpace.md, VSpace.lg + VSpace.xs),
+              padding: const EdgeInsets.fromLTRB(VSpace.md, 40, VSpace.md, 0),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: VOverlay.menuWidth(context), maxHeight: size.height * 0.46),
+                    constraints: BoxConstraints(maxWidth: VOverlay.menuWidth(context), maxHeight: size.height * 0.42),
                     child: VGlass(
                       material: VMaterial.modal,
                       radius: VRadius.xl,
@@ -106,9 +103,6 @@ class MessageZoomOverlay extends StatelessWidget {
                           const SizedBox(height: VSpace.sm),
                           Flexible(
                             child: VFadeScroll(
-                              // Deep fade at both ends: the message dissolves
-                              // into the glass instead of being cut off.
-                              fade: 30,
                               padding: const EdgeInsets.symmetric(vertical: VSpace.sm),
                               child: MdText(message.text, style: VType.body().copyWith(fontSize: VType.md, height: 1.5)),
                             ),
@@ -117,7 +111,7 @@ class MessageZoomOverlay extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(height: VSpace.sm),
+                  const SizedBox(height: VSpace.md),
                   VOrnament(
                     padding: const EdgeInsets.all(VSpace.xs - 2),
                     child: Row(

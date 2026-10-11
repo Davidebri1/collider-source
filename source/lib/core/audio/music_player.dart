@@ -46,16 +46,9 @@ class MusicPlayer extends ChangeNotifier {
     if (t == null) return const [];
     final seen = <String>{};
     final out = <MusicTrack>[];
-    final pack = _clean(t.name);
     for (final s in t.tracks) {
       if (s.title.trim().isEmpty) continue;
-      // The generated catalog names a pack song after its own theme, so the
-      // title and the "theme name" subtitle come out identical and every row
-      // printed the same string twice. Only subtitle with the theme when the
-      // song actually carries its own name.
-      final title = s.title.trim();
-      final subtitle = title.toLowerCase() == pack.toLowerCase() ? '' : pack;
-      final m = MusicTrack(title, t.posterUrl, s.audioUrl ?? '', subtitle: subtitle, themeId: t.id);
+      final m = MusicTrack(s.title.trim(), t.posterUrl, s.audioUrl ?? '', subtitle: _clean(t.name), themeId: t.id);
       if (seen.add(m.key)) out.add(m);
     }
     return out;

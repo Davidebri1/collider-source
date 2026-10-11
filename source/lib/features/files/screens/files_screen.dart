@@ -166,9 +166,6 @@ class _FilesScreenState extends State<FilesScreen> {
           button: true,
           selected: on,
           label: _typeLabel[type],
-          // The row already states the name via FText; without this the
-          // screen reader announced "Recently Added Recently Added".
-          excludeSemantics: true,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () => setState(() => _type = type),
@@ -198,7 +195,6 @@ class _FilesScreenState extends State<FilesScreen> {
           button: true,
           selected: on,
           label: _typeLabel[type],
-          excludeSemantics: true,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () => setState(() => _type = type),

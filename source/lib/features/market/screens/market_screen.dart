@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import '../../../core/api/media_gen.dart';
 import '../../../core/vision/vision_kit.dart';
 import '../../../core/vision/work_surface.dart';
@@ -52,27 +52,6 @@ class _MarketScreenState extends State<MarketScreen> {
   }
 
   /// MarketScreen.tsx PHOTO_SEED: the catalog's stills, preferred ids first.
-  ///
-  /// The generated catalog holds one entry per uploaded file, so the same clip
-  /// appears several times under ids that differ only by a trailing Drive hash
-  /// (`...coastline-ocean-1280x720-utox9s` / `...-tze-ww`). Keyed on the raw id
-  /// those all rendered, filling the grid with the same picture two and four
-  /// times; [stemFor] folds them together.
-  static String stemFor(String id) {
-    var s = id.toLowerCase();
-    s = s.replaceAll(RegExp(r'\.(mp4|jpe?g|png|gif|webp)$'), '');
-    s = s.replaceAll(RegExp(r'\d{3,4}\s*[x\u00d7]\s*\d{3,4}'), '');
-    s = s.replaceAll(RegExp(r'[\s_]+'), '-').replaceAll(RegExp(r'-+'), '-');
-    // Drive tails are short and sometimes carry an internal dash
-    // (`...-1280x720-tze-ww`), so peel trailing segments while a base remains.
-    for (var i = 0; i < 3; i++) {
-      final next = s.replaceFirst(RegExp(r'-[0-9a-z]{2,7}$'), '');
-      if (next == s || next.split('-').length < 2) break;
-      s = next;
-    }
-    return s;
-  }
-
   List<_Tile> _seed() {
     const prefer = ['twilight', 'sanctuary', 'blade', 'cabin', 'transit', 'alley4', 'alley3', 'ocean', 'garden', 'neoncity', 'observatory', 'rainfall', 'dunehall', 'starbridge', 'twinsuns', 'deck'];
     final themes = WallpaperCatalog.freeThemes;
@@ -80,12 +59,12 @@ class _MarketScreenState extends State<MarketScreen> {
     final seen = <String>{};
     for (final id in prefer) {
       for (final t in themes) {
-        if (t.id.toLowerCase().contains(id) && seen.add(stemFor(t.id))) out.add(_Tile('photo-${t.id}', t.name, t.stillPath ?? t.assetPath));
+        if (t.id.toLowerCase().contains(id) && seen.add(t.id)) out.add(_Tile('photo-${t.id}', t.name, t.stillPath ?? t.assetPath));
       }
     }
     for (final t in themes) {
       if (out.length >= 18) break;
-      if (seen.add(stemFor(t.id))) out.add(_Tile('photo-${t.id}', t.name, t.stillPath ?? t.assetPath));
+      if (seen.add(t.id)) out.add(_Tile('photo-${t.id}', t.name, t.stillPath ?? t.assetPath));
     }
     return out;
   }
@@ -248,7 +227,7 @@ class _MarketScreenState extends State<MarketScreen> {
                 Row(children: [
                   VButton(label: 'Open', icon: Icons.play_arrow_rounded, dense: true, onTap: () => setState(() => _open = t)),
                   const SizedBox(width: VSpace.xs),
-                  VButton(label: 'Remix', icon: Icons.refresh_rounded, dense: true, onTap: () => _remix(t)),
+                  VButton(label: 'Remix', icon: Icons.auto_awesome_rounded, dense: true, onTap: () => _remix(t)),
                 ]),
               ],
             ),
@@ -279,7 +258,7 @@ class _MarketScreenState extends State<MarketScreen> {
               radius: VRadius.full,
               padding: const EdgeInsets.all(4),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
-                VCircleButton(icon: Icons.refresh_rounded, size: 44, tooltip: 'Remix', onTap: () => _remix(t)),
+                VCircleButton(icon: Icons.auto_awesome_rounded, size: 44, tooltip: 'Remix', onTap: () => _remix(t)),
                 VCircleButton(icon: Icons.close_rounded, size: 44, tooltip: 'Close', onTap: () => setState(() => _open = null)),
               ]),
             ),

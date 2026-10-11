@@ -15,6 +15,8 @@ enum ActiveWorkSurface {
   files,
 }
 
+enum SideNavTab { local, global, consensus }
+
 /// REQ-21 contextual panel beside the rail — the visionOS menu panel
 /// (visionOS Apps 97:34752 "Home / People / Environments"): a glass panel of
 /// icon-circle rows, selected row lit as a capsule; content follows the surface.
@@ -45,6 +47,7 @@ class ContextualSideNav extends StatefulWidget {
   // Market props
   final String activeMarketCategory;
   final ValueChanged<String>? onSelectMarketCategory;
+  final ValueChanged<String>? onMarketSearch;
 
   // Themes props
   final String activeThemeSection;
@@ -87,6 +90,7 @@ class ContextualSideNav extends StatefulWidget {
     this.onSelectSmartGenBoardType,
     this.activeMarketCategory = 'prompts',
     this.onSelectMarketCategory,
+    this.onMarketSearch,
     this.activeThemeSection = 'gallery',
     this.onSelectThemeSection,
     this.browserTabs,
@@ -106,12 +110,15 @@ class ContextualSideNav extends StatefulWidget {
 }
 
 class _ContextualSideNavState extends State<ContextualSideNav> {
+  SideNavTab _chatTab = SideNavTab.global;
   final TextEditingController _chatSearchCtrl = TextEditingController();
   String _chatQuery = '';
+  final TextEditingController _marketSearchCtrl = TextEditingController();
 
   @override
   void dispose() {
     _chatSearchCtrl.dispose();
+    _marketSearchCtrl.dispose();
     super.dispose();
   }
 
@@ -155,16 +162,14 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
       ActiveWorkSurface.files => ('Files', 0),
     };
 
-    // Sized to its content up to maxHeight: a fixed height left a tall empty
-    // void under the short Smart Gen / Market / Files lists.
-    return ConstrainedBox(
-      constraints: BoxConstraints(minWidth: width, maxHeight: maxHeight),
+    return SizedBox(
+      width: width,
+      height: maxHeight,
       child: VGlass(
         material: VMaterial.elevated,
         radius: VRadius.card,
         padding: const EdgeInsets.fromLTRB(VSpace.sm, VSpace.sm, VSpace.sm, VSpace.sm),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             SizedBox(
@@ -179,7 +184,7 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
               ),
             ),
             const SizedBox(height: VSpace.xs),
-            Flexible(
+            Expanded(
               child: AnimatedSwitcher(
                 duration: VMotion.base,
                 child: KeyedSubtree(key: ValueKey(widget.activeSurface), child: _content()),
@@ -195,66 +200,10 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
         ActiveWorkSurface.chat => _chat(),
         ActiveWorkSurface.themes => _themes(),
         ActiveWorkSurface.browser => _browser(),
-        // These three panels were deleted in v8.2 (D31) and the side rail was
-        // hidden with them, leaving Smart Gen / Market / Files without
-        // navigation. Restored 2026-10-11 so the rail has something to open:
-        // each row lists that surface's own sections and writes the selection
-        // straight back, so nothing is decorative.
-        ActiveWorkSurface.smartgen => _simpleList(
-          const [
-            ('cards', 'Cards', Icons.style_rounded),
-            ('boards', 'Boards', Icons.dashboard_rounded),
-            ('canvas', 'Canvas', Icons.crop_free_rounded),
-            ('genie', 'Genie', Icons.assistant_rounded),
-          ],
-          widget.activeSmartGenView,
-          widget.onSelectSmartGenView,
-        ),
-        ActiveWorkSurface.market => _simpleList(
-          const [
-            ('prompts', 'Prompts', Icons.notes_rounded),
-            ('visuals', 'Visuals', Icons.image_outlined),
-            ('video', 'Video', Icons.movie_outlined),
-            ('audio', 'Audio', Icons.graphic_eq_rounded),
-            ('gallery', 'Gallery', Icons.collections_outlined),
-          ],
-          widget.activeMarketCategory,
-          widget.onSelectMarketCategory,
-        ),
-        ActiveWorkSurface.files => _simpleList(
-          const [
-            ('all', 'All Files', Icons.folder_open_rounded),
-            ('artifacts', 'Artifacts', Icons.inventory_2_rounded),
-            ('attachments', 'Attachments', Icons.attach_file_rounded),
-            ('outputs', 'Model Outputs', Icons.output_rounded),
-            ('system', 'System', Icons.settings_suggest_outlined),
-          ],
-          widget.activeFilesCategory,
-          widget.onSelectFilesCategory,
-        ),
+        // v8.2 fix pass (D31): the Smart Gen views / boards, Market categories
+        // and Files categories selected nothing; those panels are deleted.
+        ActiveWorkSurface.smartgen || ActiveWorkSurface.market || ActiveWorkSurface.files => const SizedBox.shrink(),
       };
-
-  /// A flat section list for the surfaces that only need to show and set one
-  /// category at a time.
-  Widget _simpleList(
-    List<(String, String, IconData)> rows,
-    String active,
-    ValueChanged<String>? onSelect,
-  ) =>
-      ListView(
-        shrinkWrap: true,
-        physics: const BouncingScrollPhysics(),
-        padding: EdgeInsets.zero,
-        children: [
-          for (final r in rows)
-            VSidebarItem(
-              icon: r.$3,
-              label: r.$2,
-              selected: active == r.$1,
-              onTap: () => onSelect?.call(r.$1),
-            ),
-        ],
-      );
 
   // ---------------- AI Chat ----------------
   Widget _chat() {

@@ -1,10 +1,10 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import '../../core/audio/music_player.dart';
 import '../../core/vision/vision_kit.dart';
 
 /// REQ-01 App Grid (Vision OS Design System 2:6774, visionOS Home 97:34752):
 /// circular app icons float directly over the dimmed environment in offset
-/// rows â€” no platter. Escapes: scrim tap and the floating close circle.
+/// rows — no platter. Escapes: scrim tap and the floating close circle.
 class AppsPopupPane extends StatelessWidget {
   final VoidCallback onClose;
   final VoidCallback onOpenSmartGen;
@@ -34,7 +34,7 @@ class AppsPopupPane extends StatelessWidget {
     final apps = [
       // v8.3 (D45, D48): one-word names (an icon alone is ambiguous in a
       // launcher); full-colour icons and a Settings app, as in Figma 97-34752.
-      _App('Smart Gen', Icons.view_kanban_rounded, const [Color(0xFFC4B5FD), Color(0xFF7C3AED)], onOpenSmartGen),
+      _App('Smart Gen', Icons.auto_awesome_mosaic_rounded, const [Color(0xFFC4B5FD), Color(0xFF7C3AED)], onOpenSmartGen),
       _App('Market', Icons.explore_rounded, const [Color(0xFFFDBA74), Color(0xFFEA580C)], onOpenDiscoverMarket),
       _App('Themes', Icons.landscape_rounded, const [Color(0xFF6EE7B7), Color(0xFF059669)], onOpenThemeGallery),
       _App('Premium', Icons.diamond_rounded, const [Color(0xFFFDE68A), Color(0xFFD97706)], onOpenPremiumMarketplace),
@@ -59,48 +59,40 @@ class AppsPopupPane extends StatelessWidget {
       fit: StackFit.expand,
       children: [
         VScrim(onTap: onClose, blur: true),
-        // The launcher floats as one frosted pane rather than loose icons: the
-        // glass gives the grid separation from the wallpaper without hiding it,
-        // which matters because Apps is a transient hop, not a place to read.
         Center(
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: VSpace.md),
-            child: VGlass(
-              material: VMaterial.elevated,
-              radius: VRadius.sheet,
-              padding: const EdgeInsets.fromLTRB(VSpace.sm, VSpace.xs, VSpace.sm, VSpace.md),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Align(
-                    alignment: Alignment.topRight,
-                    child: VCircleButton(icon: Icons.close_rounded, tooltip: 'Close Apps', onTap: onClose),
-                  ),
-                  for (int r = 0; r < rows.length; r++) ...[
-                    if (r > 0) const SizedBox(height: VSpace.md),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        for (final a in rows[r])
-                          SizedBox(
-                            width: cell,
-                            child: _AppIcon(
-                              index: apps.indexOf(a),
-                              app: a,
-                              size: iconSize,
-                              onTap: () {
-                                onClose();
-                                a.onTap();
-                              },
-                            ),
-                          ),
-                      ],
-                    ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (int r = 0; r < rows.length; r++) ...[
+                if (r > 0) const SizedBox(height: VSpace.md),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final a in rows[r])
+                      SizedBox(
+                        width: cell,
+                        child: _AppIcon(
+                          index: apps.indexOf(a),
+                          app: a,
+                          size: iconSize,
+                          onTap: () {
+                            onClose();
+                            a.onTap();
+                          },
+                        ),
+                      ),
                   ],
-                ],
-              ),
-            ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        Positioned(
+          top: VSpace.md,
+          right: VSpace.md,
+          child: SafeArea(
+            child: VCircleButton(icon: Icons.close_rounded, tooltip: 'Close Apps', floating: true, onTap: onClose),
           ),
         ),
       ],
