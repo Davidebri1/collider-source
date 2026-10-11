@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -31,6 +32,7 @@ import 'features/consensus/consensus_webview.dart';
 import 'features/smartgen/screens/smartgen_screen.dart';
 import 'features/market/screens/market_screen.dart';
 import 'features/files/screens/files_screen.dart';
+import 'features/mediagen/figma_media_stage.dart';
 import 'features/browser/browser_urls.dart';
 import 'features/browser/models/browser_tab.dart';
 import 'features/browser/screens/in_app_browser_sheet.dart';
@@ -540,36 +542,168 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         onOpenLocalHistory: () => setState(() => _localHistoryModel = item.modelDef),
       );
 
-  Widget _buildTicker(List<TickerItem> pills, bool isMobile) {
-    final open = _openPill(pills);
-    Widget column() => EdgeFade(
-          fadeHeight: 16,
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (int i = 0; i < pills.length; i++) ...[
-                  if (i > 0) const SizedBox(height: 6),
-                  _pill(pills[i], elevation: pills.length <= 1 ? 1.0 : 1.0 - i / (pills.length - 1), narrow: open != null),
-                ],
-              ],
+  // Main ticker (v8.3.1): every model of a category is listed; deselected
+  // models are greyed out. 4.5 rows show, then the list scrolls with a
+  // visible scrollbar. Swiping left/right pages to the next category, with
+  // dot indicators below that follow the swipe.
+  static const List<ModelCategory> _tickerOrder = [
+    ModelCategory.general, ModelCategory.coding, ModelCategory.image, ModelCategory.video, ModelCategory.audio,
+  ];
+  static const double _rowH = 62;
+  late final PageController _catPager = PageController(initialPage: _tickerOrder.indexOf(_activeCategory).clamp(0, 4));
+  final Map<ModelCategory, ScrollController> _tickerScroll = {for (final c in ModelCategory.values) c: ScrollController()};
+
+  void _toggleSelect(ModelCategory c, String id) {
+    setState(() {
+      final sel = _selByCat[c]!;
+      if (sel.contains(id)) {
+        if (sel.length > 1) sel.remove(id);
+      } else if (sel.length < 9) {
+        sel.add(id);
+      }
+    });
+  }
+
+  List<TickerItem> _tickerRows(ModelCategory c) => [
+        for (final m in ModelRoster.forCategory(c))
+          _tickerItems.firstWhere(
+            (t) => t.modelDef.id == m.id,
+            orElse: () => TickerItem(modelDef: m, relativeTime: '', summary: '', conversation: const []),
+          ),
+      ];
+
+  Widget _tickerRow(ModelCategory c, TickerItem item, double elevation, bool narrow) {
+    final selected = _selByCat[c]!.contains(item.modelDef.id);
+    final hasAnswer = item.conversation.isNotEmpty || item.isStreaming;
+    final pill = _pill(item, elevation: elevation, narrow: narrow);
+    final card = hasAnswer
+        ? pill
+        : ModelPill(
+            narrow: narrow,
+            key: ValueKey('card-${item.modelDef.id}'),
+            item: item,
+            elevation: elevation,
+            isExpanded: false,
+            onToggleExpand: () => _toggleSelect(c, item.modelDef.id),
+            onSendInlineReply: (_) {},
+          );
+    return GestureDetector(
+      key: ValueKey('row-${c.name}-${item.modelDef.id}'),
+      onLongPress: () => _toggleSelect(c, item.modelDef.id),
+      child: AnimatedOpacity(
+        duration: VMotion.base,
+        opacity: selected ? 1.0 : 0.42,
+        child: selected
+            ? card
+            : ColorFiltered(
+                colorFilter: const ColorFilter.matrix(<double>[
+                  0.2126, 0.7152, 0.0722, 0, 0,
+                  0.2126, 0.7152, 0.0722, 0, 0,
+                  0.2126, 0.7152, 0.0722, 0, 0,
+                  0, 0, 0, 1, 0,
+                ]),
+                child: card,
+              ),
+      ),
+    );
+  }
+
+  Widget _tickerPage(ModelCategory c, bool isMobile) {
+    final rows = _tickerRows(c);
+    final open = c == _activeCategory ? _openPill(rows) : null;
+    final sc = _tickerScroll[c]!;
+    Widget column() => Scrollbar(
+          controller: sc,
+          thumbVisibility: true,
+          child: EdgeFade(
+            fadeHeight: 16,
+            child: ListView.separated(
+              controller: sc,
+              padding: const EdgeInsets.only(right: 8),
+              physics: const BouncingScrollPhysics(),
+              itemCount: rows.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 6),
+              itemBuilder: (_, i) => _tickerRow(c, rows[i], rows.length <= 1 ? 1.0 : 1.0 - i / (rows.length - 1), open != null),
             ),
           ),
         );
     if (open == null) return column();
-    final h = (MediaQuery.of(context).size.height * (_isComposerSummoned ? 0.62 : 0.52) - 120).clamp(220.0, 520.0);
-    return SizedBox(
-      height: h,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SizedBox(width: isMobile ? 124 : 200, child: column()),
-          const SizedBox(width: 6),
-          Expanded(child: _pill(open, elevation: 1, pane: true)),
-        ],
-      ),
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(width: isMobile ? 124 : 200, child: column()),
+        const SizedBox(width: 6),
+        Expanded(child: _pill(open, elevation: 1, pane: true)),
+      ],
+    );
+  }
+
+  bool get _mediaStageOn => _activeCategory.isMedia && (_mediaGens[_activeCategory]?.isNotEmpty ?? false);
+
+  Widget _buildMediaStage() => MediaStageContent(
+        key: ValueKey('media-${_activeCategory.name}'),
+        items: _mediaGens[_activeCategory]!,
+        onRemix: (p) => _restoreText.value = p,
+        onNotice: _notice,
+        onOptions: () => setState(() => _genOptionsOpen = true),
+      );
+
+  Widget _buildTicker(bool isMobile) {
+    final idx = _tickerOrder.indexOf(_activeCategory);
+    if (_catPager.hasClients && _catPager.page != null && (_catPager.page!.round() != idx) && !_catPager.position.isScrollingNotifier.value) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_catPager.hasClients) _catPager.animateToPage(idx, duration: VMotion.base, curve: Curves.easeOutCubic);
+      });
+    }
+    final open = _openPill(_tickerRows(_activeCategory));
+    final h = open != null
+        ? (MediaQuery.of(context).size.height * (_isComposerSummoned ? 0.62 : 0.52) - 140).clamp(220.0, 520.0)
+        : _rowH * 4.5 + 6 * 4;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: h,
+          child: PageView.builder(
+            controller: _catPager,
+            scrollBehavior: const MaterialScrollBehavior().copyWith(dragDevices: {PointerDeviceKind.touch, PointerDeviceKind.mouse, PointerDeviceKind.trackpad, PointerDeviceKind.stylus}),
+            itemCount: _tickerOrder.length,
+            onPageChanged: (i) => setState(() {
+              _activeCategory = _tickerOrder[i];
+              _expandedModelIds.clear();
+            }),
+            itemBuilder: (_, i) => _tickerPage(_tickerOrder[i], isMobile),
+          ),
+        ),
+        const SizedBox(height: 6),
+        AnimatedBuilder(
+          animation: _catPager,
+          builder: (_, __) {
+            final page = _catPager.hasClients && _catPager.page != null ? _catPager.page! : idx.toDouble();
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                for (int i = 0; i < _tickerOrder.length; i++)
+                  GestureDetector(
+                    onTap: () => _catPager.animateToPage(i, duration: VMotion.base, curve: Curves.easeOutCubic),
+                    child: Builder(builder: (_) {
+                      final t = (1 - (page - i).abs()).clamp(0.0, 1.0);
+                      return Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 4),
+                        width: 7 + 9 * t,
+                        height: 7,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.35 + 0.6 * t),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      );
+                    }),
+                  ),
+              ],
+            );
+          },
+        ),
+      ],
     );
   }
 
@@ -1108,23 +1242,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                            // Map row 13: the media ticker for Image / Video / Audio.
-                            if (_activeCategory.isMedia && (_mediaGens[_activeCategory]?.isNotEmpty ?? false)) ...[
-                              Flexible(
-                                child: EdgeFade(
-                                  fadeHeight: 12,
-                                  child: SingleChildScrollView(
-                                    physics: const BouncingScrollPhysics(),
-                                    child: MediaTicker(
-                                      key: ValueKey('media-${_activeCategory.name}'),
-                                      items: _mediaGens[_activeCategory]!,
-                                      onRemix: (p) => _restoreText.value = p,
-                                      onNotice: _notice,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
                             // Pinned consensus row: score and the winning essence, verbatim.
                             if (!_activeCategory.isMedia && _tickerItems.isNotEmpty) ...[
                               ConsensusRow(
@@ -1139,8 +1256,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                             // Model Ticker (map row 15, WeChat 0-639, D51): the
                             // collapsed cards are a left column; the opened answer
                             // fills the middle and closes with its own button.
-                            if (!_activeCategory.isMedia && activePills.isNotEmpty)
-                              Flexible(child: _buildTicker(activePills, isMobile)),
+                            if (!_mediaStageOn) Flexible(child: _buildTicker(isMobile)),
 
                             const SizedBox(height: 8),
 
@@ -1178,6 +1294,10 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
 
 
+
+          // v8.3.1: row 13 media gen window ported from v8.4 (Figma 2013:71).
+          if (!_browserOpen && !(isMobile && _isMobileSideNavOpen) && !const {'premium', 'themes', 'apps', 'smartgen', 'market', 'files', 'consensus', 'music'}.contains(_activeDrawer) && _mediaStageOn)
+            Positioned.fill(bottom: 210, child: _buildMediaStage()),
 
           // ================= PLANE 2: APPS POPUP PANE =================
           // Middle neutral area, no visible canvas, blurred background, clickaway + close icon

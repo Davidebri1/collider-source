@@ -185,7 +185,7 @@ class _FloatingPromptState extends State<FloatingPrompt> {
         final m = cur;
         return Stack(children: [
           Positioned(
-            left: at.dx.clamp(8.0, screen.width - 268),
+            left: at.dx.clamp(8.0, screen.width - 240 * GlassMenu.scaleFor(context) - 8),
             bottom: screen.height - at.dy + 8,
             child: Material(
               type: MaterialType.transparency,
@@ -237,85 +237,114 @@ class _FloatingPromptState extends State<FloatingPrompt> {
 
   @override
   Widget build(BuildContext context) {
-    final lit = widget.mode != AskMode.chat || widget.private || widget.category.isMedia;
+    // v8.4: Figma 1-240 (760 x 116) built at its own size and scaled as one
+    // unit to the width it is given (factor = width / 760): padding 16 / 40 /
+    // 40, attach circle 60 (white 30 %), gap 16, field pill 60 high
+    // (black 30 %, radius 32, 1 px white-50 % lip, inset shade), action
+    // button 48 (white 30 %). Text 24. No placeholder (D43).
     return GestureDetector(
       onVerticalDragEnd: (d) {
         final v = d.primaryVelocity ?? 0;
         if (v > 200 && widget.summoned) widget.onTuck();
         if (v < -200 && !widget.summoned) widget.onSummon();
       },
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Attached files: the file names are the only way to tell them apart.
-          if (_files.isNotEmpty) ...[
-            Wrap(spacing: 6, runSpacing: 6, children: [
-              for (final f in _files) VChip(label: f, selected: true, onTap: () => setState(() => _files.remove(f))),
-            ]),
-            const SizedBox(height: 6),
-          ],
-          // Figma 1-240 (message bar): the attach circle sits outside the
-          // field on the left; the field is a rounded pill with the action
-          // button inside on the right.
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(bottom: 2),
-                child: Stack(clipBehavior: Clip.none, children: [
-                  VCircleButton(key: _plusKey, icon: Icons.add_rounded, size: 40, tooltip: 'More', onTap: _openMenu),
-                  if (lit)
-                    Positioned(
-                      right: 1,
-                      top: 1,
-                      child: IgnorePointer(
-                        child: Container(width: 9, height: 9, decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF0A84FF))),
-                      ),
-                    ),
-                ]),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 4, 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0x2E000000),
-                    borderRadius: BorderRadius.circular(VRadius.full),
-                    border: Border.all(color: widget.summoned ? VColors.borderHeavy : VColors.borderLight, width: 0.5),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          child: TextField(
-                            controller: _ctrl,
-                            focusNode: _focus,
-                            minLines: 1,
-                            maxLines: 5,
-                            cursorColor: VColors.textPrimary,
-                            textInputAction: TextInputAction.send,
-                            style: VType.callout(weight: FontWeight.w400).copyWith(fontSize: VType.md, height: 1.3),
-                            decoration: const InputDecoration(
-                              border: InputBorder.none,
-                              isDense: true,
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                            onSubmitted: (_) => _submit(),
-                          ),
+      child: FittedBox(
+        fit: BoxFit.fitWidth,
+        alignment: Alignment.bottomCenter,
+        child: SizedBox(
+          width: 760,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(40, 16, 40, 40),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Attached files: the file names are the only way to tell them apart.
+                if (_files.isNotEmpty) ...[
+                  Wrap(spacing: 12, runSpacing: 12, children: [
+                    for (final f in _files)
+                      GestureDetector(
+                        onTap: () => setState(() => _files.remove(f)),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                          decoration: BoxDecoration(color: const Color(0x4DFFFFFF), borderRadius: BorderRadius.circular(32)),
+                          child: Text(f, style: const TextStyle(fontSize: 20, color: Colors.white)),
                         ),
                       ),
-                      const SizedBox(width: 6),
-                      _SendButton(busy: widget.busy, onTap: _submit),
-                    ],
-                  ),
+                  ]),
+                  const SizedBox(height: 12),
+                ],
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Semantics(
+                      button: true,
+                      label: 'More',
+                      child: GestureDetector(
+                        key: _plusKey,
+                        behavior: HitTestBehavior.opaque,
+                        onTap: _openMenu,
+                        child: Container(
+                          width: 60,
+                          height: 60,
+                          decoration: BoxDecoration(color: const Color(0x4DFFFFFF), borderRadius: BorderRadius.circular(32)),
+                          child: const Icon(Icons.add_rounded, size: 30, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Container(
+                        constraints: const BoxConstraints(minHeight: 60),
+                        padding: const EdgeInsets.fromLTRB(24, 6, 6, 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0x4D000000),
+                          borderRadius: BorderRadius.circular(32),
+                          boxShadow: const [BoxShadow(color: Color(0x80FFFFFF), offset: Offset(0, 1), blurRadius: 1)],
+                        ),
+                        foregroundDecoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(32),
+                          gradient: const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment(0.2, 0.6),
+                            colors: [Color(0x26000000), Color(0x00000000)],
+                          ),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                child: TextField(
+                                  controller: _ctrl,
+                                  focusNode: _focus,
+                                  minLines: 1,
+                                  maxLines: 5,
+                                  cursorColor: Colors.white,
+                                  textInputAction: TextInputAction.send,
+                                  style: const TextStyle(fontSize: 24, height: 1.17, fontWeight: FontWeight.w500, color: Colors.white),
+                                  decoration: const InputDecoration(
+                                    border: InputBorder.none,
+                                    isDense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                  ),
+                                  onSubmitted: (_) => _submit(),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            _SendButton(busy: widget.busy, onTap: _submit),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -350,19 +379,18 @@ class _SendButtonState extends State<_SendButton> {
         curve: Curves.easeOutBack,
         child: AnimatedContainer(
           duration: VMotion.base,
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: widget.busy ? VColors.fillActive : Colors.white,
+          width: 48,
+          height: 48,
+          decoration: const BoxDecoration(
+            color: Color(0x4DFFFFFF),
             shape: BoxShape.circle,
-            boxShadow: [BoxShadow(color: Colors.white.withValues(alpha: widget.busy ? 0 : 0.25), blurRadius: 14)],
           ),
           child: Center(
             child: AnimatedSwitcher(
               duration: VMotion.fast,
               child: widget.busy
-                  ? const SizedBox(key: ValueKey('b'), width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Icon(Icons.arrow_upward_rounded, key: ValueKey('s'), size: 20, color: Colors.black),
+                  ? const SizedBox(key: ValueKey('b'), width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
+                  : const Icon(Icons.arrow_upward_rounded, key: ValueKey('s'), size: 26, color: Colors.white),
             ),
           ),
         ),

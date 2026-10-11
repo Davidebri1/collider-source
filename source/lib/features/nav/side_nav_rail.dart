@@ -19,7 +19,6 @@ List<SideRailEntry> sideRailEntries(ActiveWorkSurface s) => switch (s) {
           SideRailEntry('local', Icons.history_rounded, 'Local History'),
           SideRailEntry('global', Icons.public_rounded, 'Global History'),
           SideRailEntry('consensus', Icons.balance_rounded, 'Consensus History'),
-          SideRailEntry('models', Icons.hub_outlined, 'Models'),
         ],
       ActiveWorkSurface.smartgen => const [
           SideRailEntry('cards', Icons.style_rounded, 'Cards'),

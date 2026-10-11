@@ -31,7 +31,8 @@ class SettingsDrawer extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        VScrim(onTap: onClose),
+        // Figma 1:2 has no dimming behind the menu: a clear tap-to-close layer.
+        Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: onClose)),
         Center(
           child: ListenableBuilder(
             listenable: Listenable.merge([FloatingMusic.enabled, ThemeCatalog.instance]),

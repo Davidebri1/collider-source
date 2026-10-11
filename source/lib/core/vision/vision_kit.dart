@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/services.dart';
 import '../theme/edge_fade.dart';
 import '../theme/specular_border.dart';
@@ -978,38 +979,65 @@ class GlassMenuRow {
   const GlassMenuRow({required this.icon, required this.label, this.on = false, this.onTap, this.toggle = true});
 }
 
-/// VisionOS Autolayout Menu (Figma 4CLz2H5l84ILrVUyskOnAS 0-1): frosted panel,
-/// radius 32, padding 16; rows 44 high, icon 24 in a 40 circle, gap 16, label
-/// 17; the selected row is a white 10 % pill with a white 25 % icon circle,
-/// the others are 60 % white.
+/// VisionOS Autolayout Menu (Figma 4CLz2H5l84ILrVUyskOnAS 1:3), built at its
+/// own Figma geometry and scaled as one unit (v8.4): width 240, padding 16,
+/// gap 4, rows 208 x 40 (icon wrapper p8 around a 24 icon, gap 16, Inter
+/// Medium 16 white; inactive rows at 60 %), radius 24, 1 px white border,
+/// backdrop blur 40, gradient fill rgba(79,79,79,.1) / white .1 at 127 deg.
+/// The active row: gradient white .16 -> 0 (94.5 deg), icon disc white .3.
+/// [scale] defaults to screen width / 637 (the Figma frame width), so the
+/// menu covers the same 37.7 % of the screen width as in the frame.
 class GlassMenu extends StatelessWidget {
   final List<GlassMenuRow> rows;
+  /// Width in Figma px (240 in the frame).
   final double width;
-  const GlassMenu({super.key, required this.rows, this.width = 260});
+  final double? scale;
+  const GlassMenu({super.key, required this.rows, this.width = 240, this.scale});
+
+  static const double frameWidth = 637;
+  static double scaleFor(BuildContext context) => MediaQuery.sizeOf(context).width / frameWidth;
+  static double heightFor(int n) => 32 + n * 40 + (n > 0 ? (n - 1) * 4 : 0);
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(32),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-        child: Container(
+    final k = scale ?? scaleFor(context);
+    final h = heightFor(rows.length);
+    return SizedBox(
+      width: width * k,
+      height: h * k,
+      child: FittedBox(
+        fit: BoxFit.fill,
+        child: SizedBox(
           width: width,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: const Color(0x66808080),
-            borderRadius: BorderRadius.circular(32),
-            border: Border.all(color: const Color(0x33FFFFFF), width: 1),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (var i = 0; i < rows.length; i++) ...[
-                if (i > 0) const SizedBox(height: 4),
-                _row(rows[i]),
-              ],
-            ],
+          height: h,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 20 * k, sigmaY: 20 * k),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: Colors.white, width: 1),
+                  gradient: const LinearGradient(
+                    begin: Alignment(-0.8, -1),
+                    end: Alignment(0.8, 1),
+                    colors: [Color(0x1A4F4F4F), Color(0x1A4F4F4F), Color(0x1AFFFFFF), Color(0x1A4F4F4F)],
+                    stops: [0.017, 0.0175, 0.33, 0.97],
+                  ),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (var i = 0; i < rows.length; i++) ...[
+                      if (i > 0) const SizedBox(height: 4),
+                      _row(rows[i]),
+                    ],
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -1017,22 +1045,21 @@ class GlassMenu extends StatelessWidget {
   }
 
   Widget _row(GlassMenuRow r) {
-    final fg = r.on ? Colors.white : Colors.white.withValues(alpha: r.onTap == null ? 0.3 : 0.6);
+    final op = r.on ? 1.0 : (r.onTap == null ? 0.3 : 0.6);
     return Semantics(
       button: true,
       toggled: r.toggle ? r.on : null,
       label: r.label,
-      child: VPress(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTap: r.onTap,
         child: AnimatedContainer(
           duration: VMotion.fast,
-          height: 44,
-          padding: const EdgeInsets.only(left: 2, right: 12),
+          width: 208,
+          height: 40,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(22),
-            gradient: r.on
-                ? const LinearGradient(colors: [Color(0x26FFFFFF), Color(0x0DFFFFFF)])
-                : null,
+            borderRadius: BorderRadius.circular(48),
+            gradient: r.on ? const LinearGradient(colors: [Color(0x29FFFFFF), Color(0x00FFFFFF)], stops: [0.005, 1.4]) : null,
           ),
           child: Row(
             children: [
@@ -1040,11 +1067,18 @@ class GlassMenu extends StatelessWidget {
                 duration: VMotion.fast,
                 width: 40,
                 height: 40,
-                decoration: BoxDecoration(shape: BoxShape.circle, color: r.on ? const Color(0x40FFFFFF) : Colors.transparent),
-                child: Icon(r.icon, size: 22, color: fg),
+                decoration: BoxDecoration(borderRadius: BorderRadius.circular(61), color: r.on ? const Color(0x4DFFFFFF) : Colors.transparent),
+                child: Icon(r.icon, size: 24, color: Colors.white.withValues(alpha: op)),
               ),
-              const SizedBox(width: 14),
-              Expanded(child: Text(r.label, style: VType.body(color: fg, weight: FontWeight.w500))),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  r.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.white.withValues(alpha: op)),
+                ),
+              ),
             ],
           ),
         ),
