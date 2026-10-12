@@ -38,13 +38,17 @@ class ConsensusRow extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 4),
         padding: const EdgeInsets.fromLTRB(12, 9, 8, 10),
         decoration: BoxDecoration(
+          // The pinned row has to read as its own plane above the ticker cards,
+          // so it gets a defined surface instead of another translucent white
+          // wash over the window, and keeps the contact + ambient + bounce
+          // shadow trio that separates it from what sits below it.
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0x38FFFFFF), Color(0x14FFFFFF)],
+            colors: [Color(0xFF272736), Color(0xFF191922)],
           ),
           borderRadius: BorderRadius.circular(VRadius.lg - 2),
-          border: Border.all(color: const Color(0x66FFFFFF), width: 0.7),
+          border: Border.all(color: const Color(0x4DFFFFFF), width: 0.7),
           boxShadow: const [
             BoxShadow(color: Color(0x59000000), blurRadius: 28, offset: Offset(0, 14)),
             BoxShadow(color: Color(0x33000000), blurRadius: 6, offset: Offset(0, 2)),

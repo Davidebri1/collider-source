@@ -1,5 +1,3 @@
-import 'dart:ui' show ImageFilter;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
@@ -28,11 +26,8 @@ class ModelPill extends StatefulWidget {
   /// 0 = resting (bottom of the stack) … 1 = highest card.
   final double elevation;
 
-  /// The opened answer (middle area) rather than a left-column card.
+  /// The opened answer (the tray over the ticker) rather than a collapsed card.
   final bool pane;
-
-  /// A card in the narrow column beside an open answer: no time, one line.
-  final bool narrow;
 
   const ModelPill({
     super.key,
@@ -45,7 +40,6 @@ class ModelPill extends StatefulWidget {
     this.onOpenLocalHistory,
     this.elevation = 0,
     this.pane = false,
-    this.narrow = false,
   });
 
   @override
@@ -116,33 +110,35 @@ class _ModelPillState extends State<ModelPill> {
   @override
   Widget build(BuildContext context) => widget.pane ? _buildPane(context) : _buildCard(context);
 
-  /// The opened answer: name and close on top, the tools, the whole
-  /// conversation (fills the pane) and the reply field for this model.
+  /// The opened answer: summary on top, the tools, the whole conversation
+  /// (fills the tray) and the reply field for this model.
   Widget _buildPane(BuildContext context) {
     final item = widget.item;
     final c = item.modelDef.providerColor;
-    // The opened answer is the nearest plane: it needs real occlusion to sit
-    // in front of the room. Without a shadow and a frost pass it read as a
-    // flat gradient painted on another flat surface.
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(VRadius.lg - 4),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [c.withValues(alpha: 0.30), c.withValues(alpha: 0.12), Colors.black.withValues(alpha: 0.30)]),
-            borderRadius: BorderRadius.circular(VRadius.lg - 4),
-            border: Border.all(color: c.withValues(alpha: 0.42), width: 0.8),
-            boxShadow: [
-              BoxShadow(color: Colors.black.withValues(alpha: 0.46), blurRadius: 34, spreadRadius: -6, offset: const Offset(0, 18)),
-              BoxShadow(color: c.withValues(alpha: 0.22), blurRadius: 22, spreadRadius: -10),
-            ],
-          ),
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(VSpace.sm, 10, VSpace.xs, 8),
-            child: _paneBody(context, c),
-          ),
+    // The tray that hosts this already supplies the frost and the specular rim,
+    // so this surface is a defined plane on top of it: an opaque-leaning fill
+    // that lets the model tint through without adding a second transparent
+    // layer. It used to run its own 18 px BackdropFilter over another glass
+    // window, which is exactly the translucent-on-translucent stacking the
+    // house rule forbids, and it still carries real elevation.
+    final surface = Color.alphaBlend(c.withValues(alpha: 0.16), const Color(0xFF171722));
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color.lerp(surface, c.withValues(alpha: 0.22), 0.5)!, Color.lerp(surface, Colors.black, 0.20)!],
         ),
+        borderRadius: BorderRadius.circular(VRadius.lg - 4),
+        border: Border.all(color: c.withValues(alpha: 0.42), width: 0.8),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.46), blurRadius: 34, spreadRadius: -6, offset: const Offset(0, 18)),
+          BoxShadow(color: c.withValues(alpha: 0.22), blurRadius: 22, spreadRadius: -10),
+        ],
+      ),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(VSpace.sm, 10, VSpace.xs, 8),
+        child: _paneBody(context, c),
       ),
     );
   }
@@ -157,7 +153,24 @@ class _ModelPillState extends State<ModelPill> {
             children: [
               Padding(padding: const EdgeInsets.only(top: 2), child: VAvatar(label: item.modelDef.label, color: c, size: 22)),
               const SizedBox(width: VSpace.xs),
-              Expanded(child: Text(item.modelDef.label, maxLines: 2, style: VType.callout(weight: FontWeight.w600))),
+              // Tip from the owner, implemented exactly as given: in the opened
+              // answer the one-line summary sits where the model name used to
+              // sit, it is always shown in full, and the model name drops to
+              // fine print underneath it.
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (item.summary.isNotEmpty)
+                      Text(item.summary, style: VType.callout(weight: FontWeight.w600).copyWith(height: 1.32)),
+                    const SizedBox(height: 3),
+                    Text(
+                      [item.modelDef.label, if (item.relativeTime.isNotEmpty) item.relativeTime].join('  ·  '),
+                      style: VType.caption(color: VColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
               VCircleButton(icon: Icons.close_rounded, size: 28, tooltip: 'Close', onTap: widget.onToggleExpand),
             ],
           ),
@@ -191,8 +204,13 @@ class _ModelPillState extends State<ModelPill> {
     final c = item.modelDef.providerColor;
     final e = widget.isExpanded ? 1.0 : widget.elevation.clamp(0.0, 1.0);
     // Colour-coded card: each model owns a tint; higher cards sit higher (brighter, deeper shadow).
-    final top = Color.lerp(c.withValues(alpha: 0.20), c.withValues(alpha: 0.30), e)!;
-    final bottom = Color.lerp(c.withValues(alpha: 0.07), c.withValues(alpha: 0.12), e)!;
+    // A card is a defined plane, not a third transparent wash: the wallpaper is
+    // already behind one frosted window, so the tint is blended onto an opaque
+    // base. Translucent gradients stacked on translucent glass are what made the
+    // ticker read as one unlayered slab.
+    final tint = Color.lerp(c.withValues(alpha: 0.10), c.withValues(alpha: 0.24), e)!;
+    final top = Color.alphaBlend(tint, const Color(0xFF15151E));
+    final bottom = Color.lerp(top, Colors.black, 0.20)!;
     final waiting = item.isStreaming;
 
     return AnimatedContainer(
@@ -238,10 +256,11 @@ class _ModelPillState extends State<ModelPill> {
                 Expanded(
                   child: Text(item.modelDef.label, maxLines: 2, style: VType.footnote(color: VColors.textPrimary, weight: FontWeight.w600)),
                 ),
-                if (waiting) ...[
-                  const SizedBox(width: 6),
-                  _Pulse(color: c),
-                ] else if (!widget.narrow) ...[
+                // Bug 6: a coloured breathing dot used to sit here whenever a
+                // model was answering, so a dot appeared in the cards the moment
+                // a message was sent. Dots, sparkles and glitter are banned. The
+                // shimmer below carries the same "working" state.
+                if (!waiting) ...[
                   const SizedBox(width: 6),
                   Text(item.relativeTime, style: VType.caption()),
                 ],
@@ -257,10 +276,12 @@ class _ModelPillState extends State<ModelPill> {
               child: waiting
                   ? _SkeletonLines(key: const ValueKey('wait'), color: c)
                   : Text(
+                      // The one-line summary is never truncated. The owner's
+                      // rule: it is always present in full for each model
+                      // response. A card that grows scrolls inside the ticker
+                      // window behind its edge fade.
                       item.summary,
                       key: ValueKey(item.summary),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                       style: VType.footnote(color: VColors.textSecondary, weight: FontWeight.w400).copyWith(height: 1.3),
                     ),
             ),
@@ -344,7 +365,11 @@ class _ModelPillState extends State<ModelPill> {
                         const SizedBox(height: 2),
                         isUser
                             ? Text(msg.text, style: VType.callout(weight: FontWeight.w400).copyWith(height: 1.4))
-                            : MdText(msg.text.length > 1400 ? '${msg.text.substring(0, 1400)}…' : msg.text),
+                            // Full answer, never cut: the owner banned truncating
+                            // what a model said. The user's own message may be
+                            // shortened in future, but only behind something
+                            // that expands it.
+                            : MdText(msg.text),
                       ],
                     ),
                   ),
@@ -451,31 +476,6 @@ class _TailedBubbleClipper extends CustomClipper<Path> {
   bool shouldReclip(covariant _TailedBubbleClipper oldClipper) => oldClipper.isUser != isUser;
 }
 
-
-/// Quiet breathing dot while a model is answering.
-class _Pulse extends StatefulWidget {
-  final Color color;
-  const _Pulse({required this.color});
-  @override
-  State<_Pulse> createState() => _PulseState();
-}
-
-class _PulseState extends State<_Pulse> with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))..repeat(reverse: true);
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: Tween(begin: 0.35, end: 1.0).animate(CurvedAnimation(parent: _c, curve: Curves.easeInOut)),
-      child: Container(width: 8, height: 8, decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle)),
-    );
-  }
-}
 
 /// Shimmering loading lines shown until the answer arrives.
 class _SkeletonLines extends StatefulWidget {
