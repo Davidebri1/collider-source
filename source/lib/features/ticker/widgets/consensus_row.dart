@@ -61,8 +61,12 @@ class ConsensusRow extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Icon(Icons.balance_rounded, size: 13, color: Color(0xE6FFFFFF)),
-                const SizedBox(width: 6),
+                // v9: the balance glyph was the whole identity of this row —
+                // a scales icon with no word next to it. It read as "consensus"
+                // without ever saying what the row was for. The count alone
+                // carries it now; if there is a summary, the summary is the
+                // label.
+                const SizedBox(width: 2),
                 // The count, verbatim. No percent sign is ever added.
                 if (hasScore)
                   Text(
@@ -81,14 +85,19 @@ class ConsensusRow extends StatelessWidget {
               // The spinner glyph in the row above already carries "working".
             ] else if (showLine) ...[
               const SizedBox(height: 4),
-              // The whole summary, wrapped, newlines included. R16: the line is
+// The whole summary, wrapped, newlines included. R16: the line is
               // not cut off. `.split('\n').first` silently dropped everything
               // after the first newline, and the recorder's SUMMARY field is
               // free-form, so real text was disappearing here.
+              //
+              // v9: capped at four lines. Unbounded, a long consensus answer
+              // pushed everything below it off the phone.
               Text(
-                summary,
+                summary.trim(),
+                maxLines: 4,
+                overflow: TextOverflow.ellipsis,
                 style: VType.callout(color: Colors.white, weight: FontWeight.w500)
-                    .copyWith(height: 1.3, letterSpacing: 0.1),
+                    .copyWith(height: 1.32, letterSpacing: 0),
               ),
             ],
           ],

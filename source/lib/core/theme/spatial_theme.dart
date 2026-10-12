@@ -128,13 +128,17 @@ class SpatialTheme {
 /// crystal-clear human-centered editorial readability. Zero cyberpunk or terminal fonts.
 class SpatialTypography {
   /// Regal cinematic display header (app name, section titles, hero prompts)
+  ///
+  /// v9: this used Cormorant Garamond, a serif, while every other surface used
+  /// a sans. That serif was the single most obvious "wrong font" in the app.
+  /// The cinematic weight is carried by size + tracking now, not a second face.
   static TextStyle cinematicDisplay({
     double fontSize = 16,
     FontWeight fontWeight = FontWeight.w600,
     Color color = Colors.white,
-    double letterSpacing = 0.4,
+    double letterSpacing = -0.4,
   }) {
-    return GoogleFonts.cormorantGaramond(
+    return GoogleFonts.instrumentSans(
       fontSize: fontSize,
       fontWeight: fontWeight,
       color: color,

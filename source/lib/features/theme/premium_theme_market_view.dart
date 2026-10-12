@@ -1854,9 +1854,12 @@ LinearGradient _cssLinearGradient(
   );
 }
 
-/// Export font is `ui-sans-serif, system-ui, sans-serif`; the platform
-/// substitute on web/Android/Windows is Inter (AUTHORITY S-C13).
-TextStyle _inter(TextStyle s) => GoogleFonts.inter(textStyle: s);
+/// The Figma export declares `ui-sans-serif, system-ui, sans-serif`, which the
+/// platform substitutes with Inter (AUTHORITY S-C13). v9 stops doing that:
+/// Inter was never bundled, so this helper pulled a second family off the CDN
+/// at runtime and the Theme Gallery / Settings surfaces rendered in a different
+/// face from everything around them. It now uses the one bundled family.
+TextStyle _inter(TextStyle s) => GoogleFonts.instrumentSans(textStyle: s);
 
 /// CSS drop-shadow(x y blur color): sigma = blur / 2.
 Shadow _cssDropShadow(double x, double y, double blur, Color color) {

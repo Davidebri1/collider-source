@@ -26,7 +26,10 @@ class _AccountSheetState extends State<AccountSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final w = (MediaQuery.sizeOf(context).width - 2 * VSpace.md).clamp(0.0, 480.0);
+    // v9: was `width - 2*VSpace.md`, which on a 430pt phone is nearly the full
+    // width — a sheet flush to both edges reads as a fullscreen page and loses
+    // the floating-panel depth the rest of the app is built on. Inset it.
+    final w = (MediaQuery.sizeOf(context).width - 2 * VSpace.lg).clamp(0.0, 420.0);
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -162,10 +165,14 @@ class _GreySheet extends StatelessWidget {
   Widget build(BuildContext context) => VGlass(
         material: VMaterial.modal,
         radius: VRadius.sheet,
-        fill: const Color(0xB3505050),
-        padding: const EdgeInsets.fromLTRB(VSpace.md, VSpace.md, VSpace.md, VSpace.lg),
+        // v9: this fill was 0xB3 (70% opaque), so the panel behind the sheet
+        // stayed legible straight through it and the two layers read as one
+        // smear. A sheet is a layer: it has to occlude. Dimmed glass is still
+        // there at the rim, the body is not see-through.
+        fill: const Color(0xF012141A),
+        padding: const EdgeInsets.fromLTRB(VSpace.md, VSpace.sm + 2, VSpace.md, VSpace.md),
         child: ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.72),
+          constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.66),
           child: SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
             child: Column(
@@ -173,13 +180,15 @@ class _GreySheet extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 SizedBox(
-                  height: 48,
+                  height: 38,
                   child: Stack(alignment: Alignment.center, children: [
                     Align(alignment: Alignment.centerLeft, child: leading),
-                    Text(title, style: VType.headline().copyWith(fontSize: 19, fontWeight: FontWeight.w700)),
+                    // v9: was 19/w700, which is larger than the home screen's
+                    // own titles. A sheet heading is a caption, not a banner.
+                    Text(title, style: VType.headline().copyWith(fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: -0.2)),
                   ]),
                 ),
-                const SizedBox(height: VSpace.md),
+                const SizedBox(height: VSpace.sm),
                 ...children,
               ],
             ),
@@ -212,9 +221,11 @@ class _Row extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final body = Container(
+      // v9: rows were 52 tall with 10/16 padding, which made a five-row list
+      // taller than the screen. Tightened to match the reference density.
       color: VColors.fillCell,
-      constraints: const BoxConstraints(minHeight: 52),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      constraints: const BoxConstraints(minHeight: 44),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
       child: Row(children: [
         if (leading != null) ...[leading!, const SizedBox(width: 12)],
         Expanded(child: Text(title, style: VType.body(weight: FontWeight.w500))),

@@ -49,6 +49,11 @@ import 'features/account/account_sheet.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // v9: Instrument Sans is bundled in pubspec. Without this the google_fonts
+  // package would still try to pull it (and Inter, and Cormorant) off the
+  // Google CDN on every cold start, which is what produced mixed faces and
+  // soft glyphs whenever that request was slow or blocked.
+  GoogleFonts.config.allowRuntimeFetching = false;
   // Theme catalog: bundled fallback + cached copy now, live themes.json in background.
   await ThemeCatalog.instance.init();
   SystemChrome.setSystemUIOverlayStyle(

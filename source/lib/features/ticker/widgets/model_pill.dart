@@ -151,23 +151,23 @@ class _ModelPillState extends State<ModelPill> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Padding(padding: const EdgeInsets.only(top: 2), child: VAvatar(label: item.modelDef.label, color: c, size: 22)),
-              const SizedBox(width: VSpace.xs),
-              // Tip from the owner, implemented exactly as given: in the opened
-              // answer the one-line summary sits where the model name used to
-              // sit, it is always shown in full, and the model name drops to
-              // fine print underneath it.
+// E2E: in the opened answer the summary sits where the model name used to
+              // sit and the name drops to fine print underneath.
+              //
+              // v9: the fine print keeps the time and drops the name. Both
+              // changes agree on the important part — the answer leads — but
+              // the model name was never asked for, and printing it under the
+              // answer still puts it on screen.
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (item.summary.isNotEmpty)
                       Text(item.summary, style: VType.callout(weight: FontWeight.w600).copyWith(height: 1.32)),
-                    const SizedBox(height: 3),
-                    Text(
-                      [item.modelDef.label, if (item.relativeTime.isNotEmpty) item.relativeTime].join('  ·  '),
-                      style: VType.caption(color: VColors.textSecondary),
-                    ),
+                    if (item.relativeTime.isNotEmpty) ...[
+                      if (item.summary.isNotEmpty) const SizedBox(height: 3),
+                      Text(item.relativeTime, style: VType.caption(color: VColors.textSecondary)),
+                    ],
                   ],
                 ),
               ),
@@ -252,18 +252,19 @@ class _ModelPillState extends State<ModelPill> {
             onTap: widget.onToggleExpand,
             child: Row(
               children: [
-                // Full model name, wrapping (D44).
-                Expanded(
-                  child: Text(item.modelDef.label, maxLines: 2, style: VType.footnote(color: VColors.textPrimary, weight: FontWeight.w600)),
-                ),
-                // Bug 6: a coloured breathing dot used to sit here whenever a
-                // model was answering, so a dot appeared in the cards the moment
-                // a message was sent. Dots, sparkles and glitter are banned. The
-                // shimmer below carries the same "working" state.
-                if (!waiting) ...[
-                  const SizedBox(width: 6),
-                  Text(item.relativeTime, style: VType.caption()),
-                ],
+// v9: the collapsed row led with the model name (D44). The name is the one
+                // thing that was never asked for, and it displaced what should
+                // be there: what the model actually said. The row now carries
+                // only the time.
+                //
+                // No dot is added back. Bug 6 banned the coloured breathing dot
+                // and the E2E pass removed it; the shimmer below already carries
+                // "working", so a second indicator here would be noise.
+                if (!waiting && item.relativeTime.isNotEmpty)
+                  Text(
+                    item.relativeTime,
+                    style: VType.caption(color: VColors.textTertiary, weight: FontWeight.w500),
+                  ),
               ],
             ),
           ),
@@ -276,13 +277,15 @@ class _ModelPillState extends State<ModelPill> {
               child: waiting
                   ? _SkeletonLines(key: const ValueKey('wait'), color: c)
                   : Text(
-                      // The one-line summary is never truncated. The owner's
-                      // rule: it is always present in full for each model
-                      // response. A card that grows scrolls inside the ticker
-                      // window behind its edge fade.
+                      // Never truncated. The owner's rule: the summary is
+                      // always present in full for each model response, and a
+                      // card that grows scrolls inside the ticker window behind
+                      // its edge fade. v9 raises it from textSecondary to
+                      // textPrimary — it is the content of the card, and at
+                      // tertiary weight it read as disabled.
                       item.summary,
                       key: ValueKey(item.summary),
-                      style: VType.footnote(color: VColors.textSecondary, weight: FontWeight.w400).copyWith(height: 1.3),
+                      style: VType.footnote(color: VColors.textPrimary, weight: FontWeight.w400).copyWith(height: 1.35),
                     ),
             ),
           ),
@@ -359,7 +362,10 @@ class _ModelPillState extends State<ModelPill> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '${isUser ? 'You' : item.modelDef.label}  ${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}',
+                          // v9: a model message is stamped with its time only.
+                          // "You" still marks the user's own turns; model names
+                          // never appear on the thread.
+                          '${isUser ? 'You' : ''}  ${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}'.trim(),
                           style: VType.caption(color: VColors.textSecondary, weight: FontWeight.w600),
                         ),
                         const SizedBox(height: 2),

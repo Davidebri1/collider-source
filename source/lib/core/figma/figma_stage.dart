@@ -207,7 +207,7 @@ class FText extends StatelessWidget {
       softWrap: maxLines != 1,
       overflow: ellipsis ? TextOverflow.ellipsis : TextOverflow.clip,
       textAlign: align,
-      style: GoogleFonts.inter(
+      style: GoogleFonts.instrumentSans(
         fontSize: size,
         height: height == null ? null : height! / size,
         fontWeight: weight,
@@ -257,7 +257,7 @@ class FigmaViewport extends StatelessWidget {
 /// The [FText] style as a TextStyle (for TextFields): Inter, Figma px.
 class FTextStyle {
   static TextStyle of({double size = 16, FontWeight weight = FontWeight.w400, Color color = Colors.white, double? height, double? letterSpacing}) =>
-      GoogleFonts.inter(
+      GoogleFonts.instrumentSans(
         fontSize: size,
         height: height == null ? null : height / size,
         fontWeight: weight,
