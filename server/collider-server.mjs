@@ -20,6 +20,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
+import { networkInterfaces } from 'node:os';
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const WEB_ROOT = process.env.COLLIDER_WEB_ROOT || join(HERE, '..', 'app');
@@ -457,11 +458,17 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
+// Bind to every interface, not just loopback: the app has to be reachable from
+// a phone on the same network, which is the only way to judge it as a user.
+server.listen(PORT, '0.0.0.0', () => {
   const live = liveRoster();
+  const nets = networkInterfaces();
+  const lan = Object.values(nets).flat().find((n) => n && n.family === 'IPv4' && !n.internal);
+  const held = Object.entries(Object.fromEntries(Object.keys(PROVIDERS).map((k) => [k, keyCount(k)]))).filter(([, v]) => v);
   console.log(`Collider server on http://localhost:${PORT}`);
+  if (lan) console.log(`  on your network   http://${lan.address}:${PORT}   <- open this on the phone`);
   console.log(`  web root  ${WEB_ROOT}`);
   console.log(`  upstream  ${UPSTREAM}`);
   console.log(`  models    ${live.length}/${MODELS.length} routable`);
-  console.log(`  keys      ${Object.entries(Object.fromEntries(Object.keys(PROVIDERS).map((k) => [k, keyCount(k)]))).filter(([, v]) => v).map(([k, v]) => `${k}x${v}`).join(' ') || 'none held here'}`);
+  console.log(`  keys      ${held.map(([k, v]) => `${k}x${v}`).join(' ') || 'none held here'}`);
 });

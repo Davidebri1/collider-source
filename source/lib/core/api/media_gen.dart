@@ -42,17 +42,17 @@ String _wireSlug(String wire, String remote) =>
 
 /// Each text model's ordered list of (wire, remote id) attempts.
 const Map<String, List<(String, String)>> _text = {
-  'free/glm-5-3-flash': [('nv', 'z-ai/glm-5.3-flash'), ('oc', 'glm-5.3-flash'), ('cr', 'z-ai/glm-5.3-flash')],
-  'free/laguna-s-2-1': [('cc', 'poolside/laguna-s-2.1-free'), ('cr', 'poolside/laguna-s-2.1-free')],
-  'free/laguna-xs-2-1': [('nv', 'poolside/laguna-xs-2.1'), ('cr', 'poolside/laguna-xs-2.1')],
-  'free/ling-3-1-flash': [('cc', 'inclusionai/ling-3.1-flash:free'), ('cr', 'inclusionai/ling-3.1-flash:free')],
-  'free/nemotron-3-5-lightning': [('nv', 'nvidia/nemotron-3.5-lightning-30b-a3b'), ('cr', 'nvidia/nemotron-3.5-lightning-30b-a3b')],
-  'pro/glm-5-3': [('nv', 'z-ai/glm-5.3'), ('oc', 'glm-5.3'), ('cc', 'zai-org/GLM-5.3'), ('cr', 'z-ai/glm-5.3')],
-  'pro/deepseek-4-1-flash': [('nv', 'deepseek-ai/deepseek-v4.1-flash'), ('oc', 'deepseek-v4.1-flash'), ('cc', 'deepseek/deepseek-v4.1-flash'), ('cr', 'deepseek-ai/deepseek-v4.1-flash')],
-  'pro/minimax-m3': [('mm', 'MiniMax-M3'), ('cc', 'MiniMaxAI/MiniMax-M3'), ('oc', 'minimax-m3'), ('cr', 'minimax-M3')],
-  'pro/mimo-v2-6-flash': [('cc', 'xiaomi/mimo-v2.6-flash'), ('cr', 'xiaomi/mimo-v2.6-flash')],
-  'pro/nemotron-3-ultra': [('nv', 'nvidia/nemotron-3-ultra-550b-a55b'), ('cc', 'nvidia/nemotron-3-ultra-550b-a55b'), ('cr', 'nvidia/nemotron-3-ultra-550b-a55b')],
-  'elite/kimi-k3': [('nv', 'moonshotai/kimi-k3'), ('oc', 'kimi-k3'), ('cc', 'moonshotai/Kimi-K3'), ('cr', 'moonshotai/kimi-k3')],
+  'free/glm-5-3-flash': [('nv', 'z-ai/glm-5.3-flash'), ('oc', 'glm-5.3-flash')],
+  'free/laguna-s-2-1': [('cc', 'poolside/laguna-s-2.1-free')],
+  'free/laguna-xs-2-1': [('nv', 'poolside/laguna-xs-2.1')],
+  'free/ling-3-1-flash': [('cc', 'inclusionai/ling-3.1-flash:free')],
+  'free/nemotron-3-5-lightning': [('nv', 'nvidia/nemotron-3.5-lightning-30b-a3b')],
+  'pro/glm-5-3': [('nv', 'z-ai/glm-5.3'), ('oc', 'glm-5.3'), ('cc', 'zai-org/GLM-5.3')],
+  'pro/deepseek-4-1-flash': [('nv', 'deepseek-ai/deepseek-v4.1-flash'), ('oc', 'deepseek-v4.1-flash'), ('cc', 'deepseek/deepseek-v4.1-flash')],
+  'pro/minimax-m3': [('mm', 'MiniMax-M3'), ('cc', 'MiniMaxAI/MiniMax-M3'), ('oc', 'minimax-m3')],
+  'pro/mimo-v2-6-flash': [('cc', 'xiaomi/mimo-v2.6-flash')],
+  'pro/nemotron-3-ultra': [('nv', 'nvidia/nemotron-3-ultra-550b-a55b'), ('cc', 'nvidia/nemotron-3-ultra-550b-a55b')],
+  'elite/kimi-k3': [('nv', 'moonshotai/kimi-k3'), ('oc', 'kimi-k3'), ('cc', 'moonshotai/Kimi-K3')],
 };
 
 /// The judge for the Consensus Agent and the Smart Gen agent, strongest first.
