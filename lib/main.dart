@@ -326,8 +326,10 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     if (!mounted) return;
     final cat = ThemeCatalog.instance;
     setState(() {
-      _currentTheme = cat.bySlug(_currentTheme.id) ?? _currentTheme;
-      _savedThemeBeforePreview = cat.bySlug(_savedThemeBeforePreview.id) ?? _savedThemeBeforePreview;
+      // v9.1 (from v8.6): no built-in default wallpaper; a theme that is gone
+      // falls to the catalog's own default (an R2 theme).
+      _currentTheme = cat.bySlug(_currentTheme.id) ?? cat.defaultTheme;
+      _savedThemeBeforePreview = cat.bySlug(_savedThemeBeforePreview.id) ?? cat.defaultTheme;
     });
   }
 
