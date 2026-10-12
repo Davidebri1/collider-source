@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../core/vision/vision_kit.dart';
 import '../../core/audio/music_player.dart';
@@ -32,8 +31,10 @@ class SettingsDrawer extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Figma 1:2 has no dimming behind the menu: a clear tap-to-close layer.
-        Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: onClose, child: ClipRect(child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18), child: const ColoredBox(color: Color(0x14000000)))))),
+        // The menu is a small control, not a focus window. It used to blur the
+        // whole screen behind it, which is far more than it has the standing to
+        // do; it now only darkens toward the edges and leaves the middle clear.
+        Positioned.fill(child: EdgeVignette(onTap: onClose)),
         Center(
           child: ListenableBuilder(
             listenable: Listenable.merge([FloatingMusic.enabled, ThemeCatalog.instance]),

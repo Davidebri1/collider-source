@@ -108,6 +108,55 @@ class VScrim extends StatelessWidget {
   }
 }
 
+/// Click-away layer for a panel that should not disturb the world behind it.
+///
+/// [VScrim] dims uniformly and optionally blurs, which is right for a focus
+/// window. It is wrong for a small, light control like the settings menu: that
+/// has no standing to push the whole world out of focus. This fades darkness
+/// in from the edges and leaves the middle clear, so the menu reads crisply on
+/// a quiet field and the wallpaper survives at the centre.
+class EdgeVignette extends StatelessWidget {
+  final VoidCallback? onTap;
+
+  /// How dark the corners get.
+  final double strength;
+
+  /// Fraction of the shortest side kept fully clear.
+  final double clearRadius;
+
+  const EdgeVignette({
+    super.key,
+    this.onTap,
+    this.strength = 0.62,
+    this.clearRadius = 0.34,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: IgnorePointer(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              // Radius is measured against the shortest side, so the clear
+              // centre stays circular on a tall phone instead of stretching.
+              radius: 1 / (clearRadius * 2),
+              colors: [
+                Colors.black.withValues(alpha: 0),
+                Colors.black.withValues(alpha: strength * 0.45),
+                Colors.black.withValues(alpha: strength),
+              ],
+              stops: [0.0, clearRadius, 1.0],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Press physics from the kit: scale 0.97, opacity 0.9.
 class VPress extends StatefulWidget {
   final Widget child;
@@ -1018,13 +1067,23 @@ class GlassMenu extends StatelessWidget {
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Colors.white, width: 1),
                   gradient: const LinearGradient(
                     begin: Alignment(-0.8, -1),
                     end: Alignment(0.8, 1),
-                    colors: [Color(0x1A4F4F4F), Color(0x1A4F4F4F), Color(0x1AFFFFFF), Color(0x1A4F4F4F)],
+                    colors: [Color(0x4D232327), Color(0x4D232327), Color(0x66FFFFFF), Color(0x4D232327)],
                     stops: [0.017, 0.0175, 0.33, 0.97],
                   ),
+                ),
+                // The stroke and its shadow live in the foreground. Inside
+                // `decoration` the border was painted under the very ClipRRect
+                // that clips this box, so it was shaved off the leading edge
+                // and the card stopped reading as a container at all.
+                foregroundDecoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.5), width: 1),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withValues(alpha: 0.45), blurRadius: 30, spreadRadius: -6, offset: const Offset(0, 8)),
+                  ],
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -1045,7 +1104,10 @@ class GlassMenu extends StatelessWidget {
   }
 
   Widget _row(GlassMenuRow r) {
-    final op = r.on ? 1.0 : (r.onTap == null ? 0.3 : 0.6);
+    // Off rows used to drop to 0.3 / 0.6, which reads as broken rather than
+    // inactive once the menu sits over a bright wallpaper: the label simply
+    // disappeared. Inactive is now clearly readable, off is clearly muted.
+    final op = r.on ? 1.0 : (r.onTap == null ? 0.45 : 0.82);
     return Semantics(
       button: true,
       toggled: r.toggle ? r.on : null,

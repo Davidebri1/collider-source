@@ -11,7 +11,7 @@ class SideRailEntry {
   const SideRailEntry(this.key, this.icon, this.label);
 }
 
-/// Master Spec §6.2: the side nav reshapes to the active work surface.
+/// Master Spec Â§6.2: the side nav reshapes to the active work surface.
 /// Surfaces themselves are reached from the Apps overlay, never from here.
 List<SideRailEntry> sideRailEntries(ActiveWorkSurface s) => switch (s) {
       ActiveWorkSurface.chat => const [
@@ -48,7 +48,7 @@ List<SideRailEntry> sideRailEntries(ActiveWorkSurface s) => switch (s) {
         ],
       ActiveWorkSurface.files => const [
           SideRailEntry('all', Icons.folder_open_rounded, 'All Files'),
-          SideRailEntry('artifacts', Icons.auto_awesome_outlined, 'Artifacts'),
+          SideRailEntry('artifacts', Icons.inventory_2_outlined, 'Artifacts'),
           SideRailEntry('attachments', Icons.attach_file_rounded, 'Attachments'),
           SideRailEntry('outputs', Icons.output_rounded, 'Model Outputs'),
           SideRailEntry('system', Icons.settings_suggest_outlined, 'System'),

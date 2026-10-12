@@ -7,7 +7,6 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'core/theme/edge_fade.dart';
-import 'core/theme/living_stardust_overlay.dart';
 import 'core/vision/vision_kit.dart';
 import 'core/api/collider_api.dart';
 import 'core/audio/music_player.dart';
@@ -215,8 +214,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   bool get _railVisible {
     if (_localHistoryModel != null || _zoomedMessage != null || _browserOpen || _genOptionsOpen) return false;
     // Summoning the composer no longer hides the rail: "New Chat" was making
-    // the navigation disappear. Focus comes from depth â€” the world blurs
-    // behind the composer â€” not from deleting the frame.
+    // the navigation disappear. Focus comes from depth Ã¢â‚¬â€ the world blurs
+    // behind the composer Ã¢â‚¬â€ not from deleting the frame.
     // An open answer takes the phone's full width (row 15); closing it brings the rail back.
     if (_activeDrawer == null && MediaQuery.of(context).size.width < 768 && _openPill(_tickerItems) != null) return false;
     // Home (chat) and themes only: the Smart Gen, Market and Files rails
@@ -263,6 +262,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       _activeDrawer = Uri.base.queryParameters['drawer'];
     }
     if (Uri.base.queryParameters['composer'] == '1') _isComposerSummoned = true;
+    if (Uri.base.queryParameters['settings'] == '1') _settingsOpen = true;
     final cq = Uri.base.queryParameters['cat'];
     if (cq != null) _activeCategory = ModelCategory.values.firstWhere((c) => c.name == cq, orElse: () => ModelCategory.general);
     if (Uri.base.queryParameters['genopts'] == '1' && _activeCategory.isMedia) _genOptionsOpen = true;
@@ -714,7 +714,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     try {
       // Consensus Agent (per the Consensus Agent spec): the agent reads only
       // the responses. It is never told which model produced which response,
-      // because source identity is not an input it uses â€” need and intent are
+      // because source identity is not an input it uses Ã¢â‚¬â€ need and intent are
       // derived from the prompt, and the responses are read against that.
       final judge = await MediaGen.instance.consensus([
         {
@@ -727,14 +727,14 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               'Also count each response\'s logical chains: explicit (sequential '
               'clarifications that extend meaning) and implicit (definitions, statements or '
               'narrative that support a logical conclusion). Count meaning, never words. Report '
-              'the count and the longest chain. Split chains do not exist â€” what looks like a '
+              'the count and the longest chain. Split chains do not exist Ã¢â‚¬â€ what looks like a '
               'split is clarification and counts as one.\n\n'
               'Reply in exactly this format, nothing else:\n'
               'NEED: <the derived need, one line>\n'
               'SERVE: <how the consensus serves it, one line>\n'
               'CONSENSUS: <the agreed sentiment, verbatim from the winning group>\n'
               'RATIO: <agreed responses>/<total responses>\n'
-              'CHAINS: <response> <count> (max <n>) â€” one per response, then a CONSENSUS line '
+              'CHAINS: <response> <count> (max <n>) Ã¢â‚¬â€ one per response, then a CONSENSUS line '
               'using the longest chain among the agreed group\n'
               'DETAIL: <the agreed answer in full, noting real disagreement>'
         },
@@ -1336,12 +1336,11 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // ================= PLANE 0: BACKGROUND WALLPAPER & AMBIENT PARTICLES =================
+          // ================= PLANE 0: BACKGROUND WALLPAPER =================
           // Not built under the Premium Theme Market: the market paints its own
           // opaque #000 -> #111 root and its own ambient loop over the whole
-          // viewport, so Plane 0 and the stardust were invisible there while
-          // still decoding a full-bleed still on every swipe and forcing a
-          // Flutter frame every vsync (stardust ticker) during idle playback.
+          // viewport, so Plane 0 was invisible there while still decoding a
+          // full-bleed still on every swipe during idle playback.
           if (_activeDrawer != 'premium') ...[
           Positioned.fill(
             child: ThemeLivingBackdrop(
@@ -1354,13 +1353,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               // The Theme Gallery paints its own room and preview (row 6).
               preferVideo: _activeDrawer != 'premium' && _activeDrawer != 'themes',
               builderAmbient: _activeDrawer == 'premium',
-            ),
-          ),
-
-          // Ambient drifting stardust particles in Plane 0
-          const Positioned.fill(
-            child: IgnorePointer(
-              child: LivingStardustOverlay(),
             ),
           ),
           ],
@@ -1427,7 +1419,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                     // Compact, content-hugging half-width layout with generous negative space
                     Center(
                       child: Container(
-                        // Master Spec Â§4.2: height strictly <= 40% of screen height at all times,
+                        // Master Spec Ã‚Â§4.2: height strictly <= 40% of screen height at all times,
                         // width strictly equal to the nav bar width, never more than 50% of screen.
                         constraints: BoxConstraints(
                           // Never more than 50% of viewport width (user layout contract),
