@@ -75,7 +75,13 @@ class SimpleBackgroundVideoAmbient extends StatelessWidget {
               width: w * 2,
               height: h * 2,
               child: impl.AmbientMedia(
-                key: ValueKey('simple-video-${theme.id}-${theme.videoPath ?? theme.assetPath}'),
+                // No per-theme key. Keying this by theme tore the whole
+                // platform view down and rebuilt it on every selection, so the
+                // owner saw the ambient freeze on its poster, come back dim at
+                // brightness 0.5 and then start playing (the WebGL context, the
+                // <video> and its decoder all restarted). The renderer now
+                // swaps its own source in place; the ambient object must
+                // survive so there is something to swap into.
                 theme: theme,
                 owned: owned,
                 viewport: Size(w, h),

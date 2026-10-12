@@ -20,8 +20,8 @@ class ThemeMedia {
     return AssetImage(src);
   }
 
-  static final ImageProvider offlineWallpaper =
-      const AssetImage(ThemeCatalog.offlineWallpaperAsset);
+  static const ImageProvider offlineWallpaper =
+      AssetImage(ThemeCatalog.offlineWallpaperAsset);
 }
 
 /// Warms the image cache for posters the user is about to see.
@@ -49,6 +49,10 @@ class ThemeMediaPrefetch {
 
 /// Any theme image by source string (URL or asset). Shows the tiny bundled
 /// wallpaper while loading and on failure, so there is never an empty box.
+///
+/// Bug 5: [filterQuality] defaults to high. The medium default was the box
+/// filter behind the visibly pixelated posters and thumbnails: a 720x1280
+/// poster drawn into a 170pt cover was being box-sampled on the way down.
 class ThemeImage extends StatelessWidget {
   final String src;
   final BoxFit fit;
@@ -63,7 +67,7 @@ class ThemeImage extends StatelessWidget {
     this.fit = BoxFit.cover,
     this.width,
     this.height,
-    this.filterQuality = FilterQuality.medium,
+    this.filterQuality = FilterQuality.high,
     this.alignment = Alignment.center,
   });
 
@@ -73,7 +77,7 @@ class ThemeImage extends StatelessWidget {
         width: width,
         height: height,
         alignment: alignment,
-        filterQuality: FilterQuality.low,
+        filterQuality: FilterQuality.medium,
         errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFF1A1B22)),
       );
 
@@ -136,6 +140,13 @@ class ThemePosterImage extends StatelessWidget {
 
 /// Premium market ambient treatment: tint only (no blur), so the living
 /// wallpaper stays sharp behind the UI (quality standard H6).
+///
+/// Bug 6, "don't translucent on translucent": this used to stack four sheets
+/// over the same pixels — a black [ColoredBox], an [Opacity], a [ColorFiltered]
+/// and a second black [ColoredBox] — to arrive at one dim. Every extra sheet is
+/// another chance for the result to go muddy, and the wall behind is already
+/// blurred ambient. One [ColorFiltered] that both tints and darkens is the
+/// minimum that still reads as a held-back background, so that is all this is.
 class BuilderAmbientFilter {
   BuilderAmbientFilter._();
 
@@ -144,28 +155,19 @@ class BuilderAmbientFilter {
   static const double layerOpacity = 0.85;
   static const Color darkOverlay = Color(0x59000000); // rgba(0,0,0,0.35)
 
-  // Mild dim + slight desaturation. Colour matrices only; no ImageFilter.
+  // Mild dim + slight desaturation, with the darkOverlay's black folded into
+  // the same matrix so the tint and the scrim are one layer, not two.
+  // A source pixel multiplied by ~0.6 then lifted by ~0.12 gives roughly the
+  // old stacked result (0.85 * 0.62 * 0.65 + 0.35 * 0.35) in one pass.
   static const ColorFilter _tint = ColorFilter.matrix(<double>[
-    0.62, 0.10, 0.01, 0, 0,
-    0.04, 0.68, 0.01, 0, 0,
-    0.04, 0.10, 0.59, 0, 0,
+    0.42, 0.07, 0.01, 0, 26,
+    0.03, 0.46, 0.01, 0, 26,
+    0.03, 0.07, 0.40, 0, 26,
     0, 0, 0, 1, 0,
   ]);
 
   static Widget wrap(Widget child) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        ColoredBox(
-          color: Colors.black,
-          child: Opacity(
-            opacity: layerOpacity,
-            child: ColorFiltered(colorFilter: _tint, child: child),
-          ),
-        ),
-        const ColoredBox(color: darkOverlay),
-      ],
-    );
+    return ColorFiltered(colorFilter: _tint, child: child);
   }
 }
 

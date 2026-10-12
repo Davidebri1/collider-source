@@ -1,4 +1,4 @@
-import 'dart:ui';
+﻿import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
@@ -10,13 +10,15 @@ import '../../theme/theme_pack_store.dart';
 /// REQ-06 Theme Gallery (map row 6, Vision Pro Spatial UI Kit 69-1926): the
 /// previewed wallpaper in a rounded window over the blurred room, a
 /// thumbnail strip under it whose selected frame widens.
-/// v8.3 (D53): the window's top row is Figma's: back (close, nothing
-/// changed) on the left, Expand View in the middle (the wallpaper full
-/// screen; tap to come back) and, where Figma has ⋯, Set Wallpaper (a check).
-/// Bottom: the name; a live wallpaper also gets Figma's playback bar (play /
-/// pause and scrub; no volume, the loops are silent). Figma's date line is
-/// left out. The gallery holds the free themes and the live ones you own;
-/// swipe up for the Premium market.
+///
+/// The preview window carries two controls and nothing else: Back, and Set
+/// Wallpaper. Bug 2 (owner, repeated): every overlay is off the theme asset —
+/// no dimming scrim over the artwork, no playback or scrub bar, no centred
+/// title watermark, no expand / fullscreen affordance. The artwork shows
+/// itself (R32, R36); the name and transport lived in Figma on chrome that
+/// this app does not draw.
+/// The gallery holds the free themes and the live ones you own; swipe up for
+/// the Premium market.
 class WindowlessThemeScroller extends StatefulWidget {
   final WallpaperTheme currentTheme;
   final ValueChanged<WallpaperTheme> onLivePreview;
@@ -39,9 +41,6 @@ class WindowlessThemeScroller extends StatefulWidget {
 
 class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
   late WallpaperTheme _previewed;
-  bool _expanded = false;
-
-  static const _shadow = [Shadow(color: Color(0x99000000), blurRadius: 16)];
 
   @override
   void initState() {
@@ -68,8 +67,13 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final pad = MediaQuery.of(context).padding;
-    final winW = (size.width - 32).clamp(240.0, 440.0);
-    final winH = (winW * 1.3).clamp(240.0, size.height - pad.top - 84 - 150);
+    // Figma reference proportions: a 317 x 470 window inside a 393 x 852
+    // frame, i.e. ~80.7% of the width at a 1.48 aspect. The window used to
+    // take width - 32, which is 92.5% of a 430pt phone â€” effectively
+    // full-bleed, and it read as a fullscreen app rather than a floating
+    // window. Nothing in this app is allowed to touch the edges.
+    final winW = (size.width * 0.807).clamp(240.0, 380.0);
+    final winH = (winW * 1.4827).clamp(240.0, size.height - pad.top - 84 - 150);
     return ListenableBuilder(
       listenable: ThemePackStore.instance,
       builder: (context, _) {
@@ -83,37 +87,20 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
             fit: StackFit.expand,
             children: [
               // The room, blurred (Figma: the environment behind the window).
+              // There is no expanded full-screen state: nothing in this app is
+              // allowed to go edge to edge, so the blurred room is always the
+              // backdrop and the window always floats over it.
               Positioned.fill(
-                child: AnimatedSwitcher(
-                  duration: VMotion.base,
-                  child: KeyedSubtree(
-                    key: ValueKey('room-${_expanded ? _previewed.id : widget.currentTheme.id}-$_expanded'),
-                    child: _expanded
-                        ? GestureDetector(
-                            onTap: () => setState(() => _expanded = false),
-                            child: ThemePosterImage(theme: _previewed, fit: BoxFit.cover, fullBleed: true),
-                          )
-                        : ImageFiltered(
-                            imageFilter: ImageFilter.blur(sigmaX: 28, sigmaY: 28, tileMode: TileMode.clamp),
-                            child: ColorFiltered(
-                              colorFilter: const ColorFilter.mode(Color(0x55000000), BlendMode.darken),
-                              // v8.3.1: the room stays the current wallpaper while browsing.
-                              child: ThemePosterImage(theme: widget.currentTheme, fit: BoxFit.cover, fullBleed: true),
-                            ),
-                          ),
+                child: ImageFiltered(
+                  imageFilter: ImageFilter.blur(sigmaX: 28, sigmaY: 28, tileMode: TileMode.clamp),
+                  child: ColorFiltered(
+                    colorFilter: const ColorFilter.mode(Color(0x55000000), BlendMode.darken),
+                    // v8.3.1: the room stays the current wallpaper while browsing.
+                    child: ThemePosterImage(theme: widget.currentTheme, fit: BoxFit.cover, fullBleed: true),
                   ),
                 ),
               ),
-              if (_expanded && _previewed.isLive)
-                Positioned.fill(child: IgnorePointer(child: _LoopVideo(key: ValueKey('full-${_previewed.id}'), url: _previewed.videoUrl!))),
-              if (_expanded)
-                Positioned(
-                  left: VSpace.md,
-                  top: pad.top + VSpace.sm,
-                  child: VCircleButton(icon: Icons.fullscreen_exit_rounded, floating: true, tooltip: 'Back', onTap: () => setState(() => _expanded = false)),
-                ),
-              if (!_expanded)
-                Positioned(
+              Positioned(
                   left: 0,
                   right: 0,
                   top: pad.top,
@@ -129,7 +116,6 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                             key: ValueKey('win-${_previewed.id}'),
                             theme: _previewed,
                             onBack: widget.onCancel,
-                            onExpand: () => setState(() => _expanded = true),
                             onSet: () => widget.onConfirmTheme(_previewed),
                           ),
                         ),
@@ -157,7 +143,7 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                                     decoration: BoxDecoration(borderRadius: BorderRadius.circular(6), boxShadow: VShadow.medium),
                                     child: ClipRRect(
                                       borderRadius: BorderRadius.circular(6),
-                                      child: ThemePosterImage(theme: t, fit: BoxFit.cover, filterQuality: FilterQuality.medium),
+                                      child: ThemePosterImage(theme: t, fit: BoxFit.cover),
                                     ),
                                   ),
                                 );
@@ -182,9 +168,8 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
 class _PreviewWindow extends StatefulWidget {
   final WallpaperTheme theme;
   final VoidCallback onBack;
-  final VoidCallback onExpand;
   final VoidCallback onSet;
-  const _PreviewWindow({super.key, required this.theme, required this.onBack, required this.onExpand, required this.onSet});
+  const _PreviewWindow({super.key, required this.theme, required this.onBack, required this.onSet});
 
   @override
   State<_PreviewWindow> createState() => _PreviewWindowState();
@@ -192,7 +177,6 @@ class _PreviewWindow extends StatefulWidget {
 
 class _PreviewWindowState extends State<_PreviewWindow> {
   VideoPlayerController? _c;
-  double? _scrub;
 
   @override
   void initState() {
@@ -203,7 +187,6 @@ class _PreviewWindowState extends State<_PreviewWindow> {
       _c = c;
       c.setLooping(true);
       c.setVolume(0);
-      c.addListener(_tick);
       c.initialize().then((_) {
         if (!mounted) return;
         c.play();
@@ -212,37 +195,21 @@ class _PreviewWindowState extends State<_PreviewWindow> {
     }
   }
 
-  void _tick() {
-    if (mounted) setState(() {});
-  }
-
   @override
   void dispose() {
-    _c?.removeListener(_tick);
     _c?.dispose();
     super.dispose();
   }
-
-  Widget _capsule(Widget child) => ClipRRect(
-        borderRadius: BorderRadius.circular(VRadius.full),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-          child: Container(
-            height: 32,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(color: const Color(0x66808080), borderRadius: BorderRadius.circular(VRadius.full)),
-            child: child,
-          ),
-        ),
-      );
 
   @override
   Widget build(BuildContext context) {
     final t = widget.theme;
     final c = _c;
     final ready = c != null && c.value.isInitialized;
-    final dur = ready ? c.value.duration.inMilliseconds : 0;
-    final frac = _scrub ?? (dur > 0 ? c!.value.position.inMilliseconds / dur : 0.0);
+    // The artwork is the asset and nothing else (bug 2, R32 / R36): no
+    // gradient scrim over the poster, no playback or scrub bar, no expand
+    // affordance, no centred title watermark. The only thing drawn on top of
+    // it is the one control that belongs there, Set Wallpaper.
     return ClipRRect(
       borderRadius: BorderRadius.circular(VRadius.xl),
       child: Stack(
@@ -255,16 +222,6 @@ class _PreviewWindowState extends State<_PreviewWindow> {
               clipBehavior: Clip.hardEdge,
               child: SizedBox(width: c.value.size.width, height: c.value.size.height, child: VideoPlayer(c)),
             ),
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0x33000000), Color(0x00000000), Color(0x00000000), Color(0x99000000)],
-                stops: [0, 0.2, 0.6, 1],
-              ),
-            ),
-          ),
           Positioned(
             left: 12,
             right: 12,
@@ -273,57 +230,10 @@ class _PreviewWindowState extends State<_PreviewWindow> {
               children: [
                 VCircleButton(icon: Icons.chevron_left_rounded, size: 32, floating: true, tooltip: 'Back', onTap: widget.onBack),
                 const Spacer(),
-                VPress(
-                  onTap: widget.onExpand,
-                  tooltip: 'Expand View',
-                  child: _capsule(Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.open_in_full_rounded, size: 14, color: Colors.white),
-                    const SizedBox(width: 6),
-                    Text('Expand View', style: VType.footnote(color: Colors.white, weight: FontWeight.w600)),
-                  ])),
-                ),
-                const Spacer(),
+                // Expand View is gone: it opened a full-bleed preview, and
+                // nothing in this app goes edge to edge. The two window exits
+                // are Back and Set Wallpaper (R37).
                 VCircleButton(icon: Icons.check_rounded, size: 32, floating: true, tooltip: 'Set Wallpaper', onTap: widget.onSet),
-              ],
-            ),
-          ),
-          Positioned(
-            left: 18,
-            right: 14,
-            bottom: ready ? 8 : 18,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(t.name, maxLines: 2, style: VType.title2(color: Colors.white).copyWith(shadows: _WindowlessThemeScrollerState._shadow)),
-                if (ready)
-                  Row(children: [
-                    VPress(
-                      onTap: () => c.value.isPlaying ? c.pause() : c.play(),
-                      tooltip: c.value.isPlaying ? 'Pause' : 'Play',
-                      child: SizedBox(width: 32, height: 40, child: Icon(c.value.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, color: Colors.white, size: 24)),
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: SliderTheme(
-                        data: SliderThemeData(
-                          trackHeight: 4,
-                          activeTrackColor: Colors.white.withValues(alpha: 0.9),
-                          inactiveTrackColor: Colors.white.withValues(alpha: 0.3),
-                          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 0, elevation: 0, pressedElevation: 0),
-                          overlayShape: SliderComponentShape.noOverlay,
-                        ),
-                        child: Slider(
-                          value: frac.clamp(0.0, 1.0),
-                          onChanged: (v) => setState(() => _scrub = v),
-                          onChangeEnd: (v) {
-                            c.seekTo(Duration(milliseconds: (dur * v).round()));
-                            setState(() => _scrub = null);
-                          },
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                  ]),
               ],
             ),
           ),
@@ -333,10 +243,10 @@ class _PreviewWindowState extends State<_PreviewWindow> {
   }
 }
 
-/// A silent looping wallpaper (Expand View of a live theme).
+/// A silent looping wallpaper, played inside the floating preview window.
 class _LoopVideo extends StatefulWidget {
   final String url;
-  const _LoopVideo({super.key, required this.url});
+  const _LoopVideo({required this.url});
   @override
   State<_LoopVideo> createState() => _LoopVideoState();
 }

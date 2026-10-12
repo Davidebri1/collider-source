@@ -11,11 +11,20 @@ import 'theme_living_media.dart';
 /// -> contrast(1.2), then opacity 0.7 (0.3 while loading is not tracked here).
 /// Owned themes lift to brightness 1 / opacity 1 (DEVIATIONS.md D5).
 /// Native glass ([glass]) is Flutter BackdropFilter in the market view.
+///
+/// Bug 1: the theme swap is a crossfade, not a rebuild. A selection used to
+/// dispose the outgoing controller immediately, which left the incoming
+/// poster frozen and dim while its loop initialised, then snapped the video in.
+/// Here the outgoing theme stays mounted underneath for the length of the
+/// fade, so the change is one continuous move.
 class AmbientMedia extends StatelessWidget {
   final WallpaperTheme theme;
   final bool owned;
   final Size viewport;
   final List<AmbientGlass> glass;
+
+  /// How long one theme change takes to crossfade.
+  static const Duration crossfade = Duration(milliseconds: 620);
 
   const AmbientMedia({
     super.key,
@@ -49,7 +58,22 @@ class AmbientMedia extends StatelessWidget {
       child: ImageFiltered(
         imageFilter:
             ImageFilter.blur(sigmaX: 20, sigmaY: 20, tileMode: TileMode.clamp),
-        child: ThemeLivingBackdrop(theme: theme, preferVideo: true),
+        // The outgoing theme stays mounted and playing underneath the incoming
+        // one for the whole fade. AnimatedSwitcher is what makes the change
+        // read as a deliberate transition rather than a swap to a frozen poster.
+        child: AnimatedSwitcher(
+          duration: crossfade,
+          switchInCurve: Curves.easeInOut,
+          switchOutCurve: Curves.easeInOut,
+          // Both loops are silent and both are blurred identically, so a plain
+          // crossfade needs no slide or scale to read as depth.
+          layoutBuilder: (current, previous) => Stack(
+            fit: StackFit.expand,
+            alignment: Alignment.center,
+            children: <Widget>[...previous, if (current != null) current],
+          ),
+          child: ThemeLivingBackdrop(key: ValueKey(theme.id), theme: theme, preferVideo: true),
+        ),
       ),
       builder: (context, t, child) => Opacity(
         opacity: 0.7 + 0.3 * t,

@@ -58,6 +58,11 @@ class _AmbientMediaState extends State<AmbientMedia> {
     return ui_web.assetManager.getAssetUrl(path);
   }
 
+  static String _videoUrl(WallpaperTheme t) {
+    final v = t.videoPath;
+    return (v != null && v.isNotEmpty) ? _url(v) : '';
+  }
+
   static void _ensureScript() {
     if (_ambientFactory != null) return;
     final s = web.HTMLScriptElement()..text = _kAmbientJs;
@@ -111,8 +116,19 @@ class _AmbientMediaState extends State<AmbientMedia> {
     super.didUpdateWidget(oldWidget);
     final r = _renderer;
     if (r == null) return;
-    if (oldWidget.owned != widget.owned) {
-      r.callMethod('setOwned'.toJS, widget.owned.toJS);
+    // The ambient element is deliberately not keyed by theme, so a selection
+    // arrives here instead of destroying the DOM node, the <video> and the
+    // WebGL context. Swap the source in place: the renderer warms the incoming
+    // video beside the one still playing, then crossfades.
+    if (oldWidget.theme.id != widget.theme.id ||
+        oldWidget.theme.videoPath != widget.theme.videoPath ||
+        oldWidget.theme.assetPath != widget.theme.assetPath ||
+        oldWidget.owned != widget.owned) {
+      r.callMethod('setTheme'.toJS, <String, Object>{
+        'video': _videoUrl(widget.theme),
+        'poster': _url(widget.theme.assetPath),
+        'owned': widget.owned,
+      }.jsify() as JSObject);
     }
     if (!listEquals(oldWidget.glass, widget.glass) ||
         oldWidget.viewport != widget.viewport) {
@@ -130,7 +146,6 @@ class _AmbientMediaState extends State<AmbientMedia> {
 
   @override
   Widget build(BuildContext context) {
-    final video = widget.theme.videoPath;
     final poster = widget.theme.assetPath;
     return HtmlElementView.fromTagName(
       tagName: 'div',
@@ -138,7 +153,7 @@ class _AmbientMediaState extends State<AmbientMedia> {
       onElementCreated: (Object element) {
         _ensureScript();
         final opts = <String, Object>{
-          'video': (video != null && video.isNotEmpty) ? _url(video) : '',
+          'video': _videoUrl(widget.theme),
           'poster': _url(poster),
           'owned': widget.owned,
           'mode': _kBlurMode,
@@ -165,6 +180,9 @@ const String _kAmbientJs = r'''
   if (window.__colliderAmbient) return;
   var SCALE = 4;            // canvas px = CSS px / 4
   var SIGMA = 20 / SCALE;   // blur(20px)
+  // How long a theme change takes to crossfade. Long enough to read as one
+  // deliberate move, short enough that the market never feels sticky.
+  var FADE_MS = 620;
   var VS = 'attribute vec2 p;varying vec2 uv;void main(){uv=p*.5+.5;gl_Position=vec4(p,0.,1.);}';
   // Pass 1: box -> video (object-fit: contain, transparent outside), horizontal Gaussian.
   var FS1 = 'precision mediump float;varying vec2 uv;uniform sampler2D t;uniform vec4 vr;uniform vec2 px;uniform float sg;' +
@@ -173,12 +191,17 @@ const String _kAmbientJs = r'''
     'for(int i=-10;i<=10;i++){float x=float(i)*1.5;float w=exp(-x*x/(2.*sg*sg));a+=S(b+vec2(x*px.x,0.))*w;ws+=w;}' +
     'gl_FragColor=a/ws;}';
   // Pass 2: vertical Gaussian, then brightness -> contrast (CSS filter order), opacity over the #000 -> #111 root.
-  var FS2 = 'precision mediump float;varying vec2 uv;uniform sampler2D t;uniform vec2 px;uniform float sg;uniform float br;uniform float op;' +
-    'void main(){vec4 a=vec4(0.);float ws=0.;' +
-    'for(int i=-10;i<=10;i++){float y=float(i)*1.5;float w=exp(-y*y/(2.*sg*sg));a+=texture2D(t,uv+vec2(0.,y*px.y))*w;ws+=w;}' +
-    'a/=ws;vec3 c=a.a>0.0001?a.rgb/a.a:vec3(0.);c=clamp(c*br,0.,1.);c=clamp((c-.5)*1.2+.5,0.,1.);' +
+  // `t2` / `mx` are the outgoing theme and the blend factor, so a theme change
+  // is a real crossfade between two running loops, never a cut and never a
+  // dim-then-restore.
+  var FS2 = 'precision mediump float;varying vec2 uv;uniform sampler2D t;uniform sampler2D t2;uniform vec2 px;uniform float sg;uniform float br;uniform float op;uniform float mx;' +
+    'vec3 grade(vec4 s){vec3 c=s.a>0.0001?s.rgb/s.a:vec3(0.);c=clamp(c*br,0.,1.);return clamp((c-.5)*1.2+.5,0.,1.);}' +
+    'void main(){vec4 a=vec4(0.),b=vec4(0.);float ws=0.;' +
+    'for(int i=-10;i<=10;i++){float y=float(i)*1.5;float w=exp(-y*y/(2.*sg*sg));' +
+    'a+=texture2D(t,uv+vec2(0.,y*px.y))*w;b+=texture2D(t2,uv+vec2(0.,y*px.y))*w;ws+=w;}' +
+    'a/=ws;b/=ws;vec3 c=mix(grade(b),grade(a),mx);float al=mix(b.a,a.a,mx);' +
     'float by=1.-uv.y;float g=clamp((by-.25)/.5,0.,1.)*(17./255.);' +
-    'gl_FragColor=vec4(mix(vec3(g),c,a.a*op),1.);}';
+    'gl_FragColor=vec4(mix(vec3(g),c,al*op),1.);}';
 
   function ease(t) { return t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; }
 
@@ -186,15 +209,29 @@ const String _kAmbientJs = r'''
     var st = root.style;
     st.position = 'relative'; st.overflow = 'hidden'; st.pointerEvents = 'none';
     st.width = '100%'; st.height = '100%';
-    var v = document.createElement('video');
-    v.muted = true; v.defaultMuted = true; v.autoplay = true; v.loop = true; v.playsInline = true;
-    v.setAttribute('muted', ''); v.setAttribute('playsinline', ''); v.setAttribute('autoplay', '');
-    v.crossOrigin = 'anonymous';
-    v.poster = o.poster;
-    var vs = v.style;
-    vs.position = 'absolute'; vs.left = '0'; vs.top = '0'; vs.width = '100%'; vs.height = '100%';
-    vs.objectFit = 'contain'; vs.border = 'none'; vs.outline = 'none'; vs.pointerEvents = 'none';
+
+    // Two videos: `v` is on screen, `nv` warms the next theme out of sight.
+    // A selection must never tear down the visible one: the old behaviour
+    // (rebuild the element per theme) froze on the poster, dropped to
+    // brightness 0.5, then started playing. Here the outgoing loop keeps
+    // running while the incoming one decodes its first frame.
+    function mkVideo(url, poster) {
+      var el = document.createElement('video');
+      el.muted = true; el.defaultMuted = true; el.autoplay = true; el.loop = true; el.playsInline = true;
+      el.setAttribute('muted', ''); el.setAttribute('playsinline', ''); el.setAttribute('autoplay', '');
+      el.crossOrigin = 'anonymous';
+      if (poster) el.poster = poster;
+      var s = el.style;
+      s.position = 'absolute'; s.left = '0'; s.top = '0'; s.width = '100%'; s.height = '100%';
+      s.objectFit = 'contain'; s.border = 'none'; s.outline = 'none'; s.pointerEvents = 'none';
+      if (url) el.src = url;
+      return el;
+    }
+
+    var v = mkVideo(o.video, o.poster);
     root.appendChild(v);
+    var nv = null;
+    var swapGen = 0;
 
     var dead = false, owned = !!o.owned, loaded = false;
     var opNow = 0.3, brNow = owned ? 1 : 0.5, anim = null;
@@ -214,7 +251,10 @@ const String _kAmbientJs = r'''
       if (!gl) gl = cv.getContext('webgl', ca);
     } catch (e) { gl = null; }
 
-    var P1, P2, buf, texV, texF, fbo, W = 0, H = 0, srcW = 0, srcH = 0, posterImg = null, haveSrc = false;
+    var P1, P2, buf, texV, texV2, texF, texF2, fbo, fbo2, W = 0, H = 0, srcW = 0, srcH = 0, posterImg = null, haveSrc = false;
+    // The outgoing theme during a crossfade: its texture, its frame and its
+    // size. Null when there is nothing to blend out.
+    var prevW = 0, prevH = 0, mxNow = 1, fade = null, fadeT0 = 0;
     function sh(type, src) { var s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw gl.getShaderInfoLog(s); return s; }
     function prog(fs) { var p = gl.createProgram(); gl.attachShader(p, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs)); gl.bindAttribLocation(p, 0, 'p'); gl.linkProgram(p); if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw gl.getProgramInfoLog(p); return p; }
     function tex(mip) {
@@ -228,9 +268,9 @@ const String _kAmbientJs = r'''
     function useCss() {
       // Original rendering: CSS filter on the <video>.
       gl = null; if (cv.parentNode) cv.parentNode.removeChild(cv);
-      vs.setProperty('filter', 'blur(20px) brightness(' + targetBr() + ') contrast(1.2)');
-      vs.opacity = String(targetOp());
-      vs.setProperty('transition', 'opacity 1s ease-in-out');
+      v.style.setProperty('filter', 'blur(20px) brightness(' + targetBr() + ') contrast(1.2)');
+      v.style.opacity = String(targetOp());
+      v.style.setProperty('transition', 'opacity 1s ease-in-out');
     }
     var c2 = null;
     if (!gl && o.mode === '2d') {
@@ -238,7 +278,7 @@ const String _kAmbientJs = r'''
       if (c2 && typeof c2.filter === 'string') { c2.filter = 'blur(1px)'; if (c2.filter !== 'blur(1px)') c2 = null; } else c2 = null;
       if (c2) { c2.filter = 'none'; root.appendChild(cv); }
     }
-    function draw2d() {
+    function draw2d(prev) {
       var r = root.getBoundingClientRect();
       var w = Math.max(2, Math.round(r.width / SCALE)), h = Math.max(2, Math.round(r.height / SCALE));
       if (w !== W || h !== H) { W = w; H = h; cv.width = w; cv.height = h; }
@@ -247,12 +287,21 @@ const String _kAmbientJs = r'''
       g.addColorStop(0, '#000000'); g.addColorStop(1, '#111111');
       c2.filter = 'none'; c2.globalAlpha = 1; c2.fillStyle = g; c2.fillRect(0, 0, W, H);
       var src = v.readyState >= 2 && v.videoWidth > 0 ? v : (posterImg && posterImg.complete && posterImg.naturalWidth ? posterImg : null);
+      // Outgoing frame first, under the incoming one at (1 - mx).
+      if (prev && prev.readyState >= 2 && prev.videoWidth > 0) {
+        var ps = Math.min(W / prev.videoWidth, H / prev.videoHeight);
+        c2.filter = 'blur(' + SIGMA + 'px) brightness(' + brNow + ') contrast(1.2)';
+        c2.globalAlpha = opNow * (1 - mxNow);
+        c2.drawImage(prev, (W - prev.videoWidth * ps) / 2, (H - prev.videoHeight * ps) / 2,
+          prev.videoWidth * ps, prev.videoHeight * ps);
+      }
       if (!src) return;
       var sw = src === v ? v.videoWidth : posterImg.naturalWidth, shh = src === v ? v.videoHeight : posterImg.naturalHeight;
       var s = Math.min(W / sw, H / shh), dw = sw * s, dh = shh * s;
       c2.filter = 'blur(' + SIGMA + 'px) brightness(' + brNow + ') contrast(1.2)';
-      c2.globalAlpha = opNow;
+      c2.globalAlpha = opNow * (prev ? mxNow : 1);
       c2.drawImage(src, (W - dw) / 2, (H - dh) / 2, dw, dh);
+      c2.globalAlpha = 1;
     }
     if (c2) {
       // handled by draw2d
@@ -262,6 +311,7 @@ const String _kAmbientJs = r'''
         buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
         texV = tex(gl2); texF = tex(false); fbo = gl.createFramebuffer();
+        texV2 = tex(false); texF2 = tex(false); fbo2 = gl.createFramebuffer();
         root.appendChild(cv);
       } catch (e) { useCss(); }
     } else { useCss(); }
@@ -272,19 +322,40 @@ const String _kAmbientJs = r'''
       var w = Math.max(2, Math.round(r.width / SCALE)), h = Math.max(2, Math.round(r.height / SCALE));
       if (w === W && h === H) return false;
       W = w; H = h; cv.width = w; cv.height = h;
-      gl.bindTexture(gl.TEXTURE_2D, texF);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texF, 0);
+      [[texF, fbo], [texF2, fbo2]].forEach(function (pair) {
+        if (!pair[0]) return;
+        gl.bindTexture(gl.TEXTURE_2D, pair[0]);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, pair[1]);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, pair[0], 0);
+      });
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       return true;
     }
-    function upload(src, w, h) {
-      gl.bindTexture(gl.TEXTURE_2D, texV);
+    function uploadInto(dstTex, src, w, h, mip) {
+      gl.bindTexture(gl.TEXTURE_2D, dstTex);
       gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
-      if (gl2) gl.generateMipmap(gl.TEXTURE_2D);
+      if (gl2 && mip) gl.generateMipmap(gl.TEXTURE_2D);
+    }
+    function upload(src, w, h) {
+      uploadInto(texV, src, w, h, true);
       srcW = w; srcH = h; haveSrc = true;
+    }
+    // Pass 1 for one source: object-fit: contain inside the box, then the
+    // horizontal half of the Gaussian, into [targetFbo].
+    function blurInto(srcTex, sw, sh, targetFbo) {
+      var bw = W * SCALE, bh = H * SCALE, s = Math.min(bw / sw, bh / sh);
+      var rw = sw * s / bw, rh = sh * s / bh;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, targetFbo);
+      gl.useProgram(P1);
+      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, srcTex);
+      gl.uniform1i(gl.getUniformLocation(P1, 't'), 0);
+      gl.uniform4f(gl.getUniformLocation(P1, 'vr'), (1 - rw) / 2, (1 - rh) / 2, rw, rh);
+      gl.uniform2f(gl.getUniformLocation(P1, 'px'), 1 / W, 1 / H);
+      gl.uniform1f(gl.getUniformLocation(P1, 'sg'), SIGMA);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     }
     function draw() {
       if (dead) return;
@@ -292,29 +363,72 @@ const String _kAmbientJs = r'''
       if (!gl) return;
       resize();
       if (!haveSrc) return;
-      // object-fit: contain inside the box (box uv, top-left origin)
-      var bw = W * SCALE, bh = H * SCALE, s = Math.min(bw / srcW, bh / srcH);
-      var rw = srcW * s / bw, rh = srcH * s / bh;
       gl.viewport(0, 0, W, H);
       gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.enableVertexAttribArray(0);
       gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-      gl.useProgram(P1);
-      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, texV);
-      gl.uniform1i(gl.getUniformLocation(P1, 't'), 0);
-      gl.uniform4f(gl.getUniformLocation(P1, 'vr'), (1 - rw) / 2, (1 - rh) / 2, rw, rh);
-      gl.uniform2f(gl.getUniformLocation(P1, 'px'), 1 / W, 1 / H);
-      gl.uniform1f(gl.getUniformLocation(P1, 'sg'), SIGMA);
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      blurInto(texV, srcW, srcH, fbo);
+      // While crossfading, the outgoing theme keeps feeding its own blurred
+      // target; mx in pass 2 blends the two.
+      if (prevW > 0) blurInto(texV2, prevW, prevH, fbo2);
       gl.useProgram(P2);
-      gl.bindTexture(gl.TEXTURE_2D, texF);
+      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, texF);
       gl.uniform1i(gl.getUniformLocation(P2, 't'), 0);
+      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, texF2);
+      gl.uniform1i(gl.getUniformLocation(P2, 't2'), 1);
       gl.uniform2f(gl.getUniformLocation(P2, 'px'), 1 / W, 1 / H);
       gl.uniform1f(gl.getUniformLocation(P2, 'sg'), SIGMA);
       gl.uniform1f(gl.getUniformLocation(P2, 'br'), brNow);
       gl.uniform1f(gl.getUniformLocation(P2, 'op'), opNow);
+      gl.uniform1f(gl.getUniformLocation(P2, 'mx'), prevW > 0 ? mxNow : 1);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      gl.activeTexture(gl.TEXTURE0);
+    }
+    // Crossfades the newly selected theme in over [oldVideo] over FADE_MS. The
+    // outgoing loop keeps playing and keeps feeding its own texture for the
+    // whole blend, so the change is one legible transition: no pre-dim, no
+    // brightness snap, no restart of the visible video.
+    function crossfade(oldVideo) {
+      prevW = 0; prevH = 0;
+      if (c2) { crossfade2d(oldVideo); return; }
+      if (!gl) return;
+      if (oldVideo && oldVideo.readyState >= 2 && oldVideo.videoWidth > 0) {
+        try { uploadInto(texV2, oldVideo, oldVideo.videoWidth, oldVideo.videoHeight, false); }
+        catch (e) { return; }
+        prevW = oldVideo.videoWidth; prevH = oldVideo.videoHeight;
+      }
+      mxNow = 0; fadeT0 = performance.now();
+      function step(now) {
+        if (dead || !fade) return;
+        var k = Math.min(1, (now - fadeT0) / FADE_MS);
+        mxNow = k * k * (3 - 2 * k); // smoothstep: flat at both ends
+        draw();
+        if (k < 1) { fade = requestAnimationFrame(step); }
+        else {
+          fade = null; mxNow = 1; prevW = 0; prevH = 0;
+          try { oldVideo.pause(); oldVideo.removeAttribute('src'); oldVideo.load(); oldVideo.remove(); } catch (e) {}
+        }
+      }
+      if (prevW === 0) { draw(); if (oldVideo) { try { oldVideo.pause(); oldVideo.removeAttribute('src'); oldVideo.load(); oldVideo.remove(); } catch (e) {} } return; }
+      fade = requestAnimationFrame(step);
+    }
+    // The 2d canvas path blends the same way, by drawing the outgoing frame at
+    // a falling alpha under the incoming one.
+    function crossfade2d(oldVideo) {
+      var has = oldVideo && oldVideo.readyState >= 2 && oldVideo.videoWidth > 0;
+      mxNow = 0; fadeT0 = performance.now();
+      function step(now) {
+        if (dead || !fade) return;
+        var k = Math.min(1, (now - fadeT0) / FADE_MS);
+        mxNow = k * k * (3 - 2 * k);
+        if (has) draw2d(oldVideo);
+        if (k < 1) { fade = requestAnimationFrame(step); }
+        else {
+          fade = null; mxNow = 1;
+          if (has) { try { oldVideo.pause(); oldVideo.removeAttribute('src'); oldVideo.load(); oldVideo.remove(); } catch (e) {} }
+        }
+      }
+      if (!has) { draw2d(); if (oldVideo) { try { oldVideo.pause(); oldVideo.removeAttribute('src'); oldVideo.load(); oldVideo.remove(); } catch (e) {} } return; }
+      fade = requestAnimationFrame(step);
     }
     function frame() {
       if (dead) return;
@@ -339,11 +453,28 @@ const String _kAmbientJs = r'''
       anim = requestAnimationFrame(step);
     }
     // One upload + draw per decoded video frame (not per display frame).
-    var rvfc = typeof v.requestVideoFrameCallback === 'function';
-    var rafId = null, lastT = -1;
-    function onVideoFrame() { if (dead) return; frame(); v.requestVideoFrameCallback(onVideoFrame); }
-    function poll() { if (dead) return; if (v.currentTime !== lastT) { lastT = v.currentTime; frame(); } rafId = requestAnimationFrame(poll); }
-    if (live()) { if (rvfc) v.requestVideoFrameCallback(onVideoFrame); else rafId = requestAnimationFrame(poll); }
+    // Both callbacks re-read `v`, so they follow a theme swap without being
+    // rebound to the element that is being retired.
+    var rafId = null, lastT = -1, lastSrc = null;
+    function pump(el) {
+      if (dead || !el || el === lastSrc) return;
+      lastSrc = el;
+      if (typeof el.requestVideoFrameCallback === 'function') {
+        el.requestVideoFrameCallback(function onFrame() {
+          if (dead || el !== v) return;
+          frame();
+          el.requestVideoFrameCallback(onFrame);
+        });
+      } else {
+        rafId = requestAnimationFrame(function poll() {
+          if (dead) return;
+          if (el !== v) { lastSrc = null; pump(v); return; }
+          if (el.currentTime !== lastT) { lastT = el.currentTime; frame(); }
+          rafId = requestAnimationFrame(poll);
+        });
+      }
+    }
+    if (live()) pump(v);
 
     v.addEventListener('loadeddata', function () { loaded = true; frame(); animateTo(1000); });
     v.addEventListener('seeked', function () { frame(); });
@@ -352,9 +483,9 @@ const String _kAmbientJs = r'''
       posterImg.onload = function () { if (c2) { draw2d(); return; } if (!dead && gl && !(v.readyState >= 2)) { try { upload(posterImg, posterImg.naturalWidth, posterImg.naturalHeight); draw(); } catch (e) {} } };
       posterImg.src = o.poster;
     }
-    if (o.video) { v.src = o.video; var pr = v.play(); if (pr && pr.catch) pr.catch(function () {}); }
+    if (o.video) { var pr = v.play(); if (pr && pr.catch) pr.catch(function () {}); }
     // Autoplay can be refused before the first gesture; retry on the first one.
-    function kick() { if (v.paused && !dead) { var p2 = v.play(); if (p2 && p2.catch) p2.catch(function () {}); } }
+    function kick() { if (!dead && v.paused) { var p2 = v.play(); if (p2 && p2.catch) p2.catch(function () {}); } }
     window.addEventListener('pointerdown', kick, { once: true, capture: true });
     v.addEventListener('canplay', kick);
 
@@ -383,19 +514,94 @@ const String _kAmbientJs = r'''
       setOwned: function (b) {
         owned = !!b;
         if (live()) animateTo(600);
-        else { vs.setProperty('filter', 'blur(20px) brightness(' + targetBr() + ') contrast(1.2)'); vs.opacity = String(targetOp()); }
+        else { v.style.setProperty('filter', 'blur(20px) brightness(' + targetBr() + ') contrast(1.2)'); v.style.opacity = String(targetOp()); }
+      },
+      // Bug 1: a theme selection swaps the ambient source in place. The
+      // outgoing loop stays lit and playing while the incoming one warms out
+      // of sight, then the two are crossfaded. Nothing is pre-dimmed and the
+      // brightness never snaps: the change is one continuous blend.
+      setTheme: function (n) {
+        if (!n) return;
+        if (typeof n.owned === 'boolean') owned = !!n.owned;
+        var url = n.video || '';
+        if (url && url === v.getAttribute('src')) {
+          // Same media (an ownership change): just re-lift brightness.
+          if (live()) animateTo(600); else useCss();
+          return;
+        }
+        var gen = ++swapGen;
+        // Warm the incoming theme beside the one still on screen, invisible.
+        var warm = mkVideo(url, n.poster);
+        warm.style.opacity = '0';
+        root.appendChild(warm);
+        var p = warm.play(); if (p && p.catch) p.catch(function () {});
+        var begun = false;
+
+        // A still theme has no loop: its poster is the source.
+        function warmPoster() {
+          if (url || !n.poster) return false;
+          posterImg = new Image(); posterImg.crossOrigin = 'anonymous';
+          posterImg.onload = function () { if (!begun && gen === swapGen) beginSwap(); };
+          posterImg.onerror = function () { if (!begun && gen === swapGen) beginSwap(); };
+          posterImg.src = n.poster;
+          return true;
+        }
+
+        function beginSwap() {
+          if (begun || dead || gen !== swapGen) return;
+          begun = true;
+          var old = v;
+          if (!live()) {
+            // CSS path: stack the two videos and fade between them.
+            var s = warm.style;
+            s.filter = 'blur(20px) brightness(' + targetBr() + ') contrast(1.2)';
+            s.transition = 'none'; s.opacity = String(targetOp());
+            old.style.transition = 'opacity ' + FADE_MS + 'ms ease-in-out';
+            warm.getBoundingClientRect();       // commit, so the fade runs
+            s.transition = 'opacity ' + FADE_MS + 'ms ease-in-out';
+            s.opacity = String(targetOp());
+            old.style.opacity = '0';
+            setTimeout(function () {
+              try { old.pause(); old.removeAttribute('src'); old.load(); old.remove(); } catch (e) {}
+            }, FADE_MS + 60);
+            v = warm; loaded = true; lastSrc = null; pump(v);
+            return;
+          }
+          v = warm; loaded = true; lastSrc = null;
+          if (c2) { draw2d(); pump(v); return; }
+          // Still theme: the poster is what the shader should sample.
+          if (!url && posterImg && posterImg.complete && posterImg.naturalWidth) {
+            try { upload(posterImg, posterImg.naturalWidth, posterImg.naturalHeight); } catch (e) {}
+          }
+          pump(v);
+          crossfade(old);
+        }
+
+        function ready() { if (warm.readyState >= 2 && warm.videoWidth > 0) beginSwap(); }
+        warm.addEventListener('loadeddata', beginSwap);
+        warm.addEventListener('canplay', ready);
+        warm.addEventListener('seeked', ready);
+        warm.addEventListener('error', function () { if (!url) beginSwap(); });
+        if (!warmPoster()) beginSwap();
       },
       setGlass: setGlass,
       refresh: frame,
       dispose: function () {
-        dead = true; if (anim) cancelAnimationFrame(anim); if (rafId) cancelAnimationFrame(rafId);
+        dead = true;
+        if (anim) cancelAnimationFrame(anim);
+        if (rafId) cancelAnimationFrame(rafId);
+        if (fade) cancelAnimationFrame(fade);
         if (ro) ro.disconnect();
         window.removeEventListener('pointerdown', kick, { capture: true });
-        try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {}
+        // Any video still in the container goes: the live one and any warm one
+        // a swap left behind.
+        Array.prototype.slice.call(root.querySelectorAll('video')).forEach(function (el) {
+          try { el.pause(); el.removeAttribute('src'); el.load(); el.remove(); } catch (e) {}
+        });
         if (gl) { var lose = gl.getExtension('WEBGL_lose_context'); if (lose) lose.loseContext(); }
         gl = null; c2 = null;
       },
-      debug: function () { return { mode: c2 ? '2d' : (gl ? 'gl' : 'css'), gl: !!gl, gl2: gl2, w: W, h: H, srcW: srcW, srcH: srcH, op: opNow, br: brNow, paused: v.paused, t: v.currentTime }; },
+      debug: function () { return { mode: c2 ? '2d' : (gl ? 'gl' : 'css'), gl: !!gl, gl2: gl2, w: W, h: H, srcW: srcW, srcH: srcH, op: opNow, br: brNow, mx: mxNow, paused: v.paused, t: v.currentTime }; },
       video: v
     };
   };
