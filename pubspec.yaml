@@ -1,7 +1,7 @@
 name: collider_flutter
 description: 'Collider - AAA Multi-Model AI Spatial Client with VisionOS Glass, 3D Consensus Galaxy, and Smart Gen Suite'
 publish_to: 'none'
-version: 1.0.0+1
+version: 9.1.0+91
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -43,21 +43,5 @@ flutter:
   # Bundled: fallback catalog JSON + one tiny offline wallpaper.
   assets:
     - assets/catalog/
-    - assets/wallpapers/
     - assets/html/
 
-  # v9: the type family is bundled, not fetched. Before this, every text style
-  # went through google_fonts and hit the Google CDN at runtime; when that fetch
-  # was slow or blocked, components fell back to the platform default and the
-  # UI rendered in three different faces at once. One family, on disk, always.
-  fonts:
-    - family: InstrumentSans
-      fonts:
-        - asset: assets/fonts/InstrumentSans-Regular.ttf
-          weight: 400
-        - asset: assets/fonts/InstrumentSans-Medium.ttf
-          weight: 500
-        - asset: assets/fonts/InstrumentSans-SemiBold.ttf
-          weight: 600
-        - asset: assets/fonts/InstrumentSans-Bold.ttf
-          weight: 700

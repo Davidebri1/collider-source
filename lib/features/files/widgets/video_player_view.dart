@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -182,54 +183,49 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
                       ),
                     ),
                     Positioned(left: 10, top: 10, child: close),
-                    if (ready && c.value.duration > Duration.zero)
+                    // v8.6: Figma 11:2552 / 11:3060 / 6:842: controls live inside
+                    // the picture: title and date bottom-left over a soft shade,
+                    // then play/pause, a thin scrubber, time and volume.
+                    if (ready)
                       Positioned(
-                        right: 10,
-                        top: 10,
-                        child: _capsule(
-                          padding: const EdgeInsets.only(left: 12, right: 6),
-                          child: SizedBox(
-                            height: 32,
-                            child: Row(mainAxisSize: MainAxisSize.min, children: [
-                              SizedBox(width: vw < 360 ? 64 : 110, child: _track(c.value.volume, (v) => c.setVolume(v))),
-                              _icon(c.value.volume == 0 ? Icons.volume_off_rounded : Icons.volume_up_rounded, 'Mute',
-                                  () => c.setVolume(c.value.volume == 0 ? 1 : 0), size: 18),
-                            ]),
+                        left: 0,
+                        right: 0,
+                        top: 0,
+                        height: vh,
+                        child: IgnorePointer(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(VRadius.xl),
+                            child: const DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment(0, 0.2), end: Alignment.bottomCenter, colors: [Color(0x00000000), Color(0x8C000000)]))),
                           ),
                         ),
                       ),
-                    // The playback capsule overlaps the window's bottom edge.
                     Positioned(
-                      left: vw < 420 ? 4 : vw * 0.12,
-                      right: vw < 420 ? 4 : vw * 0.12,
-                      top: vh - 28,
-                      child: _capsule(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        child: SizedBox(
-                          height: 56,
-                          child: Row(children: [
-                            _icon(Icons.replay_10_rounded, 'Back', () => _skip(-10), size: 20),
-                            _icon(ready && c.value.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, ready && c.value.isPlaying ? 'Pause' : 'Play', _toggle,
-                                size: 28),
-                            _icon(Icons.forward_10_rounded, 'Forward', () => _skip(10), size: 20),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: _track(
-                                frac,
-                                ready ? (v) => setState(() => _scrub = v) : null,
-                                onEnd: (v) {
-                                  if (ready) c.seekTo(Duration(milliseconds: (dur.inMilliseconds * v).round()));
-                                  setState(() => _scrub = null);
-                                },
-                              ),
+                      left: 14,
+                      right: 14,
+                      top: vh - 74,
+                      height: 66,
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(widget.file.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700)),
+                        Text(FileStore.ago(widget.file.addedAt), style: const TextStyle(color: Colors.white70, fontSize: 10)),
+                        const SizedBox(height: 4),
+                        Row(children: [
+                          _icon(ready && c.value.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, ready && c.value.isPlaying ? 'Pause' : 'Play', _toggle, size: 22),
+                          Expanded(
+                            child: _track(
+                              frac,
+                              ready ? (v) => setState(() => _scrub = v) : null,
+                              onEnd: (v) {
+                                if (ready) c.seekTo(Duration(milliseconds: (dur.inMilliseconds * v).round()));
+                                setState(() => _scrub = null);
+                              },
                             ),
-                            const SizedBox(width: 10),
-                            Text('${_fmt(shown)} / ${_fmt(dur)}',
-                                style: VType.caption(color: Colors.white, weight: FontWeight.w500).copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
-                            const SizedBox(width: 8),
-                          ]),
-                        ),
-                      ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(_fmt(shown), style: VType.caption(color: Colors.white70).copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
+                          if (ready)
+                            _icon(c.value.volume == 0 ? Icons.volume_off_rounded : Icons.volume_up_rounded, 'Mute', () => c.setVolume(c.value.volume == 0 ? 1 : 0), size: 18),
+                        ]),
+                      ]),
                     ),
                     const Positioned(left: 0, right: 0, bottom: 0, child: Center(child: VWindowBar())),
                   ],

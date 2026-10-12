@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import '../../core/media/theme_catalog.dart';
+import '../../core/media/first_frame.dart';
 import '../../models/theme_def.dart';
 
 /// Media source helpers. A media string is either an absolute URL (streamed
@@ -16,12 +17,11 @@ class ThemeMedia {
   /// Image provider for a poster/still. Network sources are cached
   /// (memory + browser HTTP cache on web, disk cache on mobile).
   static ImageProvider<Object> provider(String src) {
+    if (FirstFrames.isFrame(src)) return FirstFrameImage(src.substring(FirstFrames.scheme.length));
     if (isNetwork(src)) return CachedNetworkImageProvider(src);
     return AssetImage(src);
   }
 
-  static const ImageProvider offlineWallpaper =
-      AssetImage(ThemeCatalog.offlineWallpaperAsset);
 }
 
 /// Warms the image cache for posters the user is about to see.
@@ -71,18 +71,14 @@ class ThemeImage extends StatelessWidget {
     this.alignment = Alignment.center,
   });
 
-  Widget _fallback() => Image.asset(
-        ThemeCatalog.offlineWallpaperAsset,
-        fit: fit,
-        width: width,
-        height: height,
-        alignment: alignment,
-        filterQuality: FilterQuality.medium,
-        errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFF1A1B22)),
-      );
+  Widget _fallback() => SizedBox(width: width, height: height, child: const ColoredBox(color: Color(0xFF0E0F14)));
 
   @override
   Widget build(BuildContext context) {
+    if (src.isEmpty) return _fallback();
+    if (FirstFrames.isFrame(src)) {
+      return Image(image: ThemeMedia.provider(src), fit: fit, width: width, height: height, alignment: alignment, filterQuality: filterQuality, gaplessPlayback: true, errorBuilder: (_, __, ___) => _fallback());
+    }
     if (ThemeMedia.isNetwork(src)) {
       return CachedNetworkImage(
         imageUrl: src,

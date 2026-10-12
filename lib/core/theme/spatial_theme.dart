@@ -138,7 +138,7 @@ class SpatialTypography {
     Color color = Colors.white,
     double letterSpacing = -0.4,
   }) {
-    return GoogleFonts.instrumentSans(
+    return GoogleFonts.inter(
       fontSize: fontSize,
       fontWeight: fontWeight,
       color: color,
@@ -153,7 +153,7 @@ class SpatialTypography {
     Color color = Colors.white,
     double letterSpacing = -0.2,
   }) {
-    return GoogleFonts.instrumentSans(
+    return GoogleFonts.inter(
       fontSize: fontSize,
       fontWeight: fontWeight,
       color: color,
@@ -168,7 +168,7 @@ class SpatialTypography {
     Color? color,
     double height = 1.40,
   }) {
-    return GoogleFonts.instrumentSans(
+    return GoogleFonts.inter(
       fontSize: fontSize,
       fontWeight: fontWeight,
       color: color ?? Colors.white.withOpacity(0.92),
@@ -183,7 +183,7 @@ class SpatialTypography {
     FontWeight fontWeight = FontWeight.w400,
     Color? color,
   }) {
-    return GoogleFonts.instrumentSans(
+    return GoogleFonts.inter(
       fontSize: fontSize,
       fontWeight: fontWeight,
       color: color ?? Colors.white.withOpacity(0.55),

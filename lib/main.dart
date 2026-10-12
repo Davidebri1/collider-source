@@ -159,7 +159,7 @@ class ColliderApp extends StatelessWidget {
       scrollBehavior: const _MouseDraggableScrollBehavior(),
       theme: ThemeData.dark(useMaterial3: true).copyWith(
         scaffoldBackgroundColor: const Color(0xFF07080B),
-        textTheme: GoogleFonts.instrumentSansTextTheme(ThemeData.dark().textTheme),
+        textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
       ),
       // Remote theme posters resolve through the same bundle as local assets.
       builder: (context, child) => DefaultAssetBundle(
@@ -791,12 +791,12 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     // v9: nothing has been asked in this category yet. Say so once, quietly,
     // instead of leaving the column as bare glass.
     if (rows.isEmpty) {
-      return const Padding(
+      return Padding(
         padding: EdgeInsets.only(top: 6),
         child: Text(
           'Nothing here yet',
           style: TextStyle(
-            fontFamily: 'InstrumentSans',
+            fontFamily: GoogleFonts.inter().fontFamily,
             fontSize: 11,
             height: 1.3,
             fontWeight: FontWeight.w500,

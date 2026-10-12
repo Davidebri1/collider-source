@@ -119,6 +119,8 @@ class WallpaperTheme {
 
   /// Optional looping live wallpaper (H.264 mp4, 720p, muted).
   final String? videoPath;
+  /// v9.1: tags from the R2 bucket (content, resolution, type, file type).
+  final List<String> tags;
 
   /// Optional higher resolution still for full-bleed use (free themes).
   final String? stillPath;
@@ -136,6 +138,7 @@ class WallpaperTheme {
     required this.name,
     required this.assetPath,
     this.videoPath,
+    this.tags = const [],
     this.stillPath,
     this.isPremium = false,
     this.creator = 'Studio Nebula',
@@ -169,7 +172,7 @@ class WallpaperTheme {
     return WallpaperTheme(
       id: j['slug'] as String,
       name: humanizeThemeName((j['name'] as String?) ?? (j['slug'] as String)),
-      assetPath: ThemeCatalog.resolve(j['poster'] as String?, base) ?? ThemeCatalog.offlineWallpaperAsset,
+      assetPath: ThemeCatalog.resolve(j['poster'] as String?, base) ?? '',
       videoPath: ThemeCatalog.resolve(j['video'] as String?, base),
       stillPath: ThemeCatalog.resolve(j['still'] as String?, base),
       isPremium: premium,

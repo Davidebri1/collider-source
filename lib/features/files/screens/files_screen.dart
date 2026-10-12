@@ -3,24 +3,17 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import '../../../core/files/file_store.dart';
-import '../../../core/files/file_thumbs.dart';
-import '../../../core/files/office_probe.dart';
+import '../../../core/files/file_blobs.dart';
 import '../../../core/audio/music_player.dart';
+import '../../../core/files/file_store.dart';
 import '../../../core/media/theme_catalog.dart';
 import '../../../core/vision/vision_kit.dart';
 import '../../../core/figma/figma_stage.dart';
 import '../../music/song_row_parts.dart';
 import '../../theme/theme_living_media.dart';
-import '../widgets/audio_player_view.dart';
-import '../widgets/image_viewer_view.dart';
-import '../widgets/pdf_viewer_view.dart';
-import '../widgets/text_reader_view.dart';
-import '../widgets/thumb_view.dart';
-import '../widgets/unsupported_view.dart';
 import '../widgets/video_player_view.dart';
 
-/// Map row 7 â€” Files. v8.4: a straight copy of Vision Pro Spatial UI Kit
+/// Map row 7 — Files. v8.4: a straight copy of Vision Pro Spatial UI Kit
 /// 71:7502 ("Albums", group 1336 x 835) at its own size, scaled as one unit
 /// (FigmaStage). Sidebar 4253 (295 x 740), main panel 3004 (946 x 740) with
 /// the 5-column 170 x 217 tile grid, segmented ornament 3231 and window
@@ -43,12 +36,11 @@ class FilesScreen extends StatefulWidget {
 }
 
 class _FilesScreenState extends State<FilesScreen> {
-  static const double _mw = 600;
   final TextEditingController _searchCtrl = TextEditingController();
   final FileStore _store = FileStore.instance;
   String _q = '';
   // Sidebar type filter.
-  String _type = 'All';
+  String _type = Uri.base.queryParameters['ftype'] ?? 'All';
   // Segmented ornament (Years / Months / Days / All Photos -> time added).
   int _span = 3;
   static const _spans = ['Year', 'Month', 'Today', 'All Files'];
@@ -74,6 +66,14 @@ class _FilesScreenState extends State<FilesScreen> {
     } catch (_) {}
   }
 
+  IconData _icon(String type) => switch (type) {
+        'Image' => Icons.image_rounded,
+        'Video' => Icons.movie_outlined,
+        'Data' => Icons.table_chart_outlined,
+        'Writing' => Icons.notes_rounded,
+        _ => Icons.description_outlined,
+      };
+
   bool _inSpan(StoredFile f) {
     final now = DateTime.now();
     final t = f.addedAt;
@@ -85,15 +85,7 @@ class _FilesScreenState extends State<FilesScreen> {
     };
   }
 
-  static const _typeLabel = {
-    'All': 'Recently Added',
-    'Image': 'Images',
-    'Video': 'Videos',
-    'Audio': 'Audio',
-    'Document': 'Documents',
-    'Writing': 'Text',
-    'Data': 'Data',
-  };
+  static const _typeLabel = {'All': 'Recently Added', 'Image': 'Images', 'Video': 'Videos', 'Document': 'Documents', 'Writing': 'Text', 'Data': 'Data'};
 
   @override
   Widget build(BuildContext context) {
@@ -113,24 +105,21 @@ class _FilesScreenState extends State<FilesScreen> {
                     (q.isEmpty || f.name.toLowerCase().contains(q)))
                 .toList();
         final title = cat == 'music' ? 'Music' : (_typeLabel[_type] ?? _type);
-        // v8.3.1: portrait shape: same sidebar + main panel, the main panel
-        // narrower (3 columns) and the window as tall as the phone allows.
-        final scr = MediaQuery.sizeOf(context);
-        const cw = 295.0 + _mw + 20;
-        final hh = (scr.height * cw / scr.width - 380).clamp(740.0, 2400.0);
         return FigmaStage(
-          frame: Size(95.4 + 295 + _mw + 40, hh + 120),
-          cropWidth: cw,
-          center: Offset(95.4 + (295 + _mw) / 2, (hh + 100) / 2 + 30),
+          frame: FilesScreen.frame,
+          cropWidth: FilesScreen.cropWidth,
+          center: FilesScreen.center,
           children: [
-            Positioned(left: 95.4, top: 0, width: 295, height: hh, child: _sidebar(all)),
-            Positioned(left: 390.4, top: 0, width: _mw, height: hh, child: _main(title, files, cat)),
+            // Sidebar 4253_frame at (95.4, 0), 295 x 740.
+            Positioned(left: 95.4, top: 0, width: 295, height: 740, child: _sidebar(all)),
+            // Main panel 3004_frame at (390.4, 0), 946 x 740.
+            Positioned(left: 390.4, top: 0, width: 946, height: 740, child: _main(title, files, cat)),
             // Segmented ornament 3231_frame at (518.8, 721), 394.1 x 60.2.
-            Positioned(left: 390.4 + (_mw - 394.1) / 2, top: hh - 19, width: 394.1, height: 60.2, child: _segments()),
+            Positioned(left: 518.8, top: 721, width: 394.1, height: 60.2, child: _segments()),
             // Window controls 2686_frame at (625.4, 821.2): dot (close) + bar.
             Positioned(
-              left: 95.4 + (295 + _mw) / 2 - 90,
-              top: hh + 75,
+              left: 625.4,
+              top: 815,
               width: 181,
               height: 26,
               child: Row(children: [
@@ -164,11 +153,6 @@ class _FilesScreenState extends State<FilesScreen> {
   }
 
   Widget _sidebar(List<StoredFile> all) {
-    // The last icon row (Documents) starts at 84 + 228.96 = 312.96 and is
-    // 42.24 tall, so the section list cannot begin before 363. Pinning it at
-    // 332 laid "Text" straight over the Documents label.
-    const sectionsTop = 366.0;
-
     Widget menuRow(String type, IconData icon, double top) {
       final on = _type == type;
       return Positioned(
@@ -200,7 +184,7 @@ class _FilesScreenState extends State<FilesScreen> {
       final on = _type == type;
       return Positioned(
         left: 21,
-        top: sectionsTop + top,
+        top: 332 + top,
         width: 273,
         height: 28,
         child: Semantics(
@@ -237,17 +221,15 @@ class _FilesScreenState extends State<FilesScreen> {
           menuRow('All', Icons.schedule_rounded, 0),
           menuRow('Image', Icons.image_outlined, 57.24),
           menuRow('Video', Icons.movie_outlined, 114.48),
-          // Audio sits with the filters; the sections below start at y 332.
-          menuRow('Audio', Icons.graphic_eq_rounded, 171.72),
-          menuRow('Document', Icons.description_outlined, 228.96),
+          menuRow('Document', Icons.description_outlined, 171.72),
           section('Writing', 0),
           section('Data', 55),
-          const Positioned(
+          Positioned(
             left: 21,
-            top: 461,
+            top: 442,
             width: 273,
             height: 28,
-            child: Row(children: [
+            child: Row(children: const [
               FText('Recent', size: 23.17, weight: FontWeight.w600, color: Color(0xE6FAF9F5)),
               Spacer(),
               Icon(Icons.keyboard_arrow_down_rounded, size: 28, color: Color(0xE6FAF9F5)),
@@ -257,7 +239,7 @@ class _FilesScreenState extends State<FilesScreen> {
           if (recent.isNotEmpty)
             Positioned(
               left: 18,
-              top: 503,
+              top: 484,
               width: 255,
               height: 54,
               child: GestureDetector(
@@ -265,10 +247,7 @@ class _FilesScreenState extends State<FilesScreen> {
                 child: Container(
                   decoration: BoxDecoration(color: const Color(0x4DFFFFFF), borderRadius: BorderRadius.circular(20)),
                   child: Row(children: [
-                    SizedBox(width: 47, height: 47, child: ClipRRect(
-                      borderRadius: BorderRadius.circular(VRadius.xs),
-                      child: ThumbView(file: recent.first),
-                    )),
+                    SizedBox(width: 47, height: 47, child: Icon(_icon(recent.first.type), size: 26, color: const Color(0xFFDDDBD6))),
                     const SizedBox(width: 1.84),
                     Expanded(child: FText(recent.first.name, size: 16.56, weight: FontWeight.w600, color: const Color(0xFFDDDBD6))),
                     const SizedBox(width: 12),
@@ -279,7 +258,7 @@ class _FilesScreenState extends State<FilesScreen> {
           for (var k = 1; k < recent.length; k++)
             Positioned(
               left: 29,
-              top: 572 + 57.0 * (k - 1),
+              top: 553 + 57.0 * (k - 1),
               width: 240,
               height: 32,
               child: GestureDetector(
@@ -291,7 +270,9 @@ class _FilesScreenState extends State<FilesScreen> {
                       width: 34,
                       height: 32,
                       color: const Color(0x33FFFFFF),
-                      child: ThumbView(file: recent[k], fontSize: 7),
+                      child: FileStore.isImage(recent[k].name)
+                          ? _Thumb(id: recent[k].id, fallback: _icon(recent[k].type))
+                          : Icon(_icon(recent[k].type), size: 18, color: const Color(0xFFDDDBD6)),
                     ),
                   ),
                   const SizedBox(width: 17.48),
@@ -317,7 +298,7 @@ class _FilesScreenState extends State<FilesScreen> {
         Positioned(
           left: 40,
           top: 22,
-          width: _mw - 186,
+          width: 760,
           height: 34,
           child: cat == 'search'
               ? TextField(
@@ -333,7 +314,7 @@ class _FilesScreenState extends State<FilesScreen> {
         // Adding files is the real storage path (D22/D32); Figma has no add
         // control, so it sits on the title row's end (v8.4 note in D22).
         Positioned(
-          left: _mw - 84,
+          left: 862,
           top: 17,
           width: 44,
           height: 44,
@@ -354,13 +335,21 @@ class _FilesScreenState extends State<FilesScreen> {
         Positioned(
           left: 40,
           top: 75,
-          width: _mw - 80,
+          width: 866,
           bottom: 0,
           child: CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
+              // v8.6: Images / Videos use the Photos browser (Figma 8:1352,
+              // 2004:340): 3 columns of rounded landscape tiles, label top-left.
+              if (_type == 'Image' || _type == 'Video')
+                SliverGrid(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, mainAxisSpacing: 8, crossAxisSpacing: 8, childAspectRatio: 214 / 126),
+                  delegate: SliverChildBuilderDelegate((_, i) => _photoTile(files[i]), childCount: files.length),
+                )
+              else
               SliverGrid(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, mainAxisSpacing: 13, crossAxisSpacing: 4, childAspectRatio: 170 / 217),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 5, mainAxisSpacing: 13, crossAxisSpacing: 4, childAspectRatio: 170 / 217),
                 delegate: SliverChildBuilderDelegate((_, i) => _tile(files[i]), childCount: files.length),
               ),
               if (lib.isNotEmpty)
@@ -427,8 +416,24 @@ class _FilesScreenState extends State<FilesScreen> {
         ),
       );
 
+  Widget _photoTile(StoredFile f) => GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _open(f),
+        onLongPress: () => _confirmRemove(f),
+        onSecondaryTap: () => _confirmRemove(f),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Stack(fit: StackFit.expand, children: [
+            ColoredBox(color: const Color(0x33FFFFFF), child: _Thumb(id: f.id, fallback: f.type == 'Video' ? Icons.play_circle_outline_rounded : Icons.image_outlined)),
+            const DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment(0, -0.2), colors: [Color(0x66000000), Color(0x00000000)]))),
+            Positioned(left: 12, top: 10, right: 12, child: Text(f.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700))),
+            if (f.type == 'Video') const Positioned(right: 10, bottom: 8, child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: 22)),
+          ]),
+        ),
+      );
+
   Widget _tile(StoredFile f) {
-    final meta = [FileStore.sizeLabel(f.sizeBytes), FileStore.ago(f.addedAt)].where((s) => s.isNotEmpty).join(' Â· ');
+    final meta = [FileStore.sizeLabel(f.sizeBytes), FileStore.ago(f.addedAt)].where((s) => s.isNotEmpty).join(' · ');
     return Semantics(
       button: true,
       label: f.name,
@@ -446,7 +451,9 @@ class _FilesScreenState extends State<FilesScreen> {
                 width: 152,
                 height: 153,
                 color: const Color(0x33FFFFFF),
-                child: ThumbView(file: f),
+                child: FileStore.isImage(f.name)
+                    ? _Thumb(id: f.id, fallback: _icon(f.type))
+                    : Icon(_icon(f.type), size: 52, color: const Color(0xCCFFFFFF)),
               ),
             ),
             const SizedBox(height: 3),
@@ -470,15 +477,9 @@ class _FilesScreenState extends State<FilesScreen> {
       message: f.name,
       actions: const [VAlertChoice('Remove', destructive: true), VAlertChoice('Cancel')],
     );
-    if (ok == 0) {
-      FileThumbs.forget(f);
-      await _store.remove(f.id);
-    }
+    if (ok == 0) await _store.remove(f.id);
   }
 
-  /// Opens a file in the viewer that suits it. Every type has a destination:
-  /// the ones we cannot render still get the unsupported plate, which offers
-  /// the external hand-off rather than doing nothing.
   Future<void> _open(StoredFile f) async {
     final bytes = await _store.bytesOf(f.id);
     if (!mounted) return;
@@ -486,7 +487,6 @@ class _FilesScreenState extends State<FilesScreen> {
       await _alert('${f.name} could not be opened');
       return;
     }
-
     if (FileStore.isVideo(f.name)) {
       await showGeneralDialog<void>(
         context: context,
@@ -497,55 +497,106 @@ class _FilesScreenState extends State<FilesScreen> {
       );
       return;
     }
-
-    final Widget viewer;
-    if (FileStore.isImage(f.name)) {
-      viewer = ImageViewerView(file: f, bytes: bytes);
-    } else if (FileStore.isAudio(f.name)) {
-      viewer = AudioPlayerView(file: f, bytes: bytes);
-    } else if (FileStore.isPdf(f.name)) {
-      viewer = PdfViewerView(file: f, bytes: bytes);
-    } else if (FileStore.isText(f.name)) {
-      viewer = TextReaderView(file: f, bytes: bytes);
-    } else if (FileStore.isOfficeText(f.name) || FileStore.isRtf(f.name)) {
-      // Office and RTF text is read out of the container first; the reader is
-      // handed plain UTF-8, not the zip.
-      final text = await _officeText(f, bytes);
-      if (!mounted) return;
-      if (text == null) {
-        await showGeneralDialog<void>(
-          context: context,
-          barrierDismissible: true,
-          barrierLabel: 'Close',
-          barrierColor: Colors.black54,
-          pageBuilder: (context, _, __) =>
-              Material(type: MaterialType.transparency, child: UnsupportedView(file: f, bytes: bytes)),
-        );
-        return;
-      }
-      viewer = TextReaderView(file: f, bytes: text);
-    } else {
-      viewer = UnsupportedView(file: f, bytes: bytes);
+    if (FileStore.isImage(f.name) || FileStore.isText(f.name)) {
+      await showGeneralDialog<void>(
+        context: context,
+        barrierDismissible: true,
+        barrierLabel: 'Close',
+        barrierColor: Colors.black54,
+        pageBuilder: (context, _, __) => Material(type: MaterialType.transparency, child: _FileViewer(file: f, bytes: bytes)),
+      );
+      return;
     }
+    // Web: PDF in a new tab, anything else downloaded under its own name.
+    // iOS / Android: opened in the app the user has for that type.
+    final mime = FileStore.mimeFor(f.name);
+    final ok = await FileBlobs.openExternal(f.name, bytes, mime, newTab: mime == 'application/pdf');
+    if (!ok && mounted) await _alert('${f.name} could not be opened');
+  }
+}
 
-    await showGeneralDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: 'Close',
-      barrierColor: Colors.black54,
-      pageBuilder: (context, _, __) => Material(type: MaterialType.transparency, child: viewer),
-    );
+/// Image tile thumbnail from the stored bytes.
+class _Thumb extends StatefulWidget {
+  final String id;
+  final IconData fallback;
+  const _Thumb({required this.id, required this.fallback});
+
+  @override
+  State<_Thumb> createState() => _ThumbState();
+}
+
+class _ThumbState extends State<_Thumb> {
+  static final Map<String, Uint8List> _cache = {};
+  Uint8List? _bytes;
+
+  @override
+  void initState() {
+    super.initState();
+    _bytes = _cache[widget.id];
+    if (_bytes == null) {
+      FileStore.instance.bytesOf(widget.id).then((b) {
+        if (b == null || !mounted) return;
+        _cache[widget.id] = b;
+        setState(() => _bytes = b);
+      });
+    }
   }
 
-  /// Office / RTF bytes rewritten as plain UTF-8 text for the reader. Returns
-  /// null when the container has no text we can reach.
-  Future<Uint8List?> _officeText(StoredFile f, Uint8List bytes) async {
-    try {
-      final lines = await probeOffice(bytes, f.name);
-      if (lines == null || lines.isEmpty) return null;
-      return Uint8List.fromList(utf8.encode(lines.join('\n')));
-    } catch (_) {
-      return null;
+  @override
+  Widget build(BuildContext context) {
+    final b = _bytes;
+    if (b == null) return Center(child: Icon(widget.fallback, size: 34, color: VColors.textSecondary));
+    return Image.memory(b, fit: BoxFit.cover, gaplessPlayback: true, cacheWidth: 360,
+        errorBuilder: (_, __, ___) => Center(child: Icon(widget.fallback, size: 34, color: VColors.textSecondary)));
+  }
+}
+
+/// In-app viewer for a stored image or text file.
+class _FileViewer extends StatelessWidget {
+  final StoredFile file;
+  final Uint8List bytes;
+  const _FileViewer({required this.file, required this.bytes});
+
+  static const int _maxChars = 200000;
+
+  @override
+  Widget build(BuildContext context) {
+    final close = VCircleButton(icon: Icons.close_rounded, tooltip: 'Close', onTap: () => Navigator.of(context).pop());
+    final Widget content;
+    if (FileStore.isImage(file.name)) {
+      content = InteractiveViewer(
+        maxScale: 6,
+        child: Center(
+          child: Image.memory(bytes, fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, size: 40, color: VColors.textTertiary)),
+        ),
+      );
+    } else {
+      var text = utf8.decode(bytes, allowMalformed: true);
+      final cut = text.length > _maxChars;
+      if (cut) text = text.substring(0, _maxChars);
+      content = SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(VSpace.md, VSpace.xs, VSpace.md, VSpace.md),
+        child: SelectableText(
+          cut ? '$text\n…' : text,
+          style: VType.callout(weight: FontWeight.w400).copyWith(fontFamily: 'monospace', fontSize: 13, height: 1.45),
+        ),
+      );
     }
+    return SafeArea(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(VSpace.md, 40, VSpace.md, 96),
+          child: VWindow(
+            title: file.name,
+            centerTitle: true,
+            maxWidth: VOverlay.toolWidth(context),
+            maxHeight: VOverlay.toolMaxHeight(context),
+            leading: close,
+            child: content,
+          ),
+        ),
+      ),
+    );
   }
 }

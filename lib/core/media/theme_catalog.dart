@@ -1,3 +1,4 @@
+import 'first_frame.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -53,9 +54,9 @@ class ThemeCatalogData {
       final audio = ThemeCatalog.resolve(a['audio'] as String?, base);
       if (audio == null) continue;
       ambient.add(CatalogAmbientTrack(
-        title: humanizeThemeName((a['title'] as String?) ?? 'Track'),
+        title: (a['title'] as String?) ?? 'Track',
         audioUrl: audio,
-        artUrl: ThemeCatalog.resolve(a['art'] as String?, base) ?? ThemeCatalog.offlineWallpaperAsset,
+        artUrl: ThemeCatalog.resolve(a['art'] as String?, base) ?? '',
       ));
     }
     return ThemeCatalogData(
@@ -82,15 +83,13 @@ class ThemeCatalog extends ChangeNotifier {
   static const String remoteCatalogUrl = '${mediaBaseUrl}themes.json';
   static const String bundledCatalogAsset = 'assets/catalog/themes.json';
 
-  /// Tiny bundled wallpaper used for offline start and as image placeholder.
-  static const String offlineWallpaperAsset = 'assets/wallpapers/default_wallpaper.webp';
 
-  static const String _prefsKey = 'theme_catalog_json_v1';
+  static const String _prefsKey = 'theme_list_r2_v2';
 
   static const WallpaperTheme _builtinDefault = WallpaperTheme(
     id: 'starbridge',
-    name: 'Star Bridge',
-    assetPath: offlineWallpaperAsset,
+    name: '',
+    assetPath: '',
     tier: 'Free Spatial Canvas',
   );
 
@@ -105,6 +104,7 @@ class ThemeCatalog extends ChangeNotifier {
   String get source => _source;
   String get updated => _updated;
 
+  List<WallpaperTheme> get _all => _themes;
   List<WallpaperTheme> get allThemes => List.unmodifiable(_themes);
   List<WallpaperTheme> get premiumThemes => List.unmodifiable(_themes.where((t) => t.isPremium));
   List<WallpaperTheme> get freeThemes => List.unmodifiable(_themes.where((t) => !t.isPremium));
@@ -113,7 +113,7 @@ class ThemeCatalog extends ChangeNotifier {
   WallpaperTheme get defaultTheme => bySlug(_defaultSlug) ?? (freeThemes.isNotEmpty ? freeThemes.first : _builtinDefault);
 
   WallpaperTheme? bySlug(String slug) {
-    for (final t in _themes) {
+    for (final t in _all) {
       if (t.id == slug) return t;
     }
     return null;
@@ -140,7 +140,11 @@ class ThemeCatalog extends ChangeNotifier {
   Future<void> loadBundled() async {
     try {
       final s = await rootBundle.loadString(bundledCatalogAsset);
-      _apply(ThemeCatalogData.parse(s), 'bundled', notify: false);
+      final d = ThemeCatalogData.parse(s);
+      _songThemes = d.themes.where((t) => t.tracks.isNotEmpty).toList();
+      _premium = d.themes.where((t) => t.isPremium).toList();
+      _ambient = d.ambientTracks;
+      if (_premium.isNotEmpty) _themes = _premium;
     } catch (e) {
       debugPrint('ThemeCatalog: bundled catalog unavailable: $e');
     }
@@ -150,7 +154,10 @@ class ThemeCatalog extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       final s = prefs.getString(_prefsKey);
-      if (s != null && s.isNotEmpty) _apply(ThemeCatalogData.parse(s), 'cache', notify: false);
+      if (s != null && s.isNotEmpty) {
+        final l = jsonDecode(s);
+        if (l is List) _applyR2(l, 'cache');
+      }
     } catch (e) {
       debugPrint('ThemeCatalog: cached catalog ignored: $e');
     }
@@ -161,22 +168,111 @@ class ThemeCatalog extends ChangeNotifier {
     return _remoteInFlight ??= _fetchRemote(timeout).whenComplete(() => _remoteInFlight = null);
   }
 
+  // v8.8: live wallpapers = every video in the R2 bucket "collider-themes",
+  // listed by the collider-themes Worker ([{name,url,size}]) and
+  // played from r2.dev at original quality. Posters are each video's own first
+  // frame (FirstFrames). The bundled catalog only supplies songs (theme packs'
+  // tracks + ambientTracks) and premium themes, exactly as before.
+  static const String themesUrl = String.fromEnvironment('COLLIDER_THEMES', defaultValue: 'https://collider-themes.ebridavid.workers.dev/');
+  List<WallpaperTheme> _songThemes = const [];
+  List<WallpaperTheme> _premium = const [];
+
+  /// Bundled themes that carry songs (for the music library).
+  List<WallpaperTheme> get songThemes => _songThemes;
+  WallpaperTheme? songThemeBySlug(String slug) {
+    for (final t in _songThemes) {
+      if (t.id == slug) return t;
+    }
+    return null;
+  }
+
+  static String niceName(String file) {
+    final base = file.split('/').last;
+    final dot = base.lastIndexOf('.');
+    final b = (dot > 0 ? base.substring(0, dot) : base).replaceAll(RegExp(r'[_\-]+'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    return b.isEmpty ? base : b;
+  }
+
+  List<WallpaperTheme> _fromList(List list) {
+    final maps = [for (final o in list.whereType<Map>()) if ((o['url'] as String?)?.isNotEmpty == true) o];
+    final songs = [for (final o in maps) if (_kind(o) == 'audio') o];
+    return [for (final o in maps) if (_kind(o) != 'audio') _r2Theme(o, songs)];
+  }
+
+  /// v8.7: a flat bucket of videos (live wallpapers), images (wallpapers)
+  /// and audio (songs), each with tags. Songs attach to a live wallpaper
+  /// through shared content tags (at least two in common).
+  static final _img = RegExp(r'\.(jpe?g|png|webp|avif|gif)$', caseSensitive: false);
+  static final _aud = RegExp(r'\.(m4a|mp3|aac|ogg|opus|wav|flac)$', caseSensitive: false);
+  static const _autoTags = {'4K', '1440p', '1080p', '720p', 'SD', 'live wallpaper', 'wallpaper', 'song'};
+  static const _fileTypes = {'mp4', 'm4v', 'mov', 'webm', 'jpg', 'jpeg', 'png', 'webp', 'avif', 'gif', 'm4a', 'mp3', 'aac', 'ogg', 'opus', 'wav', 'flac'};
+  static Set<String> _content(List<String> t) =>
+      {for (final x in t) if (!_autoTags.contains(x) && !_fileTypes.contains(x)) x};
+  static List<String> _tagsOf(Map o) => [for (final x in (o['tags'] as List? ?? const [])) '$x'];
+  String _kind(Map o) {
+    final k = o['kind'];
+    if (k is String) return k;
+    final n = '${o['name']}';
+    return _aud.hasMatch(n) ? 'audio' : _img.hasMatch(n) ? 'image' : 'video';
+  }
+
+  WallpaperTheme _r2Theme(Map o, [List<Map> songs = const []]) {
+    final url = o['url'] as String;
+    final name = '${o['name']}';
+    final still = _kind(o) == 'image';
+    final tags = _tagsOf(o);
+    final mine = _content(tags);
+    final tracks = <AmbientTrack>[];
+    if (!still) {
+      for (final s in songs) {
+        if (_content(_tagsOf(s)).intersection(mine).length >= 2) {
+          tracks.add(AmbientTrack(
+              number: tracks.length + 1,
+              title: niceName('${s['name']}').replaceAll(RegExp(r'\s+song$'), ''),
+              duration: '',
+              mood: '',
+              audioUrl: s['url'] as String));
+        }
+      }
+    }
+    return WallpaperTheme(
+      id: 'r2-$name',
+      name: niceName(name),
+      assetPath: still ? url : FirstFrames.srcFor(url),
+      videoPath: still ? null : url,
+      creator: 'David Ebri',
+      tier: still ? 'Free Still' : 'Free Live Loop',
+      collection: 'Collider Themes',
+      tags: tags,
+      tracks: tracks,
+    );
+  }
+
+  void _applyR2(List list, String source) {
+    final t = _fromList(list);
+    if (t.isEmpty) return;
+    t.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    _themes = [...t, ..._premium];
+    // Default: a portrait ocean loop (fits the phone, decodes everywhere tested).
+    WallpaperTheme? pick(String n) => t.where((x) => x.name.toLowerCase().contains(n)).firstOrNull;
+    _defaultSlug = (pick('ocean reflection') ?? pick('beach waves') ?? t.where((x) => x.isLive).firstOrNull ?? t.first).id;
+    _source = source;
+    notifyListeners();
+  }
+
   Future<void> _fetchRemote(Duration timeout) async {
     try {
       final dio = Dio(BaseOptions(connectTimeout: timeout, receiveTimeout: timeout, responseType: ResponseType.plain));
-      // Cache-bust so a just-published catalog shows up on the next launch
-      // instead of after the CDN / browser cache expires.
-      final res = await dio.get<String>(remoteCatalogUrl,
-          queryParameters: {'t': DateTime.now().millisecondsSinceEpoch ~/ 60000});
+      final res = await dio.get<String>(themesUrl);
       final body = res.data;
       if (res.statusCode != 200 || body == null || body.isEmpty) return;
-      final data = ThemeCatalogData.parse(body);
-      if (data.themes.isEmpty) return;
-      _apply(data, 'remote');
+      final list = jsonDecode(body);
+      if (list is! List || list.isEmpty) return;
+      _applyR2(list, 'r2');
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_prefsKey, body);
     } catch (e) {
-      debugPrint('ThemeCatalog: remote refresh failed, keeping $_source: $e');
+      debugPrint('ThemeCatalog: theme list unavailable, keeping $_source: $e');
     }
   }
 
