@@ -31,35 +31,42 @@ const Map<String, ({String base, String key, bool cors})> _textWires = {
   'cc': (base: 'https://api.commandcode.ai/provider/v1', key: _commandCodeKey, cors: true),
   'oc': (base: 'https://opencode.ai/zen/v1', key: _openCodeKey, cors: false),
   'mm': (base: 'https://api.minimax.io/v1', key: _minimaxKey, cors: true),
+  'cr': (base: 'https://crazyrouter.com/v1', key: _crazyRouterKey, cors: true),
 };
 const Map<String, String> _proxyRoute = {'nv': 'nvidia', 'oc': 'opencode'};
 
+/// CrazyRouter serves the same models under bare slugs rather than namespaced
+/// ones, so a remote id is rewritten before it goes out on that wire.
+String _wireSlug(String wire, String remote) =>
+    wire == 'cr' ? (_slugOverrides[remote] ?? remote) : remote;
+
 /// Each text model's ordered list of (wire, remote id) attempts.
 const Map<String, List<(String, String)>> _text = {
-  'free/glm-5-3-flash': [('nv', 'z-ai/glm-5.3-flash'), ('oc', 'glm-5.3-flash')],
-  'free/laguna-s-2-1': [('cc', 'poolside/laguna-s-2.1-free')],
-  'free/laguna-xs-2-1': [('nv', 'poolside/laguna-xs-2.1')],
-  'free/ling-3-1-flash': [('cc', 'inclusionai/ling-3.1-flash:free')],
-  'free/nemotron-3-5-lightning': [('nv', 'nvidia/nemotron-3.5-lightning-30b-a3b')],
-  'pro/glm-5-3': [('nv', 'z-ai/glm-5.3'), ('oc', 'glm-5.3'), ('cc', 'zai-org/GLM-5.3')],
-  'pro/deepseek-4-1-flash': [('nv', 'deepseek-ai/deepseek-v4.1-flash'), ('oc', 'deepseek-v4.1-flash'), ('cc', 'deepseek/deepseek-v4.1-flash')],
-  'pro/minimax-m3': [('mm', 'MiniMax-M3'), ('cc', 'MiniMaxAI/MiniMax-M3'), ('oc', 'minimax-m3')],
-  'pro/mimo-v2-6-flash': [('cc', 'xiaomi/mimo-v2.6-flash')],
-  'pro/nemotron-3-ultra': [('nv', 'nvidia/nemotron-3-ultra-550b-a55b'), ('cc', 'nvidia/nemotron-3-ultra-550b-a55b')],
-  'elite/kimi-k3': [('nv', 'moonshotai/kimi-k3'), ('oc', 'kimi-k3'), ('cc', 'moonshotai/Kimi-K3')],
+  'free/glm-5-3-flash': [('nv', 'z-ai/glm-5.3-flash'), ('oc', 'glm-5.3-flash'), ('cr', 'z-ai/glm-5.3-flash')],
+  'free/laguna-s-2-1': [('cc', 'poolside/laguna-s-2.1-free'), ('cr', 'poolside/laguna-s-2.1-free')],
+  'free/laguna-xs-2-1': [('nv', 'poolside/laguna-xs-2.1'), ('cr', 'poolside/laguna-xs-2.1')],
+  'free/ling-3-1-flash': [('cc', 'inclusionai/ling-3.1-flash:free'), ('cr', 'inclusionai/ling-3.1-flash:free')],
+  'free/nemotron-3-5-lightning': [('nv', 'nvidia/nemotron-3.5-lightning-30b-a3b'), ('cr', 'nvidia/nemotron-3.5-lightning-30b-a3b')],
+  'pro/glm-5-3': [('nv', 'z-ai/glm-5.3'), ('oc', 'glm-5.3'), ('cc', 'zai-org/GLM-5.3'), ('cr', 'z-ai/glm-5.3')],
+  'pro/deepseek-4-1-flash': [('nv', 'deepseek-ai/deepseek-v4.1-flash'), ('oc', 'deepseek-v4.1-flash'), ('cc', 'deepseek/deepseek-v4.1-flash'), ('cr', 'deepseek-ai/deepseek-v4.1-flash')],
+  'pro/minimax-m3': [('mm', 'MiniMax-M3'), ('cc', 'MiniMaxAI/MiniMax-M3'), ('oc', 'minimax-m3'), ('cr', 'minimax-M3')],
+  'pro/mimo-v2-6-flash': [('cc', 'xiaomi/mimo-v2.6-flash'), ('cr', 'xiaomi/mimo-v2.6-flash')],
+  'pro/nemotron-3-ultra': [('nv', 'nvidia/nemotron-3-ultra-550b-a55b'), ('cc', 'nvidia/nemotron-3-ultra-550b-a55b'), ('cr', 'nvidia/nemotron-3-ultra-550b-a55b')],
+  'elite/kimi-k3': [('nv', 'moonshotai/kimi-k3'), ('oc', 'kimi-k3'), ('cc', 'moonshotai/Kimi-K3'), ('cr', 'moonshotai/kimi-k3')],
 };
 
-/// Consensus agent (also writes every ticker's one-line summary). Smart Gen uses the same chain.
-const List<(String, String)> consensusChain = [
-  ('mm', 'MiniMax-M3'),
-  ('cc', 'MiniMaxAI/MiniMax-M3'),
-  ('oc', 'minimax-m3'),
-  ('nv', 'moonshotai/kimi-k3'),
-  ('nv', 'deepseek-ai/deepseek-v4.1-flash'),
-  ('nv', 'z-ai/glm-5.3'),
-  ('nv', 'z-ai/glm-5.3-flash'),
-  ('nv', 'nvidia/nemotron-3-ultra-550b-a55b'),
-  ('nv', 'nvidia/nemotron-3.5-lightning-30b-a3b'),
+/// The judge for the Consensus Agent and the Smart Gen agent, strongest first.
+/// Each entry expands to that model's full backup list before the next model
+/// is tried, so the judge survives any one provider being down. The keyless
+/// floor underneath them all lives in `consensus`.
+const List<String> consensusModels = [
+  'pro/minimax-m3',
+  'elite/kimi-k3',
+  'pro/deepseek-4-1-flash',
+  'pro/glm-5-3',
+  'free/glm-5-3-flash',
+  'pro/nemotron-3-ultra',
+  'free/nemotron-3-5-lightning',
 ];
 
 /// chat.ts friendlyErrorMessage, restored: our own words, never provider text.
@@ -201,22 +208,29 @@ class MediaGen {
 
   bool isRoutable(String modelId) => _routes.containsKey(modelId) || _text.containsKey(modelId.replaceFirst('code-', ''));
 
+  /// A wire is usable when a key can reach it. A direct, CORS-open wire needs a
+  /// key in the browser bundle. A proxied wire needs only the proxy: the server
+  /// holds that provider's key, so an empty local key is not a failure there.
+  /// Requiring one anyway made every proxied model report "no-key" without the
+  /// request ever leaving the device.
   bool _wireUsable(String w) {
     final t = _textWires[w]!;
-    if (t.key.isEmpty) return false;
-    return t.cors || _proxy.isNotEmpty;
+    return t.cors ? t.key.isNotEmpty : _proxy.isNotEmpty;
   }
 
   /// One OpenAI-compatible call on a text wire. Throws a raw error string.
   Future<String> _textCall(String w, String remote, List<Map<String, String>> messages, {int? maxTokens}) async {
     final t = _textWires[w]!;
-    if (t.key.isEmpty) throw const MediaGenError('no-key');
     final viaProxy = !t.cors;
-    if (viaProxy && _proxy.isEmpty) throw const MediaGenError('cors');
+    if (viaProxy) {
+      if (_proxy.isEmpty) throw const MediaGenError('cors');
+    } else if (t.key.isEmpty) {
+      throw const MediaGenError('no-key');
+    }
     final url = viaProxy ? '$_proxy/api/p?u=${_proxyRoute[w]}' : '${t.base}/chat/completions';
     try {
       final res = await _dio.post(url,
-          data: {'model': remote, 'messages': messages, if (maxTokens != null) 'max_tokens': maxTokens},
+          data: {'model': _wireSlug(w, remote), 'messages': messages, if (maxTokens != null) 'max_tokens': maxTokens},
           options: Options(headers: viaProxy ? {'Content-Type': 'application/json'} : {'Content-Type': 'application/json', 'Authorization': 'Bearer ${t.key}'}, receiveTimeout: const Duration(seconds: 90)));
       final text = _stripThink(res.data['choices']?[0]?['message']?['content'] as String? ?? '');
       if (text.isEmpty) throw const MediaGenError('empty');
@@ -227,12 +241,32 @@ class MediaGen {
     }
   }
 
-  /// Tries each attempt in order; throws the first meaningful error.
-  Future<String> _chain(List<(String, String)> tries, List<Map<String, String>> messages, {int? maxTokens}) async {
+  /// Pollinations' OpenAI-compatible text endpoint. Needs no key, so it is the
+  /// floor every text route falls back to: the answer is a weaker model rather
+  /// than nothing.
+  Future<String> _pollinationsText(List<Map<String, String>> messages) async {
+    try {
+      final res = await _dio.post('https://text.pollinations.ai/openai',
+          data: {'model': 'openai', 'messages': messages},
+          options: Options(headers: {'Content-Type': 'application/json'}));
+      final text = _stripThink(res.data['choices']?[0]?['message']?['content'] as String? ?? '');
+      if (text.trim().isEmpty) throw const MediaGenError('Pollinations returned an empty answer');
+      return text;
+    } on DioException catch (e) {
+      throw MediaGenError('Pollinations ${e.response?.statusCode ?? 'unreachable'}: ${_errBody(e)}');
+    }
+  }
+
+  /// Tries each attempt in order; throws the first meaningful error. With
+  /// [fallback] on, a failed chain still ends at the keyless floor rather than
+  /// at nothing. The judge turns it off so it can move to the next model
+  /// instead of quietly settling for the weakest one.
+  Future<String> _chain(List<(String, String)> tries, List<Map<String, String>> messages,
+      {int? maxTokens, bool fallback = true}) async {
     Object? first;
     for (final (w, remote) in tries) {
       if (!_wireUsable(w)) {
-        first ??= MediaGenError(_textWires[w]!.key.isEmpty ? 'no-key' : 'cors');
+        first ??= MediaGenError(_textWires[w]!.cors ? 'no-key' : 'cors');
         continue;
       }
       try {
@@ -241,11 +275,31 @@ class MediaGen {
         if (first == null || '$first'.contains('no-key') || '$first'.contains('cors')) first = e;
       }
     }
+    if (fallback) {
+      try {
+        return await _pollinationsText(messages);
+      } catch (e) {
+        if (first == null || '$first'.contains('no-key') || '$first'.contains('cors')) first = e;
+      }
+    }
     throw first ?? const MediaGenError('no-key');
   }
 
-  /// The consensus agent (MiniMax M3.1 first, then the fallback chain).
-  Future<String> consensus(List<Map<String, String>> messages) => _chain(consensusChain, messages);
+  /// The judge for the Consensus Agent and the Smart Gen agent. Walks
+  /// [consensusModels] strongest first; each model is exhausted across all of
+  /// its own provider backups before the next one is considered, and the
+  /// keyless floor only runs once every one of them has failed. An outage on
+  /// any single provider therefore costs nothing but latency.
+  Future<String> consensus(List<Map<String, String>> messages) async {
+    for (final id in consensusModels) {
+      final tries = _text[id];
+      if (tries == null) continue;
+      try {
+        return await _chain(tries, messages, fallback: false);
+      } catch (_) {}
+    }
+    return _chain(const [], messages);
+  }
 
   /// chat.ts hasCredentials: is there a key for the wire this route uses?
   /// Pollinations is keyless in the source (it now answers 402, D61).
@@ -334,17 +388,7 @@ class MediaGen {
     }
     final r = _routes[modelId];
     if (r == null) throw const MediaGenError('this model has no chat route in this build');
-    if (r.provider == 'pollinations-text') {
-      try {
-        final res = await _dio.post('https://text.pollinations.ai/openai',
-            data: {'model': r.remote, 'messages': messages}, options: Options(headers: {'Content-Type': 'application/json'}));
-        final text = res.data['choices']?[0]?['message']?['content'] as String? ?? '';
-        if (text.trim().isEmpty) throw const MediaGenError('Pollinations returned an empty answer');
-        return text;
-      } on DioException catch (e) {
-        throw MediaGenError('Pollinations ${e.response?.statusCode ?? 'unreachable'}: ${_errBody(e)}');
-      }
-    }
+    if (r.provider == 'pollinations-text') return _pollinationsText(messages);
     if (r.provider != 'openrouter') throw const MediaGenError('this model has no chat route in this build');
     if (!hasCredentials(modelId)) throw const MediaGenError('no OpenRouter API key in this build');
     final w = _wire(r);

@@ -7,3 +7,4 @@ source/**/generated_plugin_registrant.dart
 
 # Local QA screenshots (evidence only, not source)
 audit-shots/
+server/keys.local.json

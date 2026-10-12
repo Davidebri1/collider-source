@@ -1,0 +1,15 @@
+{
+  "_readme": "Copy to keys.local.json and fill in whatever you have. Anything left blank is simply skipped: the server never offers the client a model it cannot reach. CrazyRouter alone covers almost the whole roster.",
+
+  "CRAZYROUTER_KEY": "",
+  "OPENROUTER_KEY": "",
+  "NVIDIA_KEY": "",
+  "NVIDIA_KEY2": "",
+  "NVIDIA_KEY3": "",
+  "OPENCODE_KEY": "",
+  "COMMANDCODE_KEY": "",
+  "MINIMAX_KEY": "",
+
+  "COLLIDER_UPSTREAM_PROXY": "https://vproxy-sepia.vercel.app",
+  "PORT": "28700"
+}
