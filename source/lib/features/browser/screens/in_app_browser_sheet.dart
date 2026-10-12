@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../../core/vision/vision_kit.dart';
 import '../models/browser_tab.dart';
@@ -8,11 +7,19 @@ import '../web_frame.dart';
 /// REQ-07 Durable In-App Browser (Apple VisionOS Apps Basic Design System
 /// 1:71 "Safari"): the address bar floats as a capsule ornament above the
 /// page window. One browser instance; tabs overview replaces the page.
+///
+/// R36: this is a window, not a sheet. It is laid out by the shell inside the
+/// wallpaper, with air on all four sides, and it no longer opens as a dialog --
+/// a dialog route put a scrim over the whole screen and a barrier over the nav
+/// dock, so the wallpaper went dark and dock taps died (R12).
 class InAppBrowserSheet extends StatefulWidget {
   final String initialTabId;
   final List<BrowserTab> tabs;
   final Function(BrowserTab updatedTab)? onTabUpdated;
   final Function(BrowserTab newTab)? onNewUserTab;
+
+  /// The shell owns open/close, so the window asks rather than popping a route.
+  final VoidCallback? onClose;
 
   const InAppBrowserSheet({
     super.key,
@@ -20,11 +27,19 @@ class InAppBrowserSheet extends StatefulWidget {
     required this.tabs,
     this.onTabUpdated,
     this.onNewUserTab,
+    this.onClose,
   });
 
   @override
   State<InAppBrowserSheet> createState() => _InAppBrowserSheetState();
 }
+
+/// Room above the window for the status strip, and below it for the permanent
+/// nav dock (12 + 56 + 12) so the two never overlap.
+const double _kTopInset = 52.0;
+const double _kDockZone = 88.0;
+const double _kOrnamentH = 42.0;
+const double _kWindowBarH = 14.0;
 
 class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
   late String _activeTabId;
@@ -40,6 +55,18 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
   void initState() {
     super.initState();
     _activeTabId = widget.initialTabId;
+  }
+
+  @override
+  void didUpdateWidget(covariant InAppBrowserSheet old) {
+    super.didUpdateWidget(old);
+    // R34: one instance. Asking for another tab while open switches the tab of
+    // the window already on screen instead of putting up a second browser.
+    if (old.initialTabId != widget.initialTabId &&
+        widget.tabs.any((t) => t.id == widget.initialTabId) &&
+        widget.initialTabId != _activeTabId) {
+      _activeTabId = widget.initialTabId;
+    }
   }
 
   void _switchTab(String id) => setState(() {
@@ -61,16 +88,23 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
 
   String _host(String url) => url.replaceFirst(RegExp(r'^https?://'), '');
 
+  void _open(String url, String title) {
+    final tab = _tab;
+    (_back[tab.id] ??= []).add(tab.url);
+    widget.onTabUpdated?.call(tab.copyWith(url: url, title: title));
+    setState(() => _overview = false);
+  }
+
+  /// R34: home is Google, on open and on the home control alike.
+  void _goHome() => _open(browserStartUrl(), 'Google');
+
   /// Address bar: a web address opens directly; anything else is searched.
   void _go(String input) {
     final q = input.trim();
     if (q.isEmpty) return;
     final isUrl = !q.contains(' ') && (q.contains('.') || q.startsWith('http'));
     final url = isUrl ? (q.startsWith('http') ? q : 'https://$q') : browserSearchUrl(q);
-    final tab = _tab;
-    (_back[tab.id] ??= []).add(tab.url);
-    widget.onTabUpdated?.call(tab.copyWith(url: url, title: isUrl ? _host(url) : q));
-    setState(() => _overview = false);
+    _open(url, isUrl ? _host(url) : q);
   }
 
   void _goBack() {
@@ -88,88 +122,90 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
       _shownUrl = tab.url;
       _addr.text = _host(tab.url);
     }
-    final w = math.max(VOverlay.toolWidth(context), 300.0);
-    final h = VOverlay.toolMaxHeight(context) - 60;
+    final media = MediaQuery.sizeOf(context);
+    final safe = MediaQuery.paddingOf(context);
+    final w = VOverlay.toolWidth(context);
+    const chrome = _kOrnamentH + VSpace.sm * 2 + _kWindowBarH;
+    final room = media.height - (_kTopInset + safe.top) - (_kDockZone + safe.bottom) - chrome;
+    final h = room.clamp(180.0, VOverlay.toolMaxHeight(context));
 
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      alignment: Alignment.topCenter,
-      insetPadding: const EdgeInsets.fromLTRB(VSpace.sm, 56, VSpace.sm, VSpace.sm),
-      child: SizedBox(
-        width: w,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Address bar ornament
-            VOrnament(
-              padding: const EdgeInsets.all(VSpace.xxs + 1),
-              child: Row(
-                children: [
-                  VCircleButton(icon: Icons.close_rounded, size: 32, tooltip: 'Close', onTap: () => Navigator.of(context).pop()),
-                  const SizedBox(width: VSpace.xs - 2),
-                  if ((_back[tab.id] ?? const []).isNotEmpty) ...[
-                    VCircleButton(icon: Icons.arrow_back_rounded, size: 32, tooltip: 'Back', onTap: _goBack),
-                    const SizedBox(width: VSpace.xs - 2),
-                  ],
-                  Expanded(
-                    child: Container(
-                      height: 32,
-                      padding: const EdgeInsets.symmetric(horizontal: VSpace.sm),
-                      decoration: BoxDecoration(color: VColors.fillRecessed, borderRadius: BorderRadius.circular(VRadius.full)),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.lock_outline_rounded, size: 13, color: VColors.textSecondary),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: TextField(
-                              controller: _addr,
-                              textAlign: TextAlign.center,
-                              cursorColor: VColors.textPrimary,
-                              style: VType.callout(),
-                              textInputAction: TextInputAction.go,
-                              decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.zero),
-                              onSubmitted: _go,
-                            ),
-                          ),
-                          VPress(
-                            onTap: () => setState(() => _reload++),
-                            child: const Icon(Icons.refresh_rounded, size: 15, color: VColors.textSecondary),
-                          ),
-                        ],
+    // One width for the whole window: the ornament above the page window has to
+    // line up with it, and both stay inside the phone's edges.
+    return SizedBox(
+      width: w,
+      child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Address bar ornament
+        VOrnament(
+          padding: const EdgeInsets.all(VSpace.xxs + 1),
+          child: Row(
+            children: [
+              VCircleButton(icon: Icons.close_rounded, size: 32, tooltip: 'Close', onTap: widget.onClose),
+              const SizedBox(width: VSpace.xs - 2),
+              if ((_back[tab.id] ?? const []).isNotEmpty) ...[
+                VCircleButton(icon: Icons.arrow_back_rounded, size: 32, tooltip: 'Back', onTap: _goBack),
+                const SizedBox(width: VSpace.xs - 2),
+              ],
+              Expanded(
+                child: Container(
+                  height: 32,
+                  padding: const EdgeInsets.symmetric(horizontal: VSpace.xs),
+                  decoration: BoxDecoration(color: VColors.fillRecessed, borderRadius: BorderRadius.circular(VRadius.full)),
+                  child: Row(
+                    children: [
+                      VPress(
+                        onTap: _goHome,
+                        tooltip: 'Home',
+                        child: const Icon(Icons.home_outlined, size: 14, color: VColors.textSecondary),
                       ),
-                    ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: TextField(
+                          controller: _addr,
+                          textAlign: TextAlign.center,
+                          cursorColor: VColors.textPrimary,
+                          style: VType.callout(),
+                          textInputAction: TextInputAction.go,
+                          decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.zero),
+                          onSubmitted: _go,
+                        ),
+                      ),
+                      VPress(
+                        onTap: () => setState(() => _reload++),
+                        tooltip: 'Reload',
+                        child: const Icon(Icons.refresh_rounded, size: 15, color: VColors.textSecondary),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: VSpace.xs - 2),
-                  VCircleButton(icon: Icons.add_rounded, size: 32, tooltip: 'New Tab', onTap: _newTab),
-                  const SizedBox(width: VSpace.xxs),
-                  VCircleButton(
-                    icon: Icons.filter_none_rounded,
-                    size: 32,
-                    tooltip: 'Open Windows & Tabs',
-                    selected: _overview,
-                    onTap: () => setState(() => _overview = !_overview),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: VSpace.sm),
-            SizedBox(
-              height: h,
-              child: VGlass(
-                material: VMaterial.work,
-                radius: VRadius.xl,
-                child: AnimatedSwitcher(
-                  duration: VMotion.base,
-                  child: _overview ? _tabsOverview() : _page(tab),
                 ),
               ),
-            ),
-            const SizedBox(height: VSpace.sm),
-            const VWindowBar(),
-          ],
+              const SizedBox(width: VSpace.xs - 2),
+              VCircleButton(icon: Icons.add_rounded, size: 32, tooltip: 'New Tab', onTap: _newTab),
+              const SizedBox(width: VSpace.xxs),
+              VCircleButton(
+                icon: Icons.filter_none_rounded,
+                size: 32,
+                tooltip: 'Open Windows & Tabs',
+                selected: _overview,
+                onTap: () => setState(() => _overview = !_overview),
+              ),
+            ],
+          ),
         ),
-      ),
+        const SizedBox(height: VSpace.sm),
+        SizedBox(
+          height: h,
+          child: VGlass(
+            material: VMaterial.work,
+            radius: VRadius.xl,
+            child: _overview ? _tabsOverview() : _page(tab),
+          ),
+        ),
+        const SizedBox(height: VSpace.sm),
+        const VWindowBar(),
+      ],
+    ),
     );
   }
 

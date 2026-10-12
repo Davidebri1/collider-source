@@ -212,6 +212,22 @@ class ColliderApi {
     return (text: r.data['text'] as String, essence: r.data['essence'] as String);
   }
 
+  /// The in-app browser's page proxy (R34). The server fetches [url] and hands
+  /// back `{ html }` as JSON, so the caller must render that markup itself --
+  /// pointing an iframe straight at /api/page only ever showed the raw JSON.
+  ///
+  /// Returns null when the proxy is not there (static hosting) or refused the
+  /// target, so the browser can say so instead of showing a broken page.
+  Future<String?> pageHtml(String url) async {
+    try {
+      final r = await _dio.get('$_base/api/page', queryParameters: {'url': url});
+      final html = (r.data as Map)['html'];
+      return html is String && html.isNotEmpty ? html : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<List<JobState>> history() async {
     try {
       final r = await _dio.get('$_base/api/history');

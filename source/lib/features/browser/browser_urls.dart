@@ -1,14 +1,17 @@
-// Start page and search for the in-app browser.
-// With the Collider server, pages load through its /api/page proxy and search
-// uses DuckDuckGo. With no server (static hosting such as GitHub Pages) pages
-// are framed directly, and DuckDuckGo refuses to be framed (the browser shows
-// its broken-page icon), so start page and search use Wikipedia, which allows
-// framing (v8.3, D41).
-import '../../core/api/collider_api.dart';
+// Home and search for the in-app browser.
+//
+// R34: "Home is Google." The home page is Google in every case, connected or
+// not, so opening the browser and tapping home both land on the same place.
+//
+// Search uses DuckDuckGo's plain-HTML endpoint rather than Google: /api/page
+// returns server-fetched markup, so a search page has to be one that renders
+// from HTML alone. Google's results page is script-rendered and comes back
+// nearly empty through the proxy (D41).
+const String browserHomeUrl = 'https://www.google.com';
 
-String browserStartUrl() =>
-    ColliderApi.instance.online ? 'https://html.duckduckgo.com/html/' : 'https://www.wikipedia.org/';
+/// The page a fresh tab and the home control both open.
+String browserStartUrl() => browserHomeUrl;
 
-String browserSearchUrl(String q) => ColliderApi.instance.online
-    ? 'https://html.duckduckgo.com/html/?q=${Uri.encodeComponent(q)}'
-    : 'https://en.wikipedia.org/w/index.php?search=${Uri.encodeComponent(q)}';
+/// Search is a DuckDuckGo HTML query, which survives the proxy intact.
+String browserSearchUrl(String q) =>
+    'https://html.duckduckgo.com/html/?q=${Uri.encodeComponent(q)}';

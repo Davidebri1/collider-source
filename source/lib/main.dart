@@ -61,6 +61,78 @@ Future<void> main() async {
   runApp(const ColliderApp());
 }
 
+/// Mouse-draggable everywhere, and no scrollbars.
+///
+/// Flutter's default MaterialScrollBehavior.dragDevices is
+/// {touch, stylus, invertedStylus, trackpad} — mouse is not in it, so on web
+/// nothing could be dragged with the mouse unless it opted in individually.
+/// That left the ticker rows, the theme strip and the market carousels
+/// dead to a mouse. The default has no scrollbars, which is also the rule:
+/// edges fade, never a scrollbar.
+class _MouseDraggableScrollBehavior extends MaterialScrollBehavior {
+  const _MouseDraggableScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => const {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.trackpad,
+        PointerDeviceKind.stylus,
+        PointerDeviceKind.invertedStylus,
+      };
+
+  @override
+  Widget buildOverscrollIndicator(BuildContext context, Widget child, ScrollableDetails details) => child;
+}
+
+/// Lays the ticker window's two parts out and reports the height it actually
+/// used: the pinned consensus row at its natural height, then the card list
+/// and the category strip.
+///
+/// Only the list gives height back. The pinned row has to keep every line of
+/// its one full line (R16), and the category strip is a fixed 32, so when the
+/// three together do not fit inside the 40% ceiling the list is the part that
+/// shrinks — and it shrinks to a scrollable list behind an edge fade rather
+/// than cutting anything off. When they do fit, the window is exactly as tall
+/// as its content, which is what stops a ticker holding one model from
+/// standing there as an empty slab.
+class _TickerWindowLayout extends MultiChildLayoutDelegate {
+  _TickerWindowLayout({required this.listSlots});
+
+  /// How tall the list would like to be: one row slot per visible row (R09)
+  /// plus the category strip and its gap.
+  final double listSlots;
+
+  static const String pinned = 'ticker-pinned';
+  static const String list = 'ticker-list';
+  static const double _gap = 6;
+
+  @override
+  void performLayout(Size size) {
+    final width = size.width;
+    var used = 0.0;
+
+    if (hasChild(pinned)) {
+      used = layoutChild(pinned, BoxConstraints(maxWidth: width)).height;
+      positionChild(pinned, Offset.zero);
+      if (hasChild(list)) used += _gap;
+    }
+
+    if (hasChild(list)) {
+      final available = (size.height - used).clamp(0.0, double.infinity);
+      final wanted = listSlots.clamp(0.0, available);
+      layoutChild(list, BoxConstraints.tightFor(width: width, height: wanted));
+      positionChild(list, Offset(0, used));
+      used += wanted;
+    }
+
+    size = Size(width, used);
+  }
+
+  @override
+  bool shouldRelayout(covariant _TickerWindowLayout oldDelegate) => oldDelegate.listSlots != listSlots;
+}
+
 class ColliderApp extends StatelessWidget {
   const ColliderApp({super.key});
 
@@ -69,6 +141,12 @@ class ColliderApp extends StatelessWidget {
     return MaterialApp(
       title: 'Collider',
       debugShowCheckedModeBanner: false,
+      // Mouse drag must work everywhere, not just on the one PageView that
+      // opted in. Flutter's default MaterialScrollBehavior.dragDevices is
+      // {touch, stylus, invertedStylus, trackpad} — it omits mouse, so on web
+      // every scroller and every custom drag surface ignored the mouse. The
+      // default has no scrollbars, which also satisfies the no-scrollbar rule.
+      scrollBehavior: const _MouseDraggableScrollBehavior(),
       theme: ThemeData.dark(useMaterial3: true).copyWith(
         scaffoldBackgroundColor: const Color(0xFF07080B),
         textTheme: GoogleFonts.instrumentSansTextTheme(ThemeData.dark().textTheme),
@@ -313,11 +391,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     final ok = await ColliderApi.instance.loadRoster();
     if (!mounted) return;
     if (!ok) {
-      // No backend: the untouched start tab moves to a page that can be
-      // framed (browser_urls.dart, v8.3 D41).
-      if (_browserTabs.isNotEmpty && _browserTabs.first.id == 'user_default' && _browserTabs.first.url.contains('duckduckgo.com')) {
-        setState(() => _browserTabs[0] = _browserTabs.first.copyWith(url: browserStartUrl()));
-      }
+      // R34: home is Google whether or not the server answered, so there is no
+      // offline start page to swap in.
       return;
     }
     // Default selection: one model per provider, so every card carries a distinct colour.
@@ -460,7 +535,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   void _initializeBrowserTabs() {
     // One user tab; research sources are added as tabs when a question uses the web.
     _browserTabs = [
-      BrowserTab(id: 'user_default', title: 'Search', url: 'https://html.duckduckgo.com/html/', isUserControlling: true),
+      BrowserTab(id: 'user_default', title: 'Google', url: browserStartUrl(), isUserControlling: true),
     ];
   }
 
@@ -530,8 +605,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     return null;
   }
 
-  ModelPill _pill(TickerItem item, {required double elevation, bool pane = false, bool narrow = false}) => ModelPill(
-        narrow: narrow,
+  ModelPill _pill(TickerItem item, {required double elevation, bool pane = false}) => ModelPill(
         key: ValueKey('${pane ? 'pane' : 'card'}-${item.modelDef.id}'),
         item: item,
         pane: pane,
@@ -548,13 +622,86 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       );
 
   // Main ticker (v8.3.1): every model of a category is listed; deselected
-  // models are greyed out. 4.5 rows show, then the list scrolls with a
-  // visible scrollbar. Swiping left/right pages to the next category, with
-  // dot indicators below that follow the swipe.
+  // models are greyed out. Swiping left/right pages to the next category.
+  // R08 caps the window at 40% of the screen, so the list shows three rows
+  // and scrolls behind an edge fade with a chevron — never a scrollbar.
   static const List<ModelCategory> _tickerOrder = [
     ModelCategory.general, ModelCategory.coding, ModelCategory.image, ModelCategory.video, ModelCategory.audio,
   ];
-  static const double _rowH = 62;
+
+  // ===== Window geometry. One geometry, every window, every state =============
+  // The reported bug was a layout that snapped between different full-width
+  // arrangements as you navigated, because the width was recomputed from the
+  // rail, the composer and the expanded card. These four numbers are the whole
+  // contract now; nothing below recomputes them.
+
+  /// R08: "Width matches the dock." The dock is [PermanentNavBar]: three 44 pt
+  /// circles, two VSpace.sm gaps, VOrnament padding of (VSpace.xs - 2).
+  static const double _dockWidth = 44 * 3 + VSpace.sm * 2 + (VSpace.xs - 2) * 2;
+
+  /// Air on every side. R36: windows float, they are not sheets.
+  static const double _windowInset = 16;
+
+  /// Between the ticker and the window above it, and above the dock.
+  static const double _windowGap = 10;
+
+  /// R08: "At most 40% of screen height." A hard ceiling, not a preference.
+  double get _tickerHeight => MediaQuery.sizeOf(context).height * 0.40;
+
+  /// R09: "row count 1, 2 or 3." A slot is sized for a model name plus a
+  /// wrapped one-line summary; longer answers scroll behind the edge fade.
+  static const int _maxTickerRows = 3;
+  static const double _rowSlot = 92;
+
+  /// The category strip that closes the window, with its gap.
+  static const double _chipStripHeight = 32;
+
+  /// The composer needs more room than a ticker row, so it gets the full
+  /// floatable width and keeps it in every state: summoning it must not
+  /// resize it (that was the composer growing huge over the expanded card).
+  double get _composerWidth => MediaQuery.sizeOf(context).width - _windowInset * 2;
+
+  /// The opened answer is a tray anchored over the ticker: wider than the dock
+  /// so a thread reads, and nowhere near the screen width (bug 5).
+  double get _trayWidth =>
+      (_dockWidth + 104).clamp(200.0, MediaQuery.sizeOf(context).width - _windowInset * 2).toDouble();
+
+  /// The tray takes what the ticker leaves, so the wallpaper still reads at
+  /// the top of the screen when it is open (R36).
+  double get _trayHeight => (MediaQuery.sizeOf(context).height * 0.30).clamp(160.0, 340.0);
+
+  /// Real elevation: a tight contact shadow grounds the plane, a wide ambient
+  /// one lifts it off the wallpaper, and a faint white bounce says light is
+  /// reaching the lower edge. VGlass.resting alone is a 12% wash with a 12%
+  /// shadow, which over a bright wallpaper is the unlayered slab that was
+  /// reported as bug 3.
+  static const List<BoxShadow> _windowShadow = [
+    BoxShadow(color: Color(0x73000000), blurRadius: 8, offset: Offset(0, 3)),
+    BoxShadow(color: Color(0x7A000000), blurRadius: 38, offset: Offset(0, 20)),
+    BoxShadow(color: Color(0x3D000000), blurRadius: 72, spreadRadius: -14, offset: Offset(0, 32)),
+    BoxShadow(color: Color(0x1AFFFFFF), blurRadius: 20, spreadRadius: -8),
+  ];
+
+  /// One frosted plane: a single [VGlass] with an opaque-leaning fill so the
+  /// wallpaper is seen through exactly one transparent layer instead of a
+  /// stack of them ("don't translucent on translucent"), plus the shadow pair
+  /// above and the specular rim that VGlass paints.
+  Widget _windowSurface({
+    required Widget child,
+    double radius = VRadius.card,
+    EdgeInsetsGeometry padding = EdgeInsets.zero,
+  }) =>
+      DecoratedBox(
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(radius), boxShadow: _windowShadow),
+        child: VGlass(
+          radius: radius,
+          material: VMaterial.resting,
+          shadow: false, // the real shadow is the DecoratedBox above
+          fill: const Color(0xD914141C),
+          padding: padding,
+          child: child,
+        ),
+      );
   late final PageController _catPager = PageController(initialPage: _tickerOrder.indexOf(_activeCategory).clamp(0, 4));
   /// Keeps the named category strip aligned with the paged ticker above it.
   late final ScrollController _catLabelCtl = ScrollController();
@@ -579,14 +726,13 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           ),
       ];
 
-  Widget _tickerRow(ModelCategory c, TickerItem item, double elevation, bool narrow) {
+  Widget _tickerRow(ModelCategory c, TickerItem item, double elevation) {
     final selected = _selByCat[c]!.contains(item.modelDef.id);
     final hasAnswer = item.conversation.isNotEmpty || item.isStreaming;
-    final pill = _pill(item, elevation: elevation, narrow: narrow);
+    final pill = _pill(item, elevation: elevation);
     final card = hasAnswer
         ? pill
         : ModelPill(
-            narrow: narrow,
             key: ValueKey('card-${item.modelDef.id}'),
             item: item,
             elevation: elevation,
@@ -615,69 +761,53 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     );
   }
 
-  Widget _tickerPage(ModelCategory c, bool isMobile) {
+  /// One page, one arrangement: the ticker window always shows the same thing,
+  /// a column of cards at the window's own width. The old version returned two
+  /// different layouts from this method depending on whether an answer was
+  /// open (a narrow column beside a full-width expanded pane, or a column
+  /// aligned left inside a wider window). That is the snap the owner reported
+  /// as bug 4, and the expanded answer now lives in its own tray above the
+  /// ticker, so this method has one job.
+  Widget _tickerPage(ModelCategory c) {
     final rows = _tickerRows(c);
-    final open = c != _activeCategory
-        ? null
-        : _expandedModelIds.contains(_kConsensusId)
-            ? _consensusItem()
-            : _openPill(rows);
     final sc = _tickerScroll[c]!;
     // No Scrollbar: a hard grey track on a glass surface reads as a debug
-    // affordance and flattens the illusion. The EdgeFade plus the cinematic
-    // scroll cue below carry the affordance instead.
-    Widget column() => EdgeFade(
-          fadeHeight: 22,
-          child: Stack(
-            children: [
-              ListView.separated(
-                controller: sc,
-                padding: const EdgeInsets.only(right: 8, bottom: 4),
-                physics: const BouncingScrollPhysics(),
-                itemCount: rows.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 6),
-                itemBuilder: (_, i) => _tickerRow(c, rows[i], rows.length <= 1 ? 1.0 : 1.0 - i / (rows.length - 1), open != null),
-              ),
-              if (rows.length > 3 && sc.hasClients && sc.position.maxScrollExtent > 0)
-                Positioned(
-                  right: 2,
-                  bottom: 2,
-                  child: IgnorePointer(
-                    child: AnimatedBuilder(
-                      animation: sc,
-                      builder: (_, __) {
-                        final p = sc.hasClients && sc.position.maxScrollExtent > 0
-                            ? (sc.offset / sc.position.maxScrollExtent).clamp(0.0, 1.0)
-                            : 0.0;
-                        final more = 1 - p;
-                        return Opacity(
-                          opacity: (0.18 + 0.62 * more).clamp(0.0, 0.85),
-                          child: const Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: Colors.white),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-            ],
+    // affordance and flattens the illusion. The EdgeFade plus the chevron
+    // carry the affordance instead.
+    return EdgeFade(
+      fadeHeight: 20,
+      child: Stack(
+        children: [
+          ListView.separated(
+            controller: sc,
+            padding: const EdgeInsets.only(bottom: 4),
+            physics: const BouncingScrollPhysics(),
+            itemCount: rows.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 6),
+            itemBuilder: (_, i) => _tickerRow(c, rows[i], rows.length <= 1 ? 1.0 : 1.0 - i / (rows.length - 1)),
           ),
-        );
-    if (open == null) {
-      // Collapsed: a card column, not a full-bleed panel. The resting ticker
-      // ran the full viewport width, which read as a sheet of content rather
-      // than a stack of cards floating over the room.
-      final w = MediaQuery.of(context).size.width;
-      return Align(
-        alignment: Alignment.centerLeft,
-        child: SizedBox(width: (w * 0.40).clamp(180.0, 260.0), child: column()),
-      );
-    }
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SizedBox(width: isMobile ? 108 : 180, child: column()),
-        const SizedBox(width: 6),
-        Expanded(child: _pill(open, elevation: 1, pane: true)),
-      ],
+          if (rows.length > 3 && sc.hasClients && sc.position.maxScrollExtent > 0)
+            Positioned(
+              right: 2,
+              bottom: 2,
+              child: IgnorePointer(
+                child: AnimatedBuilder(
+                  animation: sc,
+                  builder: (_, __) {
+                    final p = sc.hasClients && sc.position.maxScrollExtent > 0
+                        ? (sc.offset / sc.position.maxScrollExtent).clamp(0.0, 1.0)
+                        : 0.0;
+                    final more = 1 - p;
+                    return Opacity(
+                      opacity: (0.18 + 0.62 * more).clamp(0.0, 0.85),
+                      child: const Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: Colors.white),
+                    );
+                  },
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -809,30 +939,27 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         onOptions: () => setState(() => _genOptionsOpen = true),
       );
 
-  Widget _buildTicker(bool isMobile) {
+  Widget _buildTicker() {
     final idx = _tickerOrder.indexOf(_activeCategory);
     if (_catPager.hasClients && _catPager.page != null && (_catPager.page!.round() != idx) && !_catPager.position.isScrollingNotifier.value) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_catPager.hasClients) _catPager.animateToPage(idx, duration: VMotion.base, curve: Curves.easeOutCubic);
       });
     }
-    final h = _expandedModelIds.isNotEmpty
-        ? (MediaQuery.of(context).size.height * (_isComposerSummoned ? 0.62 : 0.52) - 140).clamp(220.0, 520.0)
-        : _rowH * 4.5 + 6 * 4;
+    // The window owns the height (R08: 40% ceiling, one fixed height in every
+    // state). This used to size itself from _rowH, or from a fraction of the
+    // screen that grew to 62% when a card was open and the composer was up.
     return Column(
-      mainAxisSize: MainAxisSize.min,
       children: [
-        SizedBox(
-          height: h,
+        Expanded(
           child: PageView.builder(
             controller: _catPager,
-            scrollBehavior: const MaterialScrollBehavior().copyWith(dragDevices: {PointerDeviceKind.touch, PointerDeviceKind.mouse, PointerDeviceKind.trackpad, PointerDeviceKind.stylus}),
             itemCount: _tickerOrder.length,
             onPageChanged: (i) => setState(() {
               _activeCategory = _tickerOrder[i];
               _expandedModelIds.clear();
             }),
-            itemBuilder: (_, i) => _tickerPage(_tickerOrder[i], isMobile),
+            itemBuilder: (_, i) => _tickerPage(_tickerOrder[i]),
           ),
         ),
         const SizedBox(height: 6),
@@ -891,6 +1018,123 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
   /// Plain-word name for a category tab comes from [ModelCategoryX.label],
   /// so the tab strip and the roster can never drift apart.
+
+  /// The ticker window (R08). Dock width, centred, air on every side, and a
+  /// height that never passes 40% of the screen, whatever is open.
+  ///
+  /// The 40% is a ceiling rather than a target: the window is as tall as the
+  /// pinned row, the visible rows and the category strip need, so a ticker
+  /// holding one model is a small window instead of a slab (which is what the
+  /// old fixed 62%-of-the-screen block was). One width, one ceiling, every
+  /// state, so opening a card or the composer cannot resize the room.
+  Widget _buildTickerWindow() {
+    final showConsensus = !_activeCategory.isMedia && _tickerItems.isNotEmpty;
+    // R09: the window shows one, two or three rows. A slot is sized for a model
+    // name plus a wrapped one-line summary; anything longer scrolls behind the
+    // edge fade and the chevron.
+    final visible = _tickerRows(_activeCategory).length.clamp(1, _maxTickerRows);
+    final window = SizedBox(
+      width: _dockWidth,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: _tickerHeight),
+        child: _windowSurface(
+          padding: const EdgeInsets.fromLTRB(VSpace.xs - 2, VSpace.xs - 2, VSpace.xs - 2, VSpace.xs - 2),
+          child: CustomMultiChildLayout(
+            // Only the card list is elastic. The pinned row keeps its natural
+            // height (R16: the line is not cut off) and the category strip is
+            // fixed, so the window is exactly as tall as it needs to be and
+            // gives the height back to the 40% ceiling when it overflows.
+            delegate: _TickerWindowLayout(listSlots: visible * _rowSlot + _chipStripHeight),
+            children: [
+              LayoutId(
+                id: _TickerWindowLayout.pinned,
+                child: showConsensus
+                    ? ConsensusRow(
+                        score: _consensusRatio,
+                        summary: _consensusSummary,
+                        isGenerating: _isConsensusGenerating,
+                        onTap: () => _onTogglePill(_kConsensusId),
+                      )
+                    : const SizedBox.shrink(),
+              ),
+              LayoutId(id: _TickerWindowLayout.list, child: _buildTicker()),
+            ],
+          ),
+        ),
+      ),
+    );
+    // Bug 10: summoning the composer has to push the rest of the room back.
+    // The wallpaper falls out of focus in the depth-of-field plane above; what
+    // was missing was the resting ticker going quiet with it instead of
+    // sitting sharp and still taking taps behind the writing surface.
+    return AnimatedOpacity(
+      duration: VMotion.base,
+      curve: Curves.easeOutCubic,
+      opacity: _isComposerSummoned ? 0.34 : 1,
+      child: IgnorePointer(ignoring: _isComposerSummoned, child: window),
+    );
+  }
+
+  /// The one window that sits above the ticker.
+  ///
+  /// R12: a menu and a work surface never show together, so the opened answer
+  /// (or the consensus detail) takes this slot, and summoning the composer
+  /// takes it back — see [_buildComposer]'s summon path, which closes the tray.
+  Widget? _buildTray() {
+    if (_expandedModelIds.contains(_kConsensusId)) {
+      return _buildTrayWindow(_consensusItem());
+    }
+    final open = _openPill(_tickerItems);
+    return open == null ? null : _buildTrayWindow(open);
+  }
+
+  /// Bug 5: the opened answer is a tray anchored over the ticker, not a
+  /// permanent full-width block. It grows upward from the ticker's top edge,
+  /// the ticker keeps its own geometry underneath it, and the tray closes from
+  /// its own close control (R37).
+  Widget _buildTrayWindow(TickerItem open) => SizedBox(
+        width: _trayWidth,
+        height: _trayHeight,
+        child: _windowSurface(
+          padding: const EdgeInsets.fromLTRB(VSpace.xs - 2, VSpace.xs - 2, VSpace.xs - 2, 2),
+          child: _pill(open, elevation: 1, pane: true),
+        ),
+      );
+
+  /// The composer, in a slot of its own with a width that never changes.
+  ///
+  /// Bugs 7 and 8: it used to be the last child of the ticker's own column, so
+  /// it sat on top of the category chips when the column ran past the window's
+  /// max height, and its width came from the ticker's — which is why it grew
+  /// huge whenever an answer was expanded. It keeps one width now, in front of
+  /// a frosted plane, and never inside the ticker's layout.
+  Widget _buildComposer() => SizedBox(
+        width: _composerWidth,
+        child: _windowSurface(
+          padding: const EdgeInsets.symmetric(vertical: VSpace.xs - 2),
+          child: FloatingPrompt(
+            summoned: _isComposerSummoned,
+            busy: _busy,
+            onSubmitPrompt: (text, files) => _onSendPrompt(text, files),
+            onSummon: () => setState(() {
+              _closeAllPanes();
+              _expandedModelIds.clear();
+              _isComposerSummoned = true;
+            }),
+            onTuck: () => setState(() => _isComposerSummoned = false),
+            mode: _mode,
+            onMode: (m) => setState(() => _mode = m),
+            private: _incognito,
+            onPrivate: (v) => setState(() => _incognito = v),
+            offline: _apiChecked && !ColliderApi.instance.online,
+            category: _activeCategory,
+            onCategory: (c) => setState(() => _activeCategory = c),
+            onOpenOptions: () => setState(() => _genOptionsOpen = true),
+            restoreText: _restoreText,
+            generateTick: _generateTick,
+          ),
+        ),
+      );
 
   Future<void> _onSendInlineReply(String modelId, String text) async {
     final idx = _tickerItems.indexWhere((it) => it.modelDef.id == modelId);
@@ -1163,40 +1407,25 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   }
 
   bool _browserOpen = false;
+  String _browserActiveTabId = 'user_default';
 
+  /// R34: one browser instance. Asking again while it is already open only
+  /// retargets the window that is on screen.
   Future<void> _openBrowserForTab(String tabId) async {
-    // The start page depends on whether the server answered (browser_urls.dart).
     await _booted.future.timeout(const Duration(seconds: 4), onTimeout: () {});
     if (!mounted) return;
     setState(() {
       _activeDrawer = null;
       _browserOpen = true;
+      _browserActiveTabId = tabId;
     });
-    showDialog(
-      context: context,
-      // Row 10 (v8.3): a tap outside must not close the browser; only its
-      // close control (or Escape) does.
-      barrierDismissible: false,
-      barrierColor: VOverlay.scrim,
-      builder: (ctx) {
-        return InAppBrowserSheet(
-          initialTabId: tabId,
-          tabs: _browserTabs,
-          onTabUpdated: (updated) {
-            setState(() {
-              final idx = _browserTabs.indexWhere((t) => t.id == updated.id);
-              if (idx != -1) _browserTabs[idx] = updated;
-            });
-          },
-          onNewUserTab: (newTab) {
-            setState(() {
-              _browserTabs.add(newTab);
-            });
-          },
-        );
-      },
-    ).then((_) {
-      if (mounted) setState(() => _browserOpen = false);
+  }
+
+  void _closeBrowser() {
+    if (!_browserOpen) return;
+    setState(() {
+      _browserOpen = false;
+      _activeDrawer = null;
     });
   }
 
@@ -1424,8 +1653,18 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               ),
             ),
           ),
-          // ================= PLANE 1: RESTING WORKSPACE =================
-          // Hidden during Premium Theme Market (Body) so ticker chrome doesn't bleed through
+          // ================= PLANE 1: THE TICKER WINDOW, THE TRAY, THE COMPOSER =================
+          // Hidden during Premium Theme Market (Body) so ticker chrome doesn't bleed through.
+          //
+          // One arrangement, in every state, bottom-up:
+          //
+          //   dock (drawn further down) · air · composer
+          //   air · ticker window (dock width, at most 40% of the height)
+          //   air · tray (only while an answer is open)
+          //
+          // Nothing here is measured from the rail, the composer or the open card
+          // any more, so navigating cannot snap the layout into a different
+          // full-width arrangement. Nothing touches an edge.
           if (!_browserOpen && !(isMobile && _isMobileSideNavOpen) && !const {'premium', 'themes', 'apps', 'smartgen', 'market', 'files', 'consensus'}.contains(_activeDrawer))
           Positioned.fill(
             bottom: 74,
@@ -1435,87 +1674,33 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                 alignment: Alignment.bottomCenter,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // ================= PLANE 1: THE SPATIAL WINDOW CANVAS =================
-                    // Compact, content-hugging half-width layout with generous negative space
-                    Center(
-                      child: Container(
-                        // Master Spec Ã‚Â§4.2: height strictly <= 40% of screen height at all times,
-                        // width strictly equal to the nav bar width, never more than 50% of screen.
-                        constraints: BoxConstraints(
-                          // Never more than 50% of viewport width (user layout contract),
-                          // and never wider than the nav capsule it sits above.
-                          // With the side rail showing, the window sits beside it (12 px either side), never under it.
-                          maxWidth: isMobile && _mediaShowing
-                              ? MediaQuery.of(context).size.width - (_railVisible ? 81 : 24)
-                              : isMobile
-                              ? (_railVisible
-                                  ? (MediaQuery.of(context).size.width - 81).clamp(220.0, _expandedModelIds.isNotEmpty ? 560.0 : 330.0)
-                                  : (MediaQuery.of(context).size.width - (_isComposerSummoned || _expandedModelIds.isNotEmpty ? 24 : 120)).clamp(220.0, _expandedModelIds.isNotEmpty ? 560.0 : 330.0))
-                              : (_expandedModelIds.isNotEmpty ? 760.0 : 480.0),
-                          // Map row 13: a generation gets the room to show the media and its panel.
-                          maxHeight: MediaQuery.of(context).size.height * (_mediaShowing ? 0.80 : _isComposerSummoned ? 0.62 : 0.52),
-                        ),
-                        margin: isMobile && _railVisible
-                            ? const EdgeInsets.only(left: 69, right: 12)
-                            : EdgeInsets.symmetric(horizontal: isMobile ? 12 : 24),
-                        child: EdgeLightDrift(radius: VRadius.card, child: VGlass(
-                          radius: VRadius.card,
-                          material: VMaterial.resting,
-                          padding: const EdgeInsets.fromLTRB(VSpace.xs, VSpace.xs, VSpace.xs, 6),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                            // Pinned consensus row: the count and the winning essence,
-                            // verbatim. R16: this is the only consensus entry point.
-                            if (!_activeCategory.isMedia && _tickerItems.isNotEmpty) ...[
-                              AmbientGlow(color: Colors.white, radius: 20, min: 0.06, max: 0.20, period: const Duration(milliseconds: 5200), child: ConsensusRow(
-                                score: _consensusRatio,
-                                summary: _consensusSummary,
-                                isGenerating: _isConsensusGenerating,
-                                onTap: () => _onTogglePill(_kConsensusId)),
-                              ),
-                              const SizedBox(height: 8),
-                            ],
-
-                            // Model Ticker (map row 15, WeChat 0-639, D51): the
-                            // collapsed cards are a left column; the opened answer
-                            // fills the middle and closes with its own button.
-                            if (!_mediaStageOn) Flexible(child: _buildTicker(isMobile)),
-
-                            const SizedBox(height: 8),
-
-                            // Pinned prompt: condensed above the dock, opens in place as the composer.
-                            FloatingPrompt(
-                              summoned: _isComposerSummoned,
-                              busy: _busy,
-                              onSubmitPrompt: (text, files) => _onSendPrompt(text, files),
-                              onSummon: () => setState(() {
-                                _closeAllPanes();
-                                _isComposerSummoned = true;
-                              }),
-                              onTuck: () => setState(() => _isComposerSummoned = false),
-                              mode: _mode,
-                              onMode: (m) => setState(() => _mode = m),
-                              private: _incognito,
-                              onPrivate: (v) => setState(() => _incognito = v),
-                              offline: _apiChecked && !ColliderApi.instance.online,
-                              category: _activeCategory,
-                              onCategory: (c) => setState(() => _activeCategory = c),
-                              onOpenOptions: () => setState(() => _genOptionsOpen = true),
-                              restoreText: _restoreText,
-                              generateTick: _generateTick,
-                            ),
-                          ],
-                        )),
-                      ),
-                    ),
-                  ),
-                ],
+                    // Map row 13: a generation gets the room to show its media
+                    // and its panel, so the media board keeps this plane to
+                    // itself and only the composer floats in the floatable width.
+                    if (_mediaShowing)
+                      _buildComposer()
+                    else ...[
+                      // Bug 5: the opened answer is a tray anchored over the
+                      // ticker, not a permanent block in the middle of it.
+                      if (_buildTray() case final tray?) ...[
+                        tray,
+                        const SizedBox(height: _windowGap),
+                      ],
+                      // Bug 10: this one dims when the composer is summoned.
+                      _buildTickerWindow(),
+                      const SizedBox(height: _windowGap),
+                      // Bug 7: the composer has its own slot now, so it cannot
+                      // land on the category chips.
+                      _buildComposer(),
+                    ],
+                    const SizedBox(height: _windowGap),
+                  ],
+                ),
               ),
             ),
           ),
-        ),
 
 
 
@@ -1784,6 +1969,36 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               ),
             ),
 
+          // ================= PLANE 3: BROWSER WINDOW =================
+          // A window in the room, not a route above it. It sits under the dock
+          // (PLANE 4), so dock taps reach the dock and close the browser (R12),
+          // and it lays no scrim over the wallpaper, which stays visible around
+          // all four sides of it (R36). The transparent barrier keeps taps on
+          // the resting surface from reaching through behind it.
+          if (_browserOpen) ...[
+            const Positioned.fill(child: ModalBarrier(color: Colors.transparent)),
+            Positioned.fill(
+              child: Center(
+                child: InAppBrowserSheet(
+                  initialTabId: _browserActiveTabId,
+                  tabs: _browserTabs,
+                  onClose: _closeBrowser,
+                  onTabUpdated: (updated) {
+                    setState(() {
+                      final idx = _browserTabs.indexWhere((t) => t.id == updated.id);
+                      if (idx != -1) _browserTabs[idx] = updated;
+                    });
+                  },
+                  onNewUserTab: (newTab) {
+                    setState(() {
+                      _browserTabs.add(newTab);
+                    });
+                  },
+                ),
+              ),
+            ),
+          ],
+
           // ================= PLANE 4: PERMANENT BOTTOM DOCK =================
           // Shown on every screen, the Premium Theme Market included (the market
           // reserves its height; see PremiumThemeMarketView.bottomBarReserve).
@@ -1810,16 +2025,27 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               child: Center(
                 child: SpecularSweep(radius: 40, child: PermanentNavBar(
                   isComposerSummoned: _isComposerSummoned,
-                  onToggleComposer: _toggleComposer,
+                  onToggleComposer: () {
+                    // R12: any nav tap closes every other open pane.
+                    _closeBrowser();
+                    _toggleComposer();
+                  },
                   onHome: () {
+                    _closeBrowser();
                     if (_activeDrawer != null) {
                       _requestSwitchSurface(null);
                     } else {
                       _openHomeComposer();
                     }
                   },
-                  onApps: () => _openDrawer('apps'),
-                  onSettings: () => setState(() => _settingsOpen = !_settingsOpen),
+                  onApps: () {
+                    _closeBrowser();
+                    _openDrawer('apps');
+                  },
+                  onSettings: () {
+                    _closeBrowser();
+                    setState(() => _settingsOpen = !_settingsOpen);
+                  },
                   activeDrawer: _activeDrawer,
                 )),
               ),
