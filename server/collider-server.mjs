@@ -59,7 +59,8 @@ const PROVIDERS = {
     slug: (remote) => remote.replace(/^[^/]+\//, ''),
   },
   openrouter: { base: 'https://openrouter.ai/api/v1', keys: ['OPENROUTER_KEY'] },
-  pollinations: { base: 'https://text.pollinations.ai/openai', keys: [] }, // keyless by design
+  // Keyless. Note the path: Pollinations publishes /openai, not /chat/completions.
+  pollinations: { base: 'https://text.pollinations.ai', path: '/openai', keys: [] },
 };
 
 /** The roster the client knows about, and how to actually reach each model.
@@ -127,35 +128,53 @@ const liveRoster = () => MODELS.filter((m) => m.tries.some(([p]) => providerUsab
 const stripThink = (t) =>
   String(t || '').replaceAll(/<think>[\s\S]*?<\/think>/g, '').replace(/^[\s\S]*?<\/think>/g, '').trim();
 
+/** One OpenAI-compatible chat call. Providers differ in three ways only: the
+ *  path they expose, whether they want a bearer token, and what they do with
+ *  the model id. Everything else is identical, so it lives in one place. */
+async function postChat(url, body, headers) {
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body,
+    signal: AbortSignal.timeout(90_000),
+  });
+  const text = await r.text();
+  if (!r.ok) throw new Error(`${r.status}: ${text.slice(0, 200)}`);
+  const out = stripThink(JSON.parse(text)?.choices?.[0]?.message?.content);
+  if (!out) throw new Error('empty answer');
+  return out;
+}
+
 async function callProvider(provider, remote, messages, { maxTokens } = {}) {
   const def = PROVIDERS[provider];
   const wireRemote = def.slug ? def.slug(remote) : remote;
-  const body = JSON.stringify({ model: wireRemote, messages, ...(maxTokens ? { max_tokens: maxTokens } : {}) });
+  const body = JSON.stringify({
+    model: wireRemote,
+    messages,
+    ...(maxTokens ? { max_tokens: maxTokens } : {}),
+  });
+  const path = def.path || '/chat/completions';
 
-  // Try each configured key; fall through to the upstream proxy.
+  // Keyless by design: go straight out, with no token at all.
+  if (def.keys.length === 0) return postChat(def.base + path, body, {});
+
+  // Try each configured key. Auth and quota failures mean "try the next one";
+  // anything else is a real answer from the provider and we stop there.
+  let hard = null;
   for (const name of def.keys) {
     const key = process.env[name];
     if (!key) continue;
     try {
-      const r = await fetch(`${def.base}/chat/completions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-        body,
-        signal: AbortSignal.timeout(90_000),
-      });
-      const text = await r.text();
-      if (r.status === 401 || r.status === 403 || r.status === 429) continue; // try the next key
-      if (!r.ok) throw new Error(`provider ${r.status}: ${text.slice(0, 200)}`);
-      const json = JSON.parse(text);
-      const out = stripThink(json?.choices?.[0]?.message?.content);
-      if (out) return out;
-      throw new Error('empty answer');
+      return await postChat(def.base + path, body, { Authorization: `Bearer ${key}` });
     } catch (e) {
-      if (e?.message?.startsWith('provider') || e?.message === 'empty answer') throw e;
+      if (/^(401|403|429):/.test(e.message)) continue;
+      hard = e;
+      break;
     }
   }
+  if (hard) throw new Error(`provider ${hard.message}`);
 
-  // No usable key here — ask the upstream Collider proxy, which holds one.
+  // No usable key here: ask the upstream Collider proxy, which holds one.
   if (def.viaUpstream && UPSTREAM) {
     const r = await fetch(`${UPSTREAM}/api/p?u=${def.viaUpstream}`, {
       method: 'POST',
@@ -166,8 +185,8 @@ async function callProvider(provider, remote, messages, { maxTokens } = {}) {
     const text = await r.text();
     if (!r.ok) throw new Error(`upstream ${r.status}: ${text.slice(0, 200)}`);
     const out = stripThink(JSON.parse(text)?.choices?.[0]?.message?.content);
-    if (out) return out;
-    throw new Error('empty answer');
+    if (!out) throw new Error('empty answer');
+    return out;
   }
 
   throw new Error('no-key');
