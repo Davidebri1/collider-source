@@ -212,7 +212,142 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
   List<WallpaperTheme> get _catalog => [
         ...WallpaperCatalog.premiumThemes,
         ...WallpaperCatalog.freeThemes,
+      ].where(_inCategory).toList();
+
+  // v8.7 side nav: categories + a search button (popup search with DOF).
+  // Categories = the bucket's top-level folders (theme.collection).
+  List<String> get _categories => [
+        'All',
+        // v8.7: the ghost menu filters by tag (most used first).
+        ...(() {
+          final n = <String, int>{};
+          for (final t in [...WallpaperCatalog.premiumThemes, ...WallpaperCatalog.freeThemes]) {
+            for (final g in t.tags) {
+              n[g] = (n[g] ?? 0) + 1;
+            }
+          }
+          return n.keys.toList()..sort((a, b) => n[b]!.compareTo(n[a]!));
+        })(),
       ];
+  String _category = 'All';
+  bool _searchOpen = false;
+  bool _exploded = false;
+  bool _inCategory(WallpaperTheme t) => _category == 'All' || t.tags.contains(_category);
+  void _setCategory(String c) {
+    if (c == _category) return;
+    _category = c;
+    _fetchThemes(_searchQuery, keepId: _selected?.id);
+  }
+  void _openSearch(bool open) {
+    setState(() => _searchOpen = open);
+    if (open) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _searchFocus.requestFocus());
+    } else {
+      _searchFocus.unfocus();
+    }
+  }
+
+  Widget _sideNav() {
+    Widget item(IconData icon, String label, bool on, VoidCallback tap) => GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: tap,
+          child: SizedBox(
+            width: 56,
+            height: 52,
+            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Icon(icon, size: 20, color: Colors.white.withValues(alpha: on ? 1 : 0.55)),
+              const SizedBox(height: 2),
+              Text(label,
+                  style: TextStyle(fontSize: 10, color: Colors.white.withValues(alpha: on ? 1 : 0.55))),
+            ]),
+          ),
+        );
+    final cats = _categories;
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      SuspendedFrost(
+        edge: 0.15,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+            child: ColoredBox(
+              color: const Color(0x14FFFFFF),
+              child: item(Icons.search_rounded, 'Search', _searchOpen || _searchQuery.isNotEmpty,
+                  () => _openSearch(true)),
+            ),
+          ),
+        ),
+      ),
+      const SizedBox(height: 8),
+      GhostMenu(
+        width: 96,
+        items: cats,
+        selected: math.max(0, cats.indexOf(_category)),
+        onSelected: (i) => _setCategory(cats[i]),
+      ),
+    ]);
+  }
+
+  /// Exploded asset view: the cover lifted forward, a context menu under it.
+  Widget _explodedView(WallpaperTheme t, double w, double h) {
+    final cw = math.min(w * 0.62, 300.0);
+    final owned = _owned(t);
+    final menu = GlassMenu(rows: [
+      GlassMenuRow(
+          icon: owned ? Icons.check_rounded : Icons.shopping_bag_outlined,
+          label: owned ? 'Apply' : 'Buy · ${_store.priceLabelFor(t.id, catalogPrice: t.priceLabel)}',
+          on: true,
+          toggle: false,
+          onTap: () {
+            setState(() => _exploded = false);
+            owned ? widget.onApplyTheme(t) : _confirmBuy(t, _store.priceLabelFor(t.id, catalogPrice: t.priceLabel));
+          }),
+      GlassMenuRow(
+          icon: Icons.visibility_outlined,
+          label: 'Preview',
+          toggle: false,
+          onTap: () {
+            setState(() => _exploded = false);
+            widget.onPreviewTheme(t);
+          }),
+      GlassMenuRow(
+          icon: Icons.close_rounded, label: 'Close', toggle: false,
+          onTap: () => setState(() => _exploded = false)),
+    ]);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => setState(() => _exploded = false),
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: 1),
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+        builder: (context, v, child) => BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 14 * v, sigmaY: 14 * v),
+          child: ColoredBox(
+            color: Color.fromRGBO(0, 0, 0, 0.25 * v),
+            child: Opacity(opacity: v, child: Transform.scale(scale: 0.9 + 0.1 * v, child: child)),
+          ),
+        ),
+        child: Center(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(22),
+              child: SizedBox(
+                width: cw,
+                height: cw * 16 / 9,
+                child: ThemeImage(t.assetPath, fit: BoxFit.cover, filterQuality: FilterQuality.high),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(_displayName(t),
+                style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w300)),
+            const SizedBox(height: 14),
+            GestureDetector(onTap: () {}, child: menu),
+          ]),
+        ),
+      ),
+    );
+  }
 
   /// A still (not premium) is free: it applies straight away.
   bool _owned(WallpaperTheme t) => !t.isPremium || _store.isUnlocked(t.id);
@@ -337,7 +472,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
       // Search input (backdrop-blur-sm 8px) blur element, hosted by the
       // ambient on web (the empty header strip no longer paints; see below).
       final glass = <AmbientGlass>[
-        AmbientGlass(
+        if (_searchOpen) AmbientGlass(
             Rect.fromLTWH((w - searchWidth) / 2, _kHeaderHeight + _kSearchPad,
                 searchWidth, _kSearchHeight),
             _kSearchHeight / 2,
@@ -430,7 +565,9 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
                 ),
                 // CoverFlow wrapper
                 Positioned(
-                  left: _kMainPadX,
+                  // v8.7: leave room for the side nav (covers can be HTML
+                  // video layers, which paint above the canvas).
+                  left: _kMainPadX + 76,
                   right: _kMainPadX,
                   top: stageTop,
                   height: _kStageHeight,
@@ -448,7 +585,13 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
                             if (_owned(t)) t.id,
                         },
                         onSelect: _select,
-                        onTapCover: _select,
+                        onTapCover: (i) {
+                          if (i % _themes.length == _currentIndex) {
+                            setState(() => _exploded = true);
+                          } else {
+                            _select(i);
+                          }
+                        },
                         onApplyCover: _applyAt,
                       ),
                     ),
@@ -456,20 +599,32 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
                 ),
               ],
 
-              // SearchBar wrapper (z 450): p-4
-              Positioned(
-                left: _kSearchPad,
-                right: _kSearchPad,
-                top: _kHeaderHeight + _kSearchPad,
-                height: _kSearchHeight,
-                child: Center(
-                  child: SizedBox(
-                    width: searchWidth,
-                    height: _kSearchHeight,
-                    child: _buildSearchBar(),
+              // v8.7 side nav (categories + search), left edge.
+              Positioned(left: 8, top: mainTop, child: _sideNav()),
+
+              // Search popup (was the always-on SearchBar): DOF blur behind.
+              if (_searchOpen) ...[
+                Positioned.fill(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => _openSearch(false),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                      child: const ColoredBox(color: Color(0x33000000)),
+                    ),
                   ),
                 ),
-              ),
+                Positioned(
+                  left: _kSearchPad,
+                  right: _kSearchPad,
+                  top: _kHeaderHeight + _kSearchPad,
+                  height: _kSearchHeight,
+                  child: Center(child: SizedBox(width: searchWidth, height: _kSearchHeight, child: _buildSearchBar())),
+                ),
+              ],
+
+              if (_exploded && _selected != null)
+                Positioned.fill(child: _explodedView(_selected!, w, h)),
 
               // Header (z 500): the export's empty p-4 strip keeps its 32px in
               // the layout (mainTop) but paints nothing. Its bg-black/20 +
@@ -508,7 +663,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
             SizedBox(
               height: 28,
               child: Text(
-                _displayName(t),
+                '${t.isLive ? '\u25B6\uFE0E ' : ''}${_displayName(t)}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
@@ -1859,7 +2014,7 @@ LinearGradient _cssLinearGradient(
 /// Inter was never bundled, so this helper pulled a second family off the CDN
 /// at runtime and the Theme Gallery / Settings surfaces rendered in a different
 /// face from everything around them. It now uses the one bundled family.
-TextStyle _inter(TextStyle s) => GoogleFonts.instrumentSans(textStyle: s);
+TextStyle _inter(TextStyle s) => GoogleFonts.inter(textStyle: s);
 
 /// CSS drop-shadow(x y blur color): sigma = blur / 2.
 Shadow _cssDropShadow(double x, double y, double blur, Color color) {

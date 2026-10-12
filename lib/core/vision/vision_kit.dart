@@ -1059,7 +1059,7 @@ class GlassMenu extends StatelessWidget {
         child: SizedBox(
           width: width,
           height: h,
-          child: ClipRRect(
+          child: SuspendedFrost(child: ClipRRect(
             borderRadius: BorderRadius.circular(24),
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 20 * k, sigmaY: 20 * k),
@@ -1080,7 +1080,7 @@ class GlassMenu extends StatelessWidget {
                 // and the card stopped reading as a container at all.
                 foregroundDecoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.5), width: 1),
+                  // v9.1: no outline (suspended frost).
                   boxShadow: [
                     BoxShadow(color: Colors.black.withValues(alpha: 0.45), blurRadius: 30, spreadRadius: -6, offset: const Offset(0, 8)),
                   ],
@@ -1097,7 +1097,7 @@ class GlassMenu extends StatelessWidget {
                 ),
               ),
             ),
-          ),
+          )),
         ),
       ),
     );
@@ -1138,10 +1138,132 @@ class GlassMenu extends StatelessWidget {
                   r.label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.instrumentSans(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.white.withValues(alpha: op)),
+                  style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.white.withValues(alpha: op)),
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+/// v8.7: temporary UI (Settings, context menus, popups) looks suspended in
+/// mid-air: no outline, the frosted panel dissolves at its perimeter.
+class SuspendedFrost extends StatelessWidget {
+  final Widget child;
+  final double edge;
+  const SuspendedFrost({super.key, required this.child, this.edge = 0.06});
+  @override
+  Widget build(BuildContext context) {
+    Shader fade(Rect r, bool vertical) => LinearGradient(
+          begin: vertical ? Alignment.topCenter : Alignment.centerLeft,
+          end: vertical ? Alignment.bottomCenter : Alignment.centerRight,
+          colors: const [Color(0x00FFFFFF), Color(0xFFFFFFFF), Color(0xFFFFFFFF), Color(0x00FFFFFF)],
+          stops: [0, edge, 1 - edge, 1],
+        ).createShader(r);
+    return ShaderMask(
+      blendMode: BlendMode.dstIn,
+      shaderCallback: (r) => fade(r, true),
+      child: ShaderMask(blendMode: BlendMode.dstIn, shaderCallback: (r) => fade(r, false), child: child),
+    );
+  }
+}
+
+/// v8.7 ghost menu: a floating vertical picker with no outlines. The centred
+/// item is sharp; items above and below blur and fade with distance. The
+/// frosted backing dissolves at its edges (suspended mid-air).
+class GhostMenu extends StatefulWidget {
+  final List<String> items;
+  final int selected;
+  final ValueChanged<int> onSelected;
+  final double width;
+  final double itemExtent;
+  final int visible;
+  final List<IconData>? icons;
+  const GhostMenu({super.key, required this.items, required this.selected, required this.onSelected,
+      this.width = 120, this.itemExtent = 36, this.visible = 5, this.icons});
+  @override
+  State<GhostMenu> createState() => _GhostMenuState();
+}
+
+class _GhostMenuState extends State<GhostMenu> {
+  late final FixedExtentScrollController _c = FixedExtentScrollController(initialItem: widget.selected);
+  @override
+  void didUpdateWidget(covariant GhostMenu old) {
+    super.didUpdateWidget(old);
+    if (_c.hasClients && widget.selected != _c.selectedItem && widget.selected < widget.items.length) {
+      _c.animateToItem(widget.selected, duration: VMotion.base, curve: Curves.easeOutCubic);
+    }
+  }
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+  @override
+  Widget build(BuildContext context) {
+    final h = widget.itemExtent * widget.visible;
+    return SuspendedFrost(
+      edge: 0.18,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: Container(
+            width: widget.width,
+            height: h,
+            color: const Color(0x14FFFFFF),
+            child: ListWheelScrollView.useDelegate(
+              controller: _c,
+              itemExtent: widget.itemExtent,
+              diameterRatio: 3,
+              physics: const FixedExtentScrollPhysics(),
+              onSelectedItemChanged: widget.onSelected,
+              childDelegate: ListWheelChildBuilderDelegate(
+                childCount: widget.items.length,
+                builder: (context, i) => AnimatedBuilder(
+                  animation: _c,
+                  builder: (context, _) {
+                    final pos = _c.hasClients && _c.position.hasContentDimensions
+                        ? _c.offset / widget.itemExtent
+                        : widget.selected.toDouble();
+                    final d = (i - pos).abs();
+                    final sigma = (d * 2.2).clamp(0.0, 6.0);
+                    return GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => _c.animateToItem(i, duration: VMotion.base, curve: Curves.easeOutCubic),
+                      child: Opacity(
+                        opacity: (1 - d * 0.32).clamp(0.08, 1.0),
+                        child: ImageFiltered(
+                          enabled: sigma > 0.05,
+                          imageFilter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+                          child: Center(
+                            child: Row(mainAxisSize: MainAxisSize.min, children: [
+                              if (widget.icons != null && i < widget.icons!.length) ...[
+                                Icon(widget.icons![i], size: 16, color: Colors.white),
+                                const SizedBox(width: 6),
+                              ],
+                              Flexible(
+                                child: Text(widget.items[i],
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 14,
+                                        fontWeight: d < 0.5 ? FontWeight.w600 : FontWeight.w400)),
+                              ),
+                            ]),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
           ),
         ),
       ),

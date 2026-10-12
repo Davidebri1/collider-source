@@ -8,6 +8,7 @@
 // stores and an auth backend that this link does not have: those actions
 // answer inline that they are not available here (H10, D60).
 import 'package:flutter/material.dart';
+import '../drawers/settings_drawer.dart';
 
 import '../../core/vision/vision_kit.dart';
 import '../../models/model_def.dart';
@@ -33,17 +34,26 @@ class _AccountSheetState extends State<AccountSheet> {
     return Stack(
       fit: StackFit.expand,
       children: [
-        VScrim(onTap: widget.onClose),
+        // v8.7: no scrim; Settings stays visible, stepped back behind.
+        GestureDetector(behavior: HitTestBehavior.opaque, onTap: widget.onClose),
         Center(
           child: Padding(
             padding: const EdgeInsets.only(bottom: 70),
-            child: SizedBox(
-              width: w,
-              child: AnimatedSwitcher(
-                duration: VMotion.base,
-                child: _plans
-                    ? UpgradePlans(key: const ValueKey('plans'), tier: widget.tier, onBack: () => setState(() => _plans = false))
-                    : _account(),
+            // v8.7: a pane opened from Settings never exceeds Settings
+            // (the largest overlay): scaled as one unit to fit inside it.
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: SettingsDrawer.panel.width * 0.92, maxHeight: SettingsDrawer.panel.height * 0.92),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: SizedBox(
+                  width: w,
+                  child: AnimatedSwitcher(
+                    duration: VMotion.base,
+                    child: _plans
+                        ? UpgradePlans(key: const ValueKey('plans'), tier: widget.tier, onBack: () => setState(() => _plans = false))
+                        : _account(),
+                  ),
+                ),
               ),
             ),
           ),

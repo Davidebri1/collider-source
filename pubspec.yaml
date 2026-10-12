@@ -40,8 +40,9 @@ flutter:
   uses-material-design: true
   # Theme posters, live loops, and tracks are NOT bundled. They stream from
   # https://davidebri1.github.io/collider-media/ (see lib/core/media/theme_catalog.dart).
-  # Bundled: fallback catalog JSON + one tiny offline wallpaper.
+  # Bundled: fallback catalog JSON + Inter (self-hosted, google_fonts asset lookup).
   assets:
     - assets/catalog/
     - assets/html/
+    - assets/google_fonts/
 

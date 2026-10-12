@@ -1,4 +1,5 @@
-﻿import 'dart:ui';
+import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
@@ -54,13 +55,29 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
     widget.onLivePreview(t);
   }
 
+  String _category = 'All';
+  List<String> get _categories => [
+        'All',
+        // v9.1: the ghost menu filters by tag (most used first).
+        ...(() {
+          final n = <String, int>{};
+          for (final t in WallpaperCatalog.freeThemes) {
+            for (final g in t.tags) {
+              n[g] = (n[g] ?? 0) + 1;
+            }
+          }
+          return n.keys.toList()..sort((a, b) => n[b]!.compareTo(n[a]!));
+        })(),
+      ];
+
   List<WallpaperTheme> get _themes {
     final store = ThemePackStore.instance;
-    return [
+    final all = <WallpaperTheme>[
       ...WallpaperCatalog.freeThemes,
       for (final t in WallpaperCatalog.premiumThemes)
         if (store.storeOpen && store.isUnlocked(t.id)) t,
     ];
+    return _category == 'All' ? all : all.where((t) => t.tags.contains(_category)).toList();
   }
 
   @override
@@ -72,7 +89,7 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
     // take width - 32, which is 92.5% of a 430pt phone â€” effectively
     // full-bleed, and it read as a fullscreen app rather than a floating
     // window. Nothing in this app is allowed to touch the edges.
-    final winW = (size.width * 0.807).clamp(240.0, 380.0);
+    final winW = (size.width * 0.807 - 112).clamp(200.0, 380.0); // v9.1: ghost menu column on the left
     final winH = (winW * 1.4827).clamp(240.0, size.height - pad.top - 84 - 150);
     return ListenableBuilder(
       listenable: ThemePackStore.instance,
@@ -100,8 +117,23 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                   ),
                 ),
               ),
+              // v8.7 floating ghost category menu.
+                Positioned(
+                  left: 4,
+                  top: pad.top + 120,
+                  child: Builder(builder: (_) {
+                    final cats = _categories;
+                    return GhostMenu(
+                      width: 104,
+                      visible: 5,
+                      items: cats,
+                      selected: math.max(0, cats.indexOf(_category)),
+                      onSelected: (i) => setState(() => _category = cats[i]),
+                    );
+                  }),
+                ),
               Positioned(
-                  left: 0,
+                  left: 112,
                   right: 0,
                   top: pad.top,
                   bottom: 84,

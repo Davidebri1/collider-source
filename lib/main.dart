@@ -39,6 +39,7 @@ import 'features/browser/screens/in_app_browser_sheet.dart';
 import 'features/theme/premium_theme_market_view.dart';
 import 'features/theme/theme_living_media.dart';
 import 'core/media/theme_catalog.dart';
+import 'core/vision/keyboard_dof.dart';
 import 'core/media/theme_media_bundle.dart';
 import 'core/api/media_gen.dart';
 import 'models/media_specs.dart';
@@ -343,6 +344,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   void initState() {
     super.initState();
     ThemeCatalog.instance.addListener(_onCatalogChanged);
+    KeyboardDof.install();
     if (Uri.base.queryParameters['drawer'] == 'premium') {
       _activeDrawer = 'premium';
       // Seed Plane 0 to a live premium loop before CoverFlow preview callback
@@ -1713,6 +1715,20 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               ),
             ),
           ),
+          // v8.7: depth of field while typing: the room behind goes soft.
+          Positioned.fill(
+            child: IgnorePointer(
+              child: ValueListenableBuilder<bool>(
+                valueListenable: KeyboardDof.active,
+                builder: (_, on, __) => TweenAnimationBuilder<double>(
+                  tween: Tween(end: on ? 14 : 0),
+                  duration: const Duration(milliseconds: 260),
+                  builder: (_, b, __) => b < 0.3 ? const SizedBox.shrink() : BackdropFilter(filter: ui.ImageFilter.blur(sigmaX: b, sigmaY: b), child: const SizedBox.expand()),
+                ),
+              ),
+            ),
+          ),
+
           // ================= PLANE 1: THE TICKER WINDOW, THE TRAY, THE COMPOSER =================
           // Hidden during Premium Theme Market (Body) so ticker chrome doesn't bleed through.
           //
@@ -1749,7 +1765,11 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                         const SizedBox(height: _windowGap),
                       ],
                       // Bug 10: this one dims when the composer is summoned.
-                      _buildTickerWindow(),
+                      ValueListenableBuilder<bool>(
+                        valueListenable: KeyboardDof.active,
+                        builder: (_, on, child) => ImageFiltered(enabled: on, imageFilter: ui.ImageFilter.blur(sigmaX: 4, sigmaY: 4), child: child!),
+                        child: _buildTickerWindow(),
+                      ),
                       const SizedBox(height: _windowGap),
                       // Bug 7: the composer has its own slot now, so it cannot
                       // land on the category chips.
@@ -1906,7 +1926,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             ),
 
 
-          if (_activeDrawer == 'account')
+          if (_activeDrawer == 'account' && !_settingsOpen)
             Positioned.fill(
               child: AccountSheet(tier: ModelTier.free, onClose: () => setState(() => _activeDrawer = null)),
             ),
@@ -2066,15 +2086,27 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // v8.3.1: Settings opens over the current screen (no reset), blurred behind.
           if (_settingsOpen)
             Positioned.fill(
-              child: SettingsDrawer(
+              // v8.7: a submenu opened from Settings sits on its own plane in
+              // front; Settings steps back (smaller, softer) behind it.
+              child: AnimatedScale(
+                scale: _activeDrawer == 'account' ? 0.94 : 1,
+                duration: VMotion.base,
+                child: ImageFiltered(
+                  enabled: _activeDrawer == 'account',
+                  imageFilter: ui.ImageFilter.blur(sigmaX: 2, sigmaY: 2),
+                  child: SettingsDrawer(
                 onClose: () => setState(() => _settingsOpen = false),
                 incognito: _incognito,
                 autosave: _autosave,
                 onIncognito: (v) => setState(() => _incognito = v),
                 onAutosave: (v) => setState(() => _autosave = v),
-                onAccount: () => setState(() { _settingsOpen = false; _activeDrawer = 'account'; }),
+                onAccount: () => setState(() => _activeDrawer = 'account'),
+              ),
+                ),
               ),
             ),
+          if (_settingsOpen && _activeDrawer == 'account')
+            Positioned.fill(child: AccountSheet(tier: ModelTier.free, onClose: () => setState(() => _activeDrawer = null))),
 
           Positioned(
             left: 0,
