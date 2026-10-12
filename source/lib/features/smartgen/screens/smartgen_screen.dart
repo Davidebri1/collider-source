@@ -1,7 +1,30 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import '../../../core/api/media_gen.dart';
 import '../../../core/vision/vision_kit.dart';
 import '../../../core/vision/work_surface.dart';
 import '../kanban_store.dart';
+
+/// Parses the Smart Gen agent's reply into the derived need, how the cards
+/// serve it, and the proposed cards. Kept out of the widget so it can be
+/// tested against the shapes a model actually returns.
+({String need, String serve, List<(String title, String note)> cards}) parseSmartGen(String out) {
+  final need = RegExp(r'NEED:\s*(.+)').firstMatch(out)?.group(1)?.trim() ?? '';
+  final serve = RegExp(r'SERVE:\s*(.+)').firstMatch(out)?.group(1)?.trim() ?? '';
+  final block = RegExp(r'CARDS:\s*([\s\S]+)').firstMatch(out)?.group(1) ?? '';
+  final cards = <(String, String)>[];
+  for (final line in const LineSplitter().convert(block)) {
+    final t = line.trimLeft();
+    if (!t.startsWith('-')) continue;
+    final parts = t.substring(1).trim().split('|');
+    final title = parts.first.trim();
+    if (title.isEmpty) continue;
+    cards.add((title, parts.length > 1 ? parts.sublist(1).join('|').trim() : ''));
+    if (cards.length == 6) break;
+  }
+  return (need: need, serve: serve, cards: cards);
+}
 
 /// REQ-10 Smart Gen (map rows 23-25, v8.3, D54): a real local Kanban board.
 /// Layout from Vision Pro UI Kit 30-75 (Keynote window): the columns are the
@@ -25,6 +48,7 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
   final KanbanStore _store = KanbanStore.instance;
   int _col = 0;
   String? _editingId;
+  bool _generating = false;
 
   // Nimo widget card fills (light), with their accent for the header mark.
   static const List<Color> palette = [Color(0xFFDDE8FB), Color(0xFFF6DEE7), Color(0xFFDAF1E4), Color(0xFFF5EDD8)];
@@ -40,6 +64,76 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
   void _add() {
     final c = _store.add(_col);
     setState(() => _editingId = c.id);
+  }
+
+  /// Smart Gen agent. Same framing as the Consensus Agent: derive the need
+  /// from what is in front of you, then say how you serve it. Here the board is
+  /// the input and the output is cards, so the agent proposes the next actions
+  /// rather than summarizing what is already there.
+  Future<void> _generate() async {
+    if (_generating) return;
+    setState(() => _generating = true);
+    final board = [
+      for (var i = 0; i < KanbanStore.columns.length; i++)
+        for (final c in _store.inColumn(i))
+          if (c.title.isNotEmpty || c.notes.isNotEmpty)
+            '[${KanbanStore.columns[i]}] ${c.title}${c.notes.isEmpty ? '' : ' - ${c.notes}'}',
+    ];
+    try {
+      final out = await MediaGen.instance.consensus([
+        {
+          'role': 'system',
+          'content': 'What is the derived need, and how can you serve it?\n\n'
+              'Derive the need from the board: the work these cards imply but do not yet '
+              'name. Read the board against that need, then propose the smallest set of '
+              'cards that serves it. A card is one concrete next action. Never restate a '
+              'card that is already on the board, and never write a card that only '
+              'describes the board.\n\n'
+              'Reply in exactly this format, nothing else:\n'
+              'NEED: <the derived need, one line>\n'
+              'SERVE: <how these cards serve it, one line>\n'
+              'CARDS:\n'
+              '- <title> | <one note>'
+        },
+        {
+          'role': 'user',
+          'content': board.isEmpty
+              ? 'The board is empty.'
+              : 'Board:\n${board.join('\n')}'
+        },
+      ]);
+
+      final parsed = parseSmartGen(out);
+
+      var made = 0;
+      for (final (title, note) in parsed.cards) {
+        await _store.edit(_store.add(_col), title: title, notes: note);
+        made++;
+      }
+      if (!mounted) return;
+      setState(() => _generating = false);
+      await showVAlert(
+        context,
+        icon: made > 0 ? Icons.check_circle_outline_rounded : Icons.error_outline_rounded,
+        title: made > 0 ? '$made card${made == 1 ? '' : 's'} added' : 'No cards to add',
+        message: [
+          if (parsed.need.isNotEmpty) 'Need: ${parsed.need}',
+          if (parsed.serve.isNotEmpty) 'Serve: ${parsed.serve}',
+          if (made == 0) 'The agent returned no usable cards. Add a card or two first so it has something to read.',
+        ].join('\n\n'),
+        actions: const [VAlertChoice('OK')],
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _generating = false);
+      await showVAlert(
+        context,
+        icon: Icons.error_outline_rounded,
+        title: 'Smart Gen could not run',
+        message: friendlyErrorMessage(e),
+        actions: const [VAlertChoice('OK')],
+      );
+    }
   }
 
   Future<void> _menu(KanbanCard c, Rect anchor) async {
@@ -191,6 +285,12 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
           padding: const EdgeInsets.fromLTRB(VSpace.sm, VSpace.sm, VSpace.sm, VSpace.xs),
           child: Row(children: [
             Expanded(child: Text(KanbanStore.columns[_col], maxLines: 1, overflow: TextOverflow.ellipsis, style: VType.headline())),
+            VCircleButton(
+              icon: _generating ? Icons.hourglass_top_rounded : Icons.psychology_alt_outlined,
+              tooltip: _generating ? 'Working' : 'Smart Gen agent',
+              onTap: _generating ? null : _generate,
+            ),
+            const SizedBox(width: VSpace.xxs),
             VCircleButton(icon: Icons.add_rounded, tooltip: 'New card', onTap: _add),
           ]),
         ),

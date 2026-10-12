@@ -55,6 +55,7 @@ class KanbanStore extends ChangeNotifier {
   static const String _blobId = 'smartgen/kanban.json';
 
   final List<KanbanCard> _cards = [];
+  static int _seq = 0;
   bool _loaded = false;
   Future<void>? _loading;
 
@@ -96,7 +97,10 @@ class KanbanStore extends ChangeNotifier {
 
   KanbanCard add(int column) {
     final now = DateTime.now().millisecondsSinceEpoch;
-    final c = KanbanCard(id: 'k$now', column: column, color: _cards.length % 4, createdMs: now, updatedMs: now);
+    // The agent can land several cards in one turn, so the id carries a
+    // sequence: two cards added in the same millisecond would otherwise share
+    // a ValueKey and collide in the board.
+    final c = KanbanCard(id: 'k${now}_${_seq++}', column: column, color: _cards.length % 4, createdMs: now, updatedMs: now);
     _cards.add(c);
     notifyListeners();
     // Saved once it has a title (an untitled card is dropped, see [edit]).
