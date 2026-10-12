@@ -100,7 +100,8 @@ class _MediaTickerState extends State<MediaTicker> {
                     VCircleButton(
                       icon: Icons.content_copy_rounded,
                       size: 44,
-                      tooltip: 'Copy prompt',
+                      // R40: the user-facing word is "message".
+                      tooltip: 'Copy message',
                       onTap: () {
                         Clipboard.setData(ClipboardData(text: g.prompt));
                         widget.onNotice('Copied');

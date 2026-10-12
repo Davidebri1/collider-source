@@ -223,38 +223,164 @@ async function callModel(modelId, messages, opts = {}) {
 
 // -------------------------------------------------------------- consensus
 
+// Contract authority: docs/Consensus Agent.md (Consensus Agent) and
+// docs/PRD-XLSX-EXTRACT.txt row R17/R41.
+//
+// Three fields only, exactly as the agent spec's Recap section names them:
+//   Consensus Ratio      - a COUNT of responses sharing a sentiment over total
+//                          responses. Never a percent. R17: "The score is a
+//                          count, never a percent."
+//   Consensus Summary     - the winning sentiment reproduced VERBATIM from a
+//                          member response. Not composed, not paraphrased.
+//   Logical Chain Table  - per response: chain count and max chain length,
+//                          plus grouping, plus a row for the consensus summary
+//                          carrying the max chain length of its members.
+//
+// There is no DISSENT and no NEED. Those were invented. Accuracy, confidence,
+// and judgement are explicitly out of scope: "you are only recording reality,
+// not advising."
 const CONSENSUS_SYSTEM =
-  'You are the Collider consensus engine. Several models independently answered the user. ' +
-  'Write a synthesis, not a list. Format exactly:\n' +
-  'SUMMARY: <two sentences, the answer they agree on>\n' +
-  'SCORE: <0-100>\n' +
-  'DISSENT: <semicolon-separated points they disagree on, or none>\n' +
-  'NEED: <what the user should ask next to resolve it, or none>';
+  'You are the Collider consensus recorder. Several models each independently answered one message. ' +
+  'You record what is there. You do not advise, rank, or evaluate correctness.\n\n' +
+  'Work in this order.\n' +
+  '1. From the user message, derive the need and the intent of the message.\n' +
+  '2. For each response, simplify it to its base minimal distinction or sentiment: the actionable portion that serves the derived need.\n' +
+  '3. Group the responses by that sentiment. Resolve democratically: the sentiment with the most members is the consensus.\n' +
+  '4. Count the logical chain depth of each response. A logical chain is a sequential clarification or simplification that extends logic and serves the need. An explicit chain reads until the next clause is not logically dependent on the previous. Implicit chains count too: a definition, statement, or narrative element that directly supports a logical conclusion, whether evidentiary after the point or preemptive before it. A technical definition standing alone never extends beyond 1 no matter how many appear; it must attach to a larger logical point to extend. An apparent split is clarification and counts as the same chain. There is one prompt, one chain; anything outside that is ad libbing and does not count. Do not count words or characters, and do not use keyword or regex counting. Count meaning.\n' +
+  '5. Report the maximum chain length for each response. Max length separates relevant and novel clarification from repetition.\n\n' +
+  'Answer with exactly these lines and nothing else. Do not add commentary.\n' +
+  'RATIO: <count of responses in the winning group>/<total responses>\n' +
+  'SUMMARY: <the winning sentiment copied verbatim from a member response>\n' +
+  'Then one GROUP line per sentiment group, in order of size, largest first:\n' +
+  'GROUP: <sentiment> = <model name>, <model name>\n' +
+  'Then one CHAIN line per response:\n' +
+  'CHAIN: <model name> = <chain count> chains, max <max length>\n' +
+  'Then one final line:\n' +
+  'CONSENSUS_CHAIN: <chain count> chains, max <the largest max length among its members>';
 
-async function synthesise(prompt, answers) {
-  const body = answers
-    .map((a) => `MODEL ${a.model}\n${a.text}`)
-    .join('\n\n');
+/** Pull one labelled field out of the recorder's reply. */
+const field = (text, label) => {
+  const re = new RegExp(`^\\s*${label}:\\s*([\\s\\S]*?)(?=\\n\\s*[A-Z_]+:|$)`, 'im');
+  return (text.match(re) || [, ''])[1].trim();
+};
+
+/**
+ * Every line carrying a given label, in order. A group table or chain table
+ * with more than one entry arrives as repeated lines, not one long line, so a
+ * single-regex field() would silently drop every entry after the first.
+ */
+const fieldLines = (text, label) =>
+  text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => new RegExp(`^${label}:`, 'i').test(l))
+    .map((l) => l.replace(new RegExp(`^${label}:\\s*`, 'i'), '').trim())
+    .filter(Boolean);
+
+/**
+ * R16: "Incomplete shows an empty score." An unfinished shared send must render
+ * an empty score, never a placeholder, a percent, or a "waiting" line.
+ */
+function consensusScore(ratio, total) {
+  const n = Number(String(ratio).split('/')[0]);
+  if (!Number.isFinite(n) || n <= 0 || !Number.isFinite(total)) return '';
+  return `${n}/${total}`;
+}
+
+async function synthesise(prompt, answers, { excluded = [] } = {}) {
+  // R41 isolation rule: only models still on the shared query are counted.
+  // Excluded ones are reported as excluded, never dropped quietly.
+  const excludedSet = new Set(excluded);
+  const counted = answers.filter((a) => !excludedSet.has(a.model));
+  const base = {
+    status: 'done',
+    ratio: '',
+    score: '',
+    summary: '',
+    groups: [],
+    chains: [],
+    consensus_chain: '',
+    excluded: answers.filter((a) => excludedSet.has(a.model)).map((a) => a.model),
+  };
+  if (counted.length === 0) return { ...base, status: 'empty' };
+  // One response cannot disagree with itself. That is a real consensus.
+  if (counted.length === 1) {
+    return {
+      ...base,
+      ratio: `1/1`,
+      score: consensusScore('1/1', 1),
+      summary: essence(counted[0].text),
+      groups: [{ sentiment: essence(counted[0].text), models: [counted[0].model] }],
+    };
+  }
+
+  const body = counted.map((a) => `MODEL ${a.model}\n${a.text}`).join('\n\n');
   try {
     const { text } = await callModel('free/glm-5-3-flash', [
       { role: 'system', content: CONSENSUS_SYSTEM },
-      { role: 'user', content: `QUESTION\n${prompt}\n\nANSWERS\n${body}` },
+      {
+        role: 'user',
+        content:
+          `MESSAGE\n${prompt}\n\n` +
+          `RESPONSES (${counted.length})\n${body}\n\n` +
+          `Models ${excludedSet.size ? `excluded from this shared query: ${[...excludedSet].join(', ')}` : ''}`,
+      },
     ]);
-    const pick = (re) => (text.match(re) || [, ''])[1].trim();
+
+    const ratio = field(text, 'RATIO');
+    // One GROUP line per group, largest first. Split on the LAST "=" so a
+    // sentiment containing "=" survives.
+    const groups = fieldLines(text, 'GROUP')
+      .map((line) => {
+        const at = line.lastIndexOf('=');
+        if (at < 1) return null;
+        const sentiment = line.slice(0, at).trim();
+        const models = line
+          .slice(at + 1)
+          .split(',')
+          .map((m) => m.trim())
+          .filter(Boolean);
+        if (!sentiment || !models.length) return null;
+        return { sentiment, models };
+      })
+      .filter(Boolean);
+
+    // One CHAIN line per response.
+    const chains = fieldLines(text, 'CHAIN')
+      .map((line) => {
+        const at = line.lastIndexOf('=');
+        if (at < 1) return null;
+        const model = line.slice(0, at).trim();
+        const rest = line.slice(at + 1);
+        const count = Number((rest.match(/(\d+)\s+chains?/i) || [])[1]);
+        const max = Number((rest.match(/max\s+(\d+)/i) || [])[1]);
+        if (!model || !Number.isFinite(count) || !Number.isFinite(max)) return null;
+        return { model, chains: count, max };
+      })
+      .filter(Boolean);
+
+    const total = counted.length;
+    const winner = groups[0] || null;
+    const winnerCount = winner ? winner.models.length : total;
+    // Verbatim: take the summary from a member, never a composed line.
+    const summary = winner
+      ? essence(counted.find((a) => winner.models.includes(a.model))?.text) || field(text, 'SUMMARY')
+      : field(text, 'SUMMARY');
+
     return {
-      status: 'done',
-      summary: pick(/SUMMARY:\s*([\s\S]*?)(?:\nSCORE:|$)/i) || text.slice(0, 400),
-      score: pick(/SCORE:\s*([\s\S]*?)(?:\nDISSENT:|$)/i),
-      dissent: pick(/DISSENT:\s*([\s\S]*?)(?:\nNEED:|$)/i)
-        .split(';').map((s) => s.trim()).filter(Boolean),
-      need: pick(/NEED:\s*([\s\S]*)$/i),
-      groups: [], chains: {}, tie_basis: '',
+      ...base,
+      ratio: ratio || `${winnerCount}/${total}`,
+      score: consensusScore(ratio || winnerCount, total),
+      summary,
+      groups,
+      chains,
+      consensus_chain: field(text, 'CONSENSUS_CHAIN'),
     };
   } catch (e) {
-    // No synthesiser available: report the spread honestly rather than nothing.
+    // No recorder available. Report nothing rather than inventing a ratio.
     return {
-      status: 'unavailable', summary: '', score: '', dissent: [], need: '',
-      groups: [], chains: {}, tie_basis: '',
+      ...base,
+      status: 'unavailable',
       error: String(e?.message || e),
     };
   }
@@ -384,14 +510,24 @@ const server = createServer(async (req, res) => {
     }
 
     if (p === '/api/ask' && req.method === 'POST') {
-      const { prompt = '', models = [], mode = 'chat', autosave = true, incognito = false } = await readBody(req);
+      const { prompt = '', models = [], mode = 'chat', autosave = true, incognito = false, excluded = [] } = await readBody(req);
       if (!prompt.trim()) return json(res, 400, { error: 'empty prompt' });
+
+      // R41: a direct reply to a subset takes those models out of consensus.
+      // Those models are still selected and still answer — they are shown as
+      // excluded, not dropped. So `excluded` is a subset of `models`; anything
+      // outside the send cannot be excluded from it and is ignored.
+      const excludedSet = new Set(
+        (Array.isArray(excluded) ? excluded : [])
+          .filter((m) => typeof m === 'string')
+          .filter((m) => models.includes(m)),
+      );
 
       const id = randomUUID();
       const job = {
         id, prompt, mode, stage: 'running', created: Date.now() / 1000,
         results: Object.fromEntries(models.map((m) => [m, { status: 'pending', text: '', essence: '' }])),
-        consensus: { status: 'pending', summary: '', score: '', dissent: [], need: '', groups: [], chains: {}, tie_basis: '' },
+        consensus: { status: 'pending', ratio: '', score: '', summary: '', groups: [], chains: [], consensus_chain: '', excluded: [...excludedSet] },
         sources: [],
       };
       jobs.set(id, job);
@@ -418,7 +554,7 @@ const server = createServer(async (req, res) => {
         const done = models
           .map((m) => ({ model: m, text: job.results[m]?.text || '' }))
           .filter((a) => a.text);
-        if (done.length) job.consensus = await synthesise(prompt, done);
+        if (done.length) job.consensus = await synthesise(prompt, done, { excluded: [...excludedSet] });
         job.stage = 'done';
         if (autosave && !incognito) {
           history.unshift({ id, prompt, mode, created: job.created, models, status: 'done' });

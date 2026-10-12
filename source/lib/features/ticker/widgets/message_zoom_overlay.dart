@@ -44,7 +44,8 @@ class MessageZoomOverlay extends StatelessWidget {
   Future<void> _save(BuildContext context) async {
     final t = message.timestamp;
     String two(int n) => n.toString().padLeft(2, '0');
-    final who = (message.sender == 'user' ? 'Prompt' : modelName).replaceAll(RegExp(r'[^A-Za-z0-9._ -]'), '').trim();
+    // R40: the user-facing word is "message", not "prompt".
+    final who = (message.sender == 'user' ? 'Message' : modelName).replaceAll(RegExp(r'[^A-Za-z0-9._ -]'), '').trim();
     final name = '$who ${t.year}-${two(t.month)}-${two(t.day)} ${two(t.hour)}${two(t.minute)}.md';
     final note = await FileStore.instance.addBytes(name, Uint8List.fromList(utf8.encode(message.text)), 'model');
     if (!context.mounted) return;
@@ -92,7 +93,8 @@ class MessageZoomOverlay extends StatelessWidget {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(isUser ? 'Your Prompt' : modelName, style: VType.headline()),
+                                    // R40: "Your Message", never "Your Prompt".
+                                    Text(isUser ? 'Your Message' : modelName, style: VType.headline()),
                                     Text(time, style: VType.caption()),
                                   ],
                                 ),

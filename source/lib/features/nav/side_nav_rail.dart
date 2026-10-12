@@ -27,13 +27,15 @@ List<SideRailEntry> sideRailEntries(ActiveWorkSurface s) => switch (s) {
           SideRailEntry('genie', Icons.assistant_rounded, 'Genie'),
           SideRailEntry('new', Icons.add_rounded, 'New Card'),
         ],
+      // R27: Discover is the image market. The Imagine layout is a row of
+      // pictures, a row of labeled looks, then a two-column feed. So the side
+      // nav is Search, Library and Looks, and nothing else. The old prompts /
+      // visuals / video / audio / gallery shelves were a prompt shelf, clips
+      // and songs, which R27 and X5 both exclude.
       ActiveWorkSurface.market => const [
           SideRailEntry('search', Icons.search_rounded, 'Search'),
-          SideRailEntry('prompts', Icons.notes_rounded, 'Prompts'),
-          SideRailEntry('visuals', Icons.image_outlined, 'Visuals'),
-          SideRailEntry('video', Icons.movie_outlined, 'Video'),
-          SideRailEntry('audio', Icons.graphic_eq_rounded, 'Audio'),
-          SideRailEntry('gallery', Icons.collections_outlined, 'Gallery'),
+          SideRailEntry('library', Icons.photo_library_outlined, 'Library'),
+          SideRailEntry('looks', Icons.auto_awesome_outlined, 'Looks'),
         ],
       ActiveWorkSurface.themes => [
           const SideRailEntry('premium', Icons.workspace_premium_rounded, 'Premium Marketplace'),

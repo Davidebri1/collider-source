@@ -143,6 +143,11 @@ body{font-family:var(--font-sans);background:var(--bg-deep);color:var(--text-pri
     models: [],
     ratioN: 0,
     ratioM: 0,
+    score: '',
+    complete: false,
+    consensusChains: 0,
+    consensusMaxChain: 0,
+    excluded: [],
     hasRun: false,
     labels: true,
     activeTab: 'dissent',
@@ -150,7 +155,6 @@ body{font-family:var(--font-sans);background:var(--bg-deep);color:var(--text-pri
     nucleusSize: 14,
     glowOpacity: 0.15,
     glowRadius: 14,
-    tieBecause: '',
   };
 
   // Framework §3, constants revised 2026-08-08: size = 30 + chainDepth × 10.
@@ -377,12 +381,15 @@ body{font-family:var(--font-sans);background:var(--bg-deep);color:var(--text-pri
     var nucleusGlowRadius = state.glowRadius || 14;
 
     if (sn) {
-      sn.textContent = hasRun ? (state.ratioN + '/' + state.ratioM) : '\u2014/\u2014';
-      if (hasRun) {
+      // R17: a finished shared send shows a count. An unfinished one shows an
+      // empty score — no dash pair, no percent, no partial wording.
+      if (hasRun && state.score) {
+        sn.textContent = state.score;
         var pct = state.ratioM ? state.ratioN / state.ratioM : 0;
         sn.style.color = pct >= 0.66 ? '#7ee2a8' : pct >= 0.40 ? '#f5e000' : '#ff6a5c';
         sn.classList.add('has-score');
       } else {
+        sn.textContent = '';
         sn.style.color = 'rgba(238,241,246,0.32)';
         sn.classList.remove('has-score');
       }
@@ -512,12 +519,18 @@ body{font-family:var(--font-sans);background:var(--bg-deep);color:var(--text-pri
       state.models = data.models || [];
       state.ratioN = data.ratioN || 0;
       state.ratioM = data.ratioM || 0;
+      // R17: the score is a count, e.g. "4/7", and an unfinished shared send
+      // carries an empty one. Never a percent, never a "waiting" line.
+      state.score = typeof data.score === 'string' ? data.score : '';
+      state.complete = !!data.complete;
+      state.consensusChains = data.consensusChains || 0;
+      state.consensusMaxChain = data.consensusMaxChain || 0;
+      state.excluded = data.excluded || [];
       state.hasRun = !!data.hasRun;
       state.summary = data.summary || '';
       state.nucleusSize = data.nucleusSize || 14;
       state.glowOpacity = typeof data.glowOpacity === 'number' ? data.glowOpacity : 0.15;
       state.glowRadius = typeof data.glowRadius === 'number' ? data.glowRadius : 14;
-      state.tieBecause = data.tieBecause || '';
       state.sizeScale = typeof data.sizeScale === 'number' ? data.sizeScale : 1;
       if (typeof data.labels === 'boolean') state.labels = data.labels;
       if (data.activeTab === 'dissent' || data.activeTab === 'total') state.activeTab = data.activeTab;

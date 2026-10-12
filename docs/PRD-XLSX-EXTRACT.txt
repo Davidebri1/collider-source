@@ -1,0 +1,136 @@
+===== xl/worksheets/sheet1.xml =====
+Collider
+Product requirements. Discover is images only, in the Imagine layout. Ports are not in this table. Sources are in prd-references/.
+Read
+Requirements is the spec. Filter Area or Status. Done when is the acceptance test.
+Surfaces is the window contract: dock, side nav, seven apps.
+Tiers is who can open what, and how many models.
+Decisions is the merge call. Out is what was dropped, and why.
+User-facing words are message, response, Smart Gen, Discover. Not prompt. Not Workspaces.
+Sheet | What it holds | Rows
+Requirements | The product, one row each.
+Surfaces | Home, dock, side nav, seven apps.
+Tiers | Free, Pro, Elite, Enterprise.
+Decisions | Which source won.
+Out | Inserted or superseded. Not in the product.
+Sources | What was read, what was taken.
+Counts
+Requirements
+Required
+Left out
+Scope
+Native mobile app. Up to nine models in view, compared without leaving. Guest open. Five categories. Discover is the market of made pieces. Premium themes are live wallpapers, sold one at a time. The wallpaper stays the star. Windows, not full-screen sheets.
+
+===== xl/worksheets/sheet2.xml =====
+ID | Area | Requirement | Done when | Source | Status
+R01 | Product | Native iOS and Android. Opens on a guest account. No login wall. | First launch is the ticker, not a sign-in screen. | Functional spec | Required
+R02 | Account | Sign in with Google, Apple, or email. Account, usage, logout, and upgrade live in Settings. | A guest can reach account actions without a dedicated login screen. | Functional spec | Required
+R03 | Product | Up to 9 models in one view, so a person can compare without leaving. Tap a row to open that model. A conversation can be continued. | Nine selected models show at once. Tap opens that model’s thread and returns to the same thread later. | Functional spec | Required
+R04 | Categories | General, Image, Video, Music, Coding. Each keeps its own models, thread, and tools. | Switching category does not mix threads or selected models. | Functional spec | Required
+R05 | Tiers | Free: 20 messages a day, counted across every model in the send. No image, video, music, or coding use. Two coding models may show, locked. | An 11th message in a day is refused. A locked category cannot send. | Functional spec | Required
+R06 | Tiers | Pro and Elite: unlimited General. Image, video, music, and coding open. Media spends credits, with a daily, weekly, and monthly cap. | A Pro account can send in all five categories. A media send decrements credits and stops at the cap. | Functional spec | Required
+R07 | Tiers | Pro $19.99. Elite $49.99. Enterprise is a contact form that emails the person and the owner. | Prices show as stated. The form sends both emails. | Basic requirements | Required
+R08 | Home | The ticker is the conversation. Bottom window. At most 40% of screen height. Width matches the dock. No card chrome. Not draggable. Not full width. | The window never grows past 40% height or past the dock width. Rows do not drag. | Layout contract | Required
+R09 | Home | Row count is 1, 2, or 3. Three rows shows 9. Horizontal scroll inside the window. Never more than 9. | The selector changes the visible rows. Nine is the ceiling. | Basic requirements | Required
+R10 | Home | A new reply anchors to the top of that reply, in the ticker and in the card. | After a reply, the top of the new message is in view, not the bottom of the thread. | Functional spec | Required
+R11 | Nav | Dock: Compose (also Home), Settings, Apps. Swipe up on the dock opens the composer. Swipe down tucks it. An arrow shows it is tucked. | Swipe up reveals the composer. Swipe down hides it. Compose also returns to the ticker. | Layout contract | Required
+R12 | Nav | Any nav tap closes every other open pane. A menu and a work surface never show together. | Opening Apps, Settings, or a side-nav item closes whatever else is open. | Layout contract | Required
+R13 | Nav | Apps platter: seven icons, centered, background dimmed. Click away or the close icon leaves. Smart Gen, Discover Market, Theme Gallery, Premium Theme Marketplace, Files, Music Player, Browser. | Seven icons, not buttons. Each opens its own centered window. | Layout contract | Required
+R14 | Nav | Side nav follows the surface. Search lives on the side nav. On the ticker: local history, global history, new conversation, category swipe, model select. No Consensus tab. | Consensus is not on the dock or the side nav. Search is on the side nav of the surface that has it. | Layout contract | Required
+R15 | Composer | One message goes to the selected models in the active category. Chips show who receives it. | A send reaches only the selected models in the current category. | Layout contract | Required
+R16 | Consensus | Pinned row on the ticker: a count such as 4/7, then one full line. Tap opens the consensus map. Not an app. Not on the dock or side nav. | The line is not cut off. Tap opens the map. The row is the only consensus entry. | Layout contract | Required
+R17 | Consensus | The score is a count, never a percent. Incomplete shows an empty score. No partial wording. Which models count is the isolation rule. | A finished shared send shows 4/7. An unfinished one shows an empty score, not a waiting line. | Functional spec; general spec 2 | Required
+R18 | Card | That model’s thread, local files, local history, and that model’s browser. Message zoom: copy, branch, save, share. Tailed bubbles. Faded edges. No window on the zoom. | Zoom has the four actions and no frame. Bubbles have a tail. History from the card loads that model only. | Layout contract | Required
+R19 | History | New conversation archives, names, and stamps the current thread for the selected models only. Tap an entry loads it and opens the card. Both history lists do this. | New conversation clears only the selected models. Tap closes other panes and opens the thread. | Functional spec; layout contract | Required
+R20 | Search | Filters by type and by model. Live as you type. No empty box when nothing matches. | Typing narrows results. A miss shows nothing, not a message. | Functional spec | Required
+R21 | Smart Gen | Holds projects, tasks, reminders, memories, and artifacts. Cards, boards, and canvas are free to view, edit, create, and delete. Genie is Pro and above. | A free account can make a card and a board. Genie is locked until Pro. | Functional spec; smart gen ui | Required
+R22 | Smart Gen | Creates the item when the conversation already contains it, unless that item exists for the same project, type, and model. A timed reminder also lands on the calendar. Auto-create and auto-update can be turned off. | Asking for a deadline makes the reminder and the calendar entry once. A second ask does not duplicate it. Both toggles exist. | Functional spec | Required
+R23 | Smart Gen | Items convert between types, take custom fields, and embed in each other. A list shows every field as a sortable, filterable column. | A task can become a reminder. A list header sorts. Every defined field is a column. | Functional spec | Required
+R24 | Smart Gen | A board looks like the thing named: notebook, portfolio, kanban, calendar, album, storyboard, and the rest. Canvas places cards and boards freely. Up to 10 canvases, by swipe or a named chip. Backgrounds swap in view. | A notebook turns pages. Ten canvases load. A chip can be named. | smart gen ui; Smart Gen ledger | Required
+R25 | Smart Gen | Genie is a chat on the Smart Gen surface. It can mass-edit fields and refactor a card type. It cannot restyle the app. Elite can attach a coding agent. History, new conversation, attachments. | A Pro account can ask Genie to set a field on many cards. The app chrome does not change. Coding attach is Elite. | smart gen ui | Required
+R26 | Smart Gen | Editing is on the card. Columns, types, and fields are managed there. No separate setup screen. | A new field is added on the card. No settings page is required. | Smart Gen ledger | Required
+R27 | Discover | Images only for now. Same layout as the Imagine market: a row of pictures, a row of labeled looks, then a two-column feed of made images. Like, remix, save to library, use as context, use as source. A made image is stored and comes back in the feed. Not clips, not songs, not a prompt shelf, not the wallpaper store. | Open Discover and it is pictures, in that order. A remix lands back in the feed. No video tab. No music tab. | Functional spec; Imagine home; user correction | Required
+R28 | Media | Image, video, and music threads keep a generation column, a queue, and an action bar: view, context, source, favorite, save, share, delete. | Each action is on the selected piece. Source stays single. Context can stack. | Functional spec | Required
+R29 | Themes | Theme Gallery swaps the background. Glass stays glass. No color-theme system. No accent picker. | Changing theme changes the image only. Selected state stays silver. | Functional spec | Required
+R30 | Themes | Premium Theme Market sells live wallpapers one at a time, $2.99–$7.99. Not unlocked by tier. Each includes at least 5 tracks. Own, then play. | A Pro account without the purchase cannot play that wallpaper. Five tracks ship with it. | Functional spec | Required
+R31 | Music | Corner volume after a track has played. Tap mutes. Long-press opens play and volume. A track can be turned off on its own. | Mute is one tap. Turning a track off stops that track. | Functional spec | Required
+R32 | Themes | Theme browsing does not blur the wallpaper. Thumbnails show the whole subject, portrait, recognizable. | The live wallpaper stays sharp while browsing. A thumbnail is not a cropped strip. | Layout contract | Required
+R33 | Files | Generated files for the active model, and a Files surface with category nav. | A file made in a thread is in that model’s files and in Files. | Layout contract | Required
+R34 | Browser | Google home. Tabs. One instance, even in the background. Side panel is browser settings. | Home is Google. Opening a second browser reuses the same instance. | Layout contract | Required
+R35 | Settings | Functional options and account only. Upgrade. Logout. A locked category shows one lock over the whole group. | No accent picker. Image, video, music, and coding show locked together when the tier is short. | Functional spec; layout contract | Required
+R36 | Visual | Wallpaper is the star and stays visible at rest. Windows, not full-screen sheets. visionOS glass: blur or tint separates planes, specular rim. Spring motion. No particles. Type from the visionOS set. | At rest the wallpaper is uncovered. A window is a plane, not a sheet. No glitter icon. | General spec 2 named the style; layout contract | Required
+R37 | Windows | A popup is only as large as the job. Two ways out: click away, and a close icon. | Settings is a small overlay. Both exits work on every temporary pane. | Layout contract | Required
+R39 | Nav | Leaving a surface with a draft or a live reply asks first. Stay keeps the surface. Switch keeps the draft. | A draft is still there on return. Nothing is discarded without a choice. | Layout contract | Required
+R40 | Language | User-facing words are message, response, Smart Gen, Discover. Not prompt. Not Workspaces. | Those two words do not appear in the interface. | User correction | Required
+R41 | Consensus | A direct reply to a subset of the models on screen takes those models out of consensus. They are shown as excluded, not dropped quietly. The score and the line use only the shared query. A general send goes to every selected model and puts them back in. | Reply to two of seven. The row shows those two out, and the score is among the five still on the shared query. A general send returns all seven. | General spec 2; user correction | Required
+
+===== xl/worksheets/sheet3.xml =====
+Surface | Opens from | What it is | Side nav | Rule
+Ticker | Compose / Home | The conversation. Bottom window, max 40% height, dock width. | Local history, global history, new conversation, category swipe, model select. | Not draggable. No card chrome. Consensus row pinned here only.
+Composer | Swipe up on the dock | One message to the selected models in the active category. | None. It tucks. | Arrow shows the tucked state. Swipe down hides it.
+Apps platter | Apps | Seven icons, centered, background dimmed. | None. | Click away or close. Not buttons.
+Smart Gen | Apps | Cards, boards, canvas, Genie. Projects, tasks, reminders, memories, artifacts. | Cards, Boards, Canvas, Genie. Active, Urgent, All. New card. | Genie is Pro+. Cards, boards, canvas are free.
+Discover Market | Apps | Images only. Imagine layout: picture row, labeled looks, two-column feed. | Search. Library. Looks. Images only. | Not the wallpaper store. Not a prompt shelf. Made images return in the feed.
+Theme Gallery | Apps | Free background swap. | Switch to Premium Marketplace, Theme Gallery, Music Collection. | Image only. Glass does not change.
+Premium Theme Marketplace | Apps | Live wallpapers, sold one at a time, with at least 5 tracks. | Same theme switcher. | Not unlocked by tier. $2.99–$7.99.
+Music Player | Apps, and the corner control | Plays the tracks that ship with a wallpaper. | Music Collection on the theme switcher. | Corner volume after a track has played.
+Files | Apps, and the card | Generated files. Category nav. | All, artifacts, attachments, model outputs. | A card opens that model’s files.
+Browser | Apps, and the card | One browser. Tabs. Google home. | Browser settings and tabs. | A card opens that model’s browser in the same instance.
+Settings | Dock | Functional options and account. Upgrade. Logout. | Account, models, settings. Small. Looping if needed. | No cosmetic theme system.
+Consensus map | Tap the pinned row | Agreement and dissent for the shared send. | None. | Not an app. Not a nav tab.
+Message zoom | Tap a message | The message, larger, with copy, branch, save, share. | None. | No frame. Faded edges. Blur or dim behind it.
+
+===== xl/worksheets/sheet4.xml =====
+Category | Free | Pro | Elite | Gate
+General | 8 | 4 | 4 | Free cap is 20 messages a day, across models in the send. Pro and Elite are unlimited here.
+Image | 0 | 4 | 4 | Credits. Pro and Elite. Daily, weekly, and monthly caps.
+Video | 0 | 4 | 4 | Credits. Pro and Elite. Daily, weekly, and monthly caps.
+Music | 0 | 4 | 4 | Credits. Pro and Elite. Daily, weekly, and monthly caps.
+Coding | 0, two shown | 4 | 4 | Agentic and customizable. Pro and Elite. No named agent product.
+Smart Genie | Locked | Open | Open | Cards, boards, and canvas stay free. Coding attach is Elite.
+Premium themes | Buy | Buy | Buy | Per wallpaper, $2.99–$7.99. Not included in the tier.
+Enterprise | — | — | Contact | Form emails the person and the owner. Price is not listed.
+Prices | Pro $19.99. Elite $49.99. From basic requirements.
+
+===== xl/worksheets/sheet5.xml =====
+ID | Area | Call | Won | Lost
+D1 | Coding | Coding is its own category. Agentic and customizable. Pro and Elite. | Functional spec 2.5 | A named agent product as a model.
+D2 | Discover | Discover is images only for now, in the Imagine layout: picture row, labeled looks, two-column feed. Like, remix, library. | Imagine home; user correction | Clips, songs, and a prompt shelf.
+D3 | Themes | Premium Theme Market is the live-wallpaper store. Separate from Discover. Sold one at a time. | Functional spec | Unlocked in bulk by tier.
+D4 | Apps | Seven apps. Workspaces, History, Consensus, Models, and Skills are not apps. | Layout contract | Older drawer-as-app notes.
+D5 | Consensus | Pinned row: score and one full line. Tap opens the map. Not a drawer. Not a nav tab. | Layout contract | Full-screen drawer. Celestial map.
+D6 | Browser | Home is Google. One instance. Tabs. | Layout contract | Another home page.
+D7 | Language | Message, response, Smart Gen, Discover. No prompt. No Workspaces. | User correction | A ban-and-replace sentence.
+D8 | Visual | visionOS glass. Wallpaper is the star. Windows, not sheets. Spring, not particles. | Layout contract | Invented physics. Glitter icons.
+D9 | Nav | Dock and side nav replace the old left history drawer and right tools drawer. | Layout contract | Functional spec drawers. Layout 2.0 center ball and card drag.
+D10 | Tiers | Pro and Elite both open image, video, music, and coding. Counts from the functional table. | Functional spec | General spec 2 split that put video and coding on Elite only.
+D11 | Type | Type comes from the visionOS set. | Layout contract | Manrope, from the functional note.
+D13 | Smart Gen | Four surfaces hold five item types. Inline edit. Genie is Pro+. | Functional spec; smart gen ui; ledger | A separate setup screen. A hub layer.
+D14 | Isolation | A direct reply to a subset leaves consensus. Those models are shown as excluded. Only the shared query counts. A general send brings every selected model back. | General spec 2; user correction | A silent drop, or a follow-up that still moves the score.
+
+===== xl/worksheets/sheet6.xml =====
+ID | Item | Why it is out
+X1 | Workspaces as a label | Not in the layout contract. Added by a ban sentence.
+X2 | DuckDuckGo as browser home | Not in any requirements file.
+X3 | Devin as an Elite model | Not a roster entry. The coding category stays.
+X4 | Celestial consensus map | The map is consensus.html. No invented scene.
+X5 | Prompt category in Discover | Discover is the image market, Imagine layout. Clips and songs are later.
+X6 | Session ports and preview identification | Not a product requirement. Left out of the table.
+X7 | Icon allow-list and file-path catalog | Implementation notes, not requirements.
+X8 | Full-screen consensus drawer | Superseded by the pinned row and the map.
+X9 | Left history drawer and right tools drawer | Superseded by the dock, the side nav, and the Apps platter.
+X10 | Center ball to summon the composer | Superseded by swipe-up on the dock.
+X11 | Drag to reorder ticker rows | The ticker is not draggable.
+X12 | Accent hue picker, gold, purple | Theme is the background image. Selected state is silver.
+X13 | General spec 2 bans and celestial section | Not merged. The functional rows in it are already in this table.
+
+===== xl/worksheets/sheet7.xml =====
+File | Taken | Left
+Functional Requirements and spec.txt | Categories, tiers, market, wallpapers, composer behavior, Smart Gen capture, history, search. | Left and right drawers. Full-screen consensus drawer. Celestial wording. Manrope.
+basic requirements | Prices, enterprise form, row selector, Smart Gen tools, history. | File was not in this folder. Rows kept from the prior merge.
+Master spec, layout contract | Ticker, dock, side nav, seven apps, windows, consensus row, visionOS glass. | Ban sentences, port-status claim, prompt category, named agent product.
+layout 2.0 visOS.txt | Small settings, tier locks, wallpaper as the star. | Center ball. Card drag. Those lost to the layout contract.
+smart gen ui.md | Cards, boards, canvas, Genie. Ten canvases. Boards look like the thing named. | The hub layer. Contextual entry won.
+SMART_GEN_REQUIREMENTS.md | Inline edit, board types, embed, custom fields, Genie actions. | Status theater and implementation hooks.
+prd-references/ | Copies of the requirement files, the Imagine home, and the Discover layout screen. Open the folder. No links. | Ports are not in here.
+

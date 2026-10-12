@@ -97,7 +97,7 @@ class _MediaStageContentState extends State<MediaStageContent> {
               Positioned(left: 22, top: 15, child: _action(Icons.reply_rounded, 'Remix', () => widget.onRemix(g.prompt))),
               Positioned(left: 115, top: 15, child: _action(Icons.tune_rounded, 'Options', widget.onOptions)),
               Positioned(left: 199, top: 15, child: _action(Icons.download_rounded, 'Save to Files', g.url == null ? null : () => _save(g))),
-              Positioned(left: 282, top: 15, child: _action(Icons.content_copy_rounded, 'Copy prompt', () {
+              Positioned(left: 282, top: 15, child: _action(Icons.content_copy_rounded, 'Copy message', () {
                 Clipboard.setData(ClipboardData(text: g.prompt));
                 widget.onNotice('Copied');
               })),
@@ -148,8 +148,9 @@ class _MediaStageContentState extends State<MediaStageContent> {
                     ),
                   ),
                 ),
-              // "Comments 2" -> the generations.
-              const Positioned(left: 22, top: 192, child: FText('Prompts', size: 20, height: 24, weight: FontWeight.w700)),
+              // R28: the media column is the generation column, not a prompt
+              // shelf. R40: never "Prompts" in the interface.
+              const Positioned(left: 22, top: 192, child: FText('Generations', size: 20, height: 24, weight: FontWeight.w700)),
               Positioned(left: 108, top: 192, child: FText('${items.length}', size: 16, height: 24, weight: FontWeight.w700, opacity: 0.4)),
               Positioned(
                 left: 0,

@@ -78,22 +78,37 @@ const double _kMobileBreakpoint = 768; // width < 768
 const double _kCoverSizeMobile = 170;
 const double _kCoverSizeDesktop = 200;
 
-// CoverFlow.tsx getTransform()
+// The Premium carousel.
+//
+// The carousel is the animated object. The whole track slides as one rigid body
+// and every cover rides along inside it, upright and un-rotated. Nothing
+// rotates, nothing tilts, no cover is individually scaled or clipped, and no
+// cover animates on its own timer.
+//
+// This replaces a per-card CoverFlow: each thumbnail used to carry its own
+// rotateY / translateZ / scale / opacity, which meant the covers clipped against
+// the stage edge, skewed independently, and moved out of step with each other
+// during a drag. One animated track cannot desynchronise, and no cover is ever
+// cut off by the stage.
 const double _kSpacingMobile = 120;
 const double _kSpacingDesktop = 160;
-const double _kRotationDeg = 55;
-const double _kCenterTranslateZ = 300;
-const double _kCenterScale = 1.3;
-const double _kSideZPerStep = -80;
-const double _kSideScaleBase = 1.15;
-const double _kSideScaleStep = 0.04;
-const double _kSideScaleMin = 0.8;
-const double _kCenterEpsilon = 0.1;
-// CoverFlow.tsx container: h-96, perspective 1500px, max-w-7xl
+
+// How much of the neighbouring covers stays on screen. The track is a real
+// strip, so covers outside this band are not built at all.
+const int _kVisibleRadius = 2;
+
+// The stage box the track is laid out in. The label form below is positioned
+// off the stage height, so these stay.
 const double _kStageHeight = 384;
 const double _kStageMaxWidth = 1280;
-const double _kPerspective = 1500;
-// transition: all 400ms cubic-bezier(0.23, 1, 0.32, 1)
+
+// The centre cover sits slightly proud. This is a lift and a shadow only — no
+// rotation, no perspective skew.
+const double _kCenterLift = 10;
+const double _kNeighborDrop = 0.0;
+
+const double _kCenterEpsilon = 0.1;
+// transition: 400ms cubic-bezier(0.23, 1, 0.32, 1)
 const Duration _kCardTransition = Duration(milliseconds: 400);
 const Cubic _kCardEase = Cubic(0.23, 1, 0.32, 1);
 // Drag: offset / 100; threshold 50; velocity 0.5 / 2.0 px per ms
@@ -936,35 +951,25 @@ class _CoverFlowState extends State<_CoverFlow> {
     return d;
   }
 
-  // getTransform / getOpacity
-  _CardPose _poseFor(int index) {
-    final baseOffset = _rel(index).toDouble();
-    final offset =
-        baseOffset + (_drag.dragging ? _drag.offset / _kDragDivisor : 0.0);
-    final spacing = widget.isMobile ? _kSpacingMobile : _kSpacingDesktop;
-    double tx, tz, ry, s;
-    if (offset.abs() < _kCenterEpsilon) {
-      tx = 0;
-      tz = _kCenterTranslateZ;
-      ry = 0;
-      s = _kCenterScale;
-    } else {
-      final distance = offset.abs();
-      tx = (offset < 0 ? -spacing : spacing) * distance;
-      tz = _kSideZPerStep * distance;
-      ry = offset < 0 ? _kRotationDeg : -_kRotationDeg;
-      s = math.max(_kSideScaleMin, _kSideScaleBase - (distance * _kSideScaleStep));
-    }
-    return _CardPose(tx, tz, ry, s, _opacityFor(offset.abs()));
-  }
+  /// The single animated quantity: how far the whole track has slid, in cover
+  /// steps. Positive is right. This is the ONLY thing that animates.
+  double get _trackPosition => _rel(widget.currentIndex).toDouble() == 0
+      ? 0.0
+      : _rel(widget.currentIndex).toDouble() +
+          (_drag.dragging ? _drag.offset / _kDragDivisor : 0.0);
 
-  double _opacityFor(double offset) {
-    if (offset < 0.1) return 1;
-    if (offset <= 1) return 1;
-    if (offset <= 2) return 1;
-    if (offset <= 3) return 0.95;
-    if (offset <= 4) return 0.9;
-    return math.max(0.8, 0.9 - ((offset - 4) * 0.05));
+  /// A cover's x offset within the track, in pixels, measured from the centre
+  /// slot. Pure arithmetic on the loop position — no per-cover state.
+  double _slotX(int index, double coverSize, double spacing) =>
+      _rel(index) * (coverSize + spacing) +
+      (_drag.dragging ? (_drag.offset / _kDragDivisor) * (coverSize + spacing) : 0.0);
+
+  /// The centre cover sits slightly proud. A lift, never a rotation or a
+  /// perspective skew — the covers stay parallel to the viewer.
+  double _liftFor(int index) {
+    final r = _rel(index);
+    if (r.abs() < _kCenterEpsilon) return _kCenterLift;
+    return _kNeighborDrop;
   }
 
   int _zIndexFor(int index) {
@@ -977,28 +982,13 @@ class _CoverFlowState extends State<_CoverFlow> {
     return math.max(1, 10 - offset);
   }
 
-  /// Whether any of the card's paint (cover, reflection, shadow spill) lands
-  /// inside the viewport for [pose]. Off-screen cards are not painted at all
-  /// (they were fully outside the screen before as well).
-  bool _onScreen(_CardPose pose, double size, double originX) {
-    final o = size / 2; // transform-origin: centre of the cover box
-    final m = Matrix4.translationValues(o, o, 0)
-      ..multiply(pose.matrix())
-      ..multiply(Matrix4.translationValues(-o, -o, 0));
-    final st = m.storage;
-    const pad = 110.0;
-    var minX = double.infinity, maxX = double.negativeInfinity;
-    for (final x in const [-pad, 1.0]) {
-      for (final y in const [-pad, 1.0]) {
-        final px = x == 1.0 ? size + pad : x;
-        final py = y == 1.0 ? size * 2 + pad : y;
-        final w = st[3] * px + st[7] * py + st[15];
-        if (w <= 0.01) return true;
-        final sx = originX + (st[0] * px + st[4] * py + st[12]) / w;
-        minX = math.min(minX, sx);
-        maxX = math.max(maxX, sx);
-      }
-    }
+  /// Whether a cover's box, placed at [x] with the track, reaches the viewport.
+  /// Off-screen covers are not built. No transform maths is involved: covers
+  /// are unrotated rectangles, so their box is their box.
+  bool _onScreen(double x, double size, double originX) {
+    const pad = 110.0; // shadow spill and the reflection below the cover
+    final minX = originX + x - pad;
+    final maxX = originX + x + size + pad;
     return maxX > 0 && minX < widget.viewportWidth;
   }
 
@@ -1034,16 +1024,9 @@ class _CoverFlowState extends State<_CoverFlow> {
   Widget build(BuildContext context) {
     final coverSize = widget.isMobile ? _kCoverSizeMobile : _kCoverSizeDesktop;
     final themes = widget.themes;
-    // Paint order = CSS z-index (getZIndex + 1000), ties in DOM order.
-    final visible = <int>[
-      for (int i = 0; i < themes.length; i++)
-        if (_rel(i).abs() <= 6) i,
-    ]..sort((a, b) {
-        final za = _zIndexFor(a), zb = _zIndexFor(b);
-        if (za != zb) return za.compareTo(zb);
-        return a.compareTo(b);
-      });
-    // Cards are flex-centred in the stage, the stage in the viewport.
+    final spacing = widget.isMobile ? _kSpacingMobile : _kSpacingDesktop;
+    final pitch = coverSize + spacing;
+    // Cards are centred in the stage, the stage in the viewport.
     final originX = (widget.viewportWidth - coverSize) / 2;
 
     return GestureDetector(
@@ -1053,46 +1036,49 @@ class _CoverFlowState extends State<_CoverFlow> {
       onHorizontalDragEnd: (_) => _dragEnd(),
       onHorizontalDragCancel: _dragEnd,
       child: LayoutBuilder(builder: (context, c) {
-        final left = (c.maxWidth - coverSize) / 2;
-        final top = (c.maxHeight - coverSize) / 2;
+        final centreLeft = (c.maxWidth - coverSize) / 2;
+        final centreTop = (c.maxHeight - coverSize) / 2;
         return ListenableBuilder(
           listenable: _drag,
           builder: (context, _) => MouseRegion(
             cursor: _drag.dragging
                 ? SystemMouseCursors.grabbing
                 : SystemMouseCursors.grab,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                for (final i in visible)
-                  Positioned(
-                    key: ValueKey('card-${themes[i].id}'),
-                    left: left,
-                    top: top,
-                    width: coverSize,
-                    height: coverSize * 2, // cover + ReflectionComponent (top-full, h-full)
-                    child: TweenAnimationBuilder<_CardPose>(
-                      tween: _CardPoseTween(end: _poseFor(i)),
-                      duration: _drag.dragging ? Duration.zero : _kCardTransition,
-                      curve: _kCardEase,
-                      builder: (context, pose, child) {
-                        if (!_onScreen(pose, coverSize, originX)) {
-                          return const SizedBox.shrink();
-                        }
-                        return Opacity(
-                          opacity: pose.opacity.clamp(0.0, 1.0),
-                          child: Transform(
-                            // transform-origin: centre of the cover box
-                            alignment: const Alignment(0, -0.5),
-                            transform: pose.matrix(),
-                            child: child,
-                          ),
-                        );
-                      },
-                      child: _card(i, coverSize),
-                    ),
-                  ),
-              ],
+            // The track is the animated object. One tween, one translation, and
+            // every cover inside it rides along rigidly. Nothing per-cover
+            // animates, so nothing can desynchronise or clip independently.
+            child: TweenAnimationBuilder<double>(
+              tween: Tween<double>(end: _trackPosition),
+              duration: _drag.dragging ? Duration.zero : _kCardTransition,
+              curve: _kCardEase,
+              builder: (context, trackPos, _) {
+                // Neighbours first, so the centre cover paints last and sits
+                // on top without a z-index trick.
+                final slots = <int>[
+                  for (int i = 0; i < themes.length; i++)
+                    if (_rel(i).abs() <= _kVisibleRadius) i,
+                ]..sort((a, b) {
+                    final ra = _rel(a).abs(), rb = _rel(b).abs();
+                    if (ra != rb) return rb.compareTo(ra);
+                    return a.compareTo(b);
+                  });
+                return Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    for (final i in slots)
+                      // Position is a pure function of the track position: a
+                      // fixed pitch from the centre slot, shifted by the track.
+                      Positioned(
+                        key: ValueKey('card-${themes[i].id}'),
+                        left: centreLeft + (_rel(i) - trackPos) * pitch,
+                        top: centreTop - _liftFor(i),
+                        width: coverSize,
+                        height: coverSize * 2, // cover + reflection
+                        child: _card(i, coverSize),
+                      ),
+                  ],
+                );
+              },
             ),
           ),
         );
@@ -1706,49 +1692,9 @@ class _GlassCapsule extends StatelessWidget {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// CSS transform list: perspective(1500px) [container] then
-/// translateX(tx) translateZ(tz) rotateY(ry) scale(s). CSS z points at the viewer,
-/// so the perspective term is -1/d (w = 1 - z/d), matching CSS numerically.
-class _CardPose {
-  final double tx, tz, ryDeg, scale, opacity;
-  const _CardPose(this.tx, this.tz, this.ryDeg, this.scale, this.opacity);
-
-  Matrix4 matrix() {
-    final m = Matrix4.identity()..setEntry(3, 2, -1 / _kPerspective);
-    m.multiply(Matrix4.translationValues(tx, 0, tz));
-    m.multiply(Matrix4.rotationY(ryDeg * math.pi / 180));
-    m.multiply(Matrix4.diagonal3Values(scale, scale, 1));
-    return m;
-  }
-
-  @override
-  bool operator ==(Object other) =>
-      other is _CardPose &&
-      other.tx == tx &&
-      other.tz == tz &&
-      other.ryDeg == ryDeg &&
-      other.scale == scale &&
-      other.opacity == opacity;
-
-  @override
-  int get hashCode => Object.hash(tx, tz, ryDeg, scale, opacity);
-
-  static _CardPose lerp(_CardPose a, _CardPose b, double t) => _CardPose(
-        a.tx + (b.tx - a.tx) * t,
-        a.tz + (b.tz - a.tz) * t,
-        a.ryDeg + (b.ryDeg - a.ryDeg) * t,
-        a.scale + (b.scale - a.scale) * t,
-        a.opacity + (b.opacity - a.opacity) * t,
-      );
-}
-
-/// CSS transitions interpolate matching transform functions component-wise.
-class _CardPoseTween extends Tween<_CardPose> {
-  _CardPoseTween({super.end});
-
-  @override
-  _CardPose lerp(double t) => _CardPose.lerp(begin ?? end!, end!, t);
-}
+// The per-card CoverFlow pose (perspective / rotateY / translateZ / scale /
+// opacity) and its tween were removed. The track carries the only transform now,
+// so there is nothing left for them to describe.
 
 class _CssShadow {
   final double dx, dy, blur, spread;

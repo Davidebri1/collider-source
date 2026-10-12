@@ -60,14 +60,26 @@ class _ConsensusWebViewState extends State<ConsensusWebView> {
   ConsensusResult get _result {
     final j = widget.job;
     if (j == null) return const ConsensusResult(claims: []);
+    final c = j.consensus;
     final done = j.results.entries.where((e) => e.value.status == 'done').toList();
     return ConsensusResult(
       claims: [
-        for (final e in done) ConsensusClaim(modelId: e.key, essence: e.value.essence, chains: j.consensus.chains[e.key] ?? 3),
+        for (final e in done)
+          ConsensusClaim(
+            modelId: e.key,
+            essence: e.value.essence,
+            // Chain depth comes from the recorder, not from a local default.
+            chains: c.chainsFor(e.key),
+            maxChain: c.maxChainFor(e.key),
+          ),
       ],
-      groups: j.consensus.groups.isNotEmpty ? j.consensus.groups : [for (final e in done) [e.key]],
-      need: j.consensus.need,
-      tieBreakBecause: j.consensus.tieBasis.isEmpty ? null : j.consensus.tieBasis,
+      // Group models the way the recorder grouped them: sentiment first.
+      groups: c.groups.isNotEmpty
+          ? [for (final g in c.groups) g.models]
+          : [for (final e in done) [e.key]],
+      ratio: c.ratio,
+      summary: c.summary,
+      excluded: c.excluded,
     );
   }
 
@@ -97,16 +109,17 @@ class _ConsensusWebViewState extends State<ConsensusWebView> {
     final derived = deriveConsensus(_result)!;
     final mapScale = math.max(1.0, math.min(2.6, fieldH / 190));
     int scaled(num px) => (px * mapScale).round();
-    var nucleusSize = scaled(derived.nucleusSize);
+    var nucleusSize = scaled(math.max(derived.consensusChains, derived.consensusMaxChain) > 0
+        ? sphereSize(derived.consensusMaxChain > 0 ? derived.consensusMaxChain : derived.consensusChains)
+        : 40);
     final nucleusRadius = nucleusSize / 2;
     final centerX = fieldW / 2;
     final centerY = (fieldH * 0.44).roundToDouble();
     final bottomReserve = _labels ? 120.0 : 56.0;
     final innerR = math.max(nucleusRadius + 34, 58.0);
     final outerR = math.max(innerR + 40, math.min(fieldW / 2 - 52, fieldH - bottomReserve - centerY));
-    final placements = layoutByMatches(
+    final placements = layoutByGroup(
       derived,
-      _result,
       Field(width: fieldW, height: fieldH, centerX: centerX, centerY: centerY, innerR: innerR, outerR: outerR),
     );
     // Fit to the viewport: if any sphere + its label (label box max 120px)
@@ -127,8 +140,8 @@ class _ConsensusWebViewState extends State<ConsensusWebView> {
           x: centerX + (p.x - centerX) * fit,
           y: centerY + (p.y - centerY) * fit,
           unanchored: p.unanchored,
-          linksToConsensus: p.linksToConsensus,
           inConsensus: p.inConsensus,
+          excluded: p.excluded,
         ),
     };
     final claimById = {for (final c in derived.claims) c.modelId: c};
@@ -199,6 +212,7 @@ class _ConsensusWebViewState extends State<ConsensusWebView> {
     for (var i = 0; i < ms.length; i++) {
       final m = ms[i];
       final yPct = (((pos[i].dy / fieldH) - 0.34) / 0.58 * 100).clamp(0.0, 100.0);
+      final c = claimById[m.id];
       models.add({
         'id': m.id,
         'label': m.label,
@@ -207,7 +221,9 @@ class _ConsensusWebViewState extends State<ConsensusWebView> {
         'view': m.view,
         'agree': agree[i],
         'chainDepth': chains[i],
+        'maxChain': c?.maxChain ?? 0,
         'unanchored': meta[i].unanchored,
+        'excluded': meta[i].excluded,
         'x': (pos[i].dx / fieldW) * 100,
         'y': yPct,
       });
@@ -215,15 +231,22 @@ class _ConsensusWebViewState extends State<ConsensusWebView> {
 
     return jsonEncode({
       'models': models,
+      // R17: a count, never a percent. Empty while the shared send is unfinished.
+      'score': derived.score,
       'ratioN': derived.ratioN,
       'ratioM': derived.ratioM,
+      'complete': derived.complete,
       'hasRun': true,
+      // Verbatim from a member response.
       'summary': derived.summary,
+      // The consensus chain row the agent spec asks for: the max across members.
+      'consensusChains': derived.consensusChains,
+      'consensusMaxChain': derived.consensusMaxChain,
       'nucleusSize': (nucleusSize * sizeScale).round(),
       'sizeScale': sizeScale,
-      'glowOpacity': derived.glowOpacity,
-      'glowRadius': derived.glowRadius,
-      'tieBecause': derived.tieBecause ?? '',
+      'glowOpacity': 0.15 + derived.agreement * 0.55,
+      'glowRadius': (14 + derived.agreement * 36).round(),
+      'excluded': derived.excluded.map((c) => c.modelId).toList(),
       'labels': _labels,
       'activeTab': _tab,
     });

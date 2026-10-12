@@ -30,27 +30,86 @@ class ModelResult {
       );
 }
 
+/// One response's logical chain measurement. [chains] is the total chain depth
+/// and [max] the longest single chain, per the Consensus Agent spec.
+class ChainEntry {
+  final String model;
+  final int chains;
+  final int max;
+  const ChainEntry(this.model, this.chains, this.max);
+  factory ChainEntry.fromJson(Map<String, dynamic> j) => ChainEntry(
+        '${j['model']}',
+        ((j['chains'] as num?) ?? 0).toInt(),
+        ((j['max'] as num?) ?? 0).toInt(),
+      );
+}
+
+/// A sentiment group and the models that share it.
+class SentimentGroup {
+  final String sentiment;
+  final List<String> models;
+  const SentimentGroup(this.sentiment, this.models);
+  factory SentimentGroup.fromJson(Map<String, dynamic> j) => SentimentGroup(
+        j['sentiment'] as String? ?? '',
+        ((j['models'] as List?) ?? const []).map((e) => '$e').toList(),
+      );
+}
+
+/// The three fields the Consensus Agent spec actually defines. There is no
+/// dissent and no need: the spec records reality, it does not advise.
+///
+/// [score] is a count rendered as n/total. Per PRD R17 an unfinished send
+/// shows an empty score rather than a placeholder or a percent.
 class ConsensusResult {
-  final String status; // pending | done | unavailable
-  final String summary;
-  final String score;
-  final List<String> dissent;
-  final String need;
-  final List<List<String>> groups;
-  final Map<String, int> chains;
-  final String tieBasis;
-  const ConsensusResult(this.status, this.summary, this.score, this.dissent, this.need,
-      [this.groups = const [], this.chains = const {}, this.tieBasis = '']);
+  final String status; // pending | done | unavailable | empty
+  final String ratio; // "4/7"
+  final String score; // "4/7" or "" while incomplete
+  final String summary; // verbatim from a member response
+  final List<SentimentGroup> groups;
+  final List<ChainEntry> chains;
+  final String consensusChain; // e.g. "5 chains, max 4"
+  final List<String> excluded; // R41: out of the shared query, shown not hidden
+
+  const ConsensusResult(
+    this.status,
+    this.ratio,
+    this.score,
+    this.summary, {
+    this.groups = const [],
+    this.chains = const [],
+    this.consensusChain = '',
+    this.excluded = const [],
+  });
+
+  /// R16/R17: an incomplete shared send shows an empty score, never a
+  /// "waiting" line and never a percent.
+  bool get complete => score.isNotEmpty && status == 'done';
+
   factory ConsensusResult.fromJson(Map<String, dynamic>? j) => ConsensusResult(
         j?['status'] as String? ?? 'pending',
-        j?['summary'] as String? ?? '',
+        j?['ratio'] as String? ?? '',
         j?['score'] as String? ?? '',
-        ((j?['dissent'] as List?) ?? const []).map((e) => '$e').toList(),
-        j?['need'] as String? ?? '',
-        [for (final g in (j?['groups'] as List?) ?? const []) [for (final m in g as List) '$m']],
-        {for (final e in ((j?['chains'] as Map?) ?? const {}).entries) '${e.key}': (e.value as num).toInt()},
-        j?['tie_basis'] as String? ?? '',
+        j?['summary'] as String? ?? '',
+        groups: [for (final g in (j?['groups'] as List?) ?? const []) SentimentGroup.fromJson(Map<String, dynamic>.from(g as Map))],
+        chains: [for (final c in (j?['chains'] as List?) ?? const []) ChainEntry.fromJson(Map<String, dynamic>.from(c as Map))],
+        consensusChain: j?['consensus_chain'] as String? ?? '',
+        excluded: ((j?['excluded'] as List?) ?? const []).map((e) => '$e').toList(),
       );
+
+  /// Chain depth for one model, or 0 when it was not measured.
+  int chainsFor(String model) {
+    for (final c in chains) {
+      if (c.model == model) return c.chains;
+    }
+    return 0;
+  }
+
+  int maxChainFor(String model) {
+    for (final c in chains) {
+      if (c.model == model) return c.max;
+    }
+    return 0;
+  }
 }
 
 class JobState {
@@ -114,13 +173,25 @@ class ColliderApi {
     return online;
   }
 
-  Future<String> ask({required String prompt, required List<String> models, required AskMode mode, required bool autosave, required bool incognito}) async {
+  /// [excluded] is the R41 isolation set: models a direct reply took out of the
+  /// shared query. They still answer, they are just not counted, and the server
+  /// reports them back as excluded rather than dropping them. A general send
+  /// passes an empty list and every selected model is counted again.
+  Future<String> ask({
+    required String prompt,
+    required List<String> models,
+    required AskMode mode,
+    required bool autosave,
+    required bool incognito,
+    List<String> excluded = const [],
+  }) async {
     final r = await _dio.post('$_base/api/ask', data: {
       'prompt': prompt,
       'models': models,
       'mode': mode.wire,
       'autosave': autosave,
       'incognito': incognito,
+      'excluded': excluded,
     });
     return r.data['id'] as String;
   }

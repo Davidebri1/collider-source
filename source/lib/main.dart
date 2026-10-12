@@ -176,8 +176,10 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   // Current floating user prompt (floats un-framed on wallpaper)
   String _currentPrompt = '';
 
-  // Consensus state: ratio of agreeing models (e.g. "7/7")
-  String _consensusRatio = 'Consensus';
+  // Consensus state. The score is a count rendered as n/total, or empty while
+  // a shared send is unfinished (R17: an incomplete send shows an empty score,
+  // no partial wording, never a percent).
+  String _consensusRatio = '';
   String _consensusSummary = '';
   bool _isConsensusGenerating = false;
 
@@ -334,9 +336,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       _mode = AskMode.values.firstWhere((m) => m.wire == qp['mode'], orElse: () => AskMode.chat);
     }
     if (qp['ask'] != null && qp['ask']!.trim().isNotEmpty) _onSendPrompt(qp['ask']!);
-    // ?app=smartgen|market|themes|files — open a surface directly. Used by the
-    // screenshot pass and as shortcuts on the phone.
-    const openable = {'smartgen', 'market', 'themes', 'files', 'consensus', 'apps'};
+    // ?app=smartgen|market|themes|premium|music|files|consensus — open a
+    // surface directly. Used by the screenshot pass and as phone shortcuts.
+    const openable = {'smartgen', 'market', 'themes', 'premium', 'music', 'files', 'consensus', 'apps'};
     final app = qp['app'];
     if (app != null && openable.contains(app)) {
       setState(() => _activeDrawer = app);
@@ -446,7 +448,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     }
     final c = j.consensus;
     _isConsensusGenerating = !j.done;
-    _consensusRatio = c.status == 'done' && c.score.isNotEmpty ? c.score : 'Consensus';
+    _consensusRatio = c.score;
     _consensusSummary = c.summary;
   }
 
@@ -696,7 +698,12 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       );
 
   /// Direct mode consensus: a real call to the keyless judge, over the real answers.
-  /// Error texts our system put in bubbles (never sent back to a model).
+  ///
+  /// Output contract is the Consensus Agent spec's Recap, and only that:
+  /// Consensus Ratio (a count, never a percent), Consensus Summary (verbatim
+  /// from the winning group), and the Logical Chain Length Table. There is no
+  /// NEED, no SERVE and no DETAIL: those were advisory additions, and the spec
+  /// is explicit that this records reality rather than advising.
   final Set<String> _errTexts = {};
   bool _isErr(String t) => t.startsWith('Error: ') || _errTexts.contains(t);
 
@@ -710,7 +717,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     if (answers.isEmpty) {
       setState(() {
         _isConsensusGenerating = false;
-        _consensusRatio = '0/$total Consensus';
+        // R17: an empty score, not "0/N" and not a "waiting" line.
+        _consensusRatio = '';
         _consensusSummary = 'Nothing to compare yet.';
         _consensusFull = total == 0
             ? 'No models were selected, so there is nothing to compare.'
@@ -719,66 +727,72 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       return;
     }
     try {
-      // Consensus Agent (per the Consensus Agent spec): the agent reads only
-      // the responses. It is never told which model produced which response,
-      // because source identity is not an input it uses Ã¢â‚¬â€ need and intent are
-      // derived from the prompt, and the responses are read against that.
+      // The agent reads only the responses. It is never told which model
+      // produced which response, because source identity is not an input it
+      // uses — need and intent are derived from the prompt, and the responses
+      // are read against that.
       final judge = await MediaGen.instance.consensus([
         {
           'role': 'system',
-          'content': 'What is the derived need, and how can you serve it?\n\n'
-              'Derive the need from the prompt. Read each response against that need and '
-              'reduce it to its base distinction: the actionable portion. Resolve democratically '
-              'by counting each unique sentiment; the sentiment with the largest count is the '
-              'consensus summary, verbatim.\n\n'
-              'Also count each response\'s logical chains: explicit (sequential '
-              'clarifications that extend meaning) and implicit (definitions, statements or '
-              'narrative that support a logical conclusion). Count meaning, never words. Report '
-              'the count and the longest chain. Split chains do not exist Ã¢â‚¬â€ what looks like a '
-              'split is clarification and counts as one.\n\n'
-              'Reply in exactly this format, nothing else:\n'
-              'NEED: <the derived need, one line>\n'
-              'SERVE: <how the consensus serves it, one line>\n'
-              'CONSENSUS: <the agreed sentiment, verbatim from the winning group>\n'
-              'RATIO: <agreed responses>/<total responses>\n'
-              'CHAINS: <response> <count> (max <n>) Ã¢â‚¬â€ one per response, then a CONSENSUS line '
-              'using the longest chain among the agreed group\n'
-              'DETAIL: <the agreed answer in full, noting real disagreement>'
+          'content': 'You are the Collider consensus recorder. Several models each independently '
+              'answered one message. You record what is there. You do not advise, rank, or evaluate '
+              'correctness.\n\n'
+              'Work in this order.\n'
+              '1. From the user message, derive the need and the intent.\n'
+              '2. For each response, simplify it to its base minimal distinction or sentiment: the '
+              'actionable portion that serves the derived need.\n'
+              '3. Group the responses by that sentiment. Resolve democratically: the sentiment with '
+              'the most members is the consensus.\n'
+              '4. Count the logical chain depth of each response. A logical chain is a sequential '
+              'clarification or simplification that extends logic and serves the need. An explicit '
+              'chain reads until the next clause is not logically dependent on the previous. '
+              'Implicit chains count too: a definition, statement, or narrative element that '
+              'directly supports a logical conclusion, evidentiary after the point or preemptive '
+              'before it. A technical definition standing alone never extends beyond 1 however many '
+              'appear; it must attach to a larger logical point to extend. An apparent split is '
+              'clarification and counts as the same chain. There is one prompt, one chain; anything '
+              'outside that is ad libbing and does not count. Do not count words or characters, and '
+              'do not use keyword or regex counting. Count meaning.\n'
+              '5. Report the maximum chain length for each response.\n\n'
+              'Answer with exactly these lines and nothing else. Do not add commentary.\n'
+              'RATIO: <count of responses in the winning group>/<total responses>\n'
+              'SUMMARY: <the winning sentiment copied verbatim from a member response>\n'
+              'CHAINS: <response number> <chain count> (max <n>) — one line per response\n'
+              'CONSENSUS_CHAIN: <chain count> chains, max <the largest max length among its members>'
         },
         {
           'role': 'user',
-          'content': 'Prompt:\n$prompt\n\nResponses:\n${[for (var i = 0; i < answers.length; i++) '--- ${i + 1} ---\n${answers[i].$2}'].join('\n\n')}'
+          'content': 'MESSAGE\n$prompt\n\nRESPONSES (${answers.length})\n${[for (var i = 0; i < answers.length; i++) '--- ${i + 1} ---\n${answers[i].$2}'].join('\n\n')}'
         },
       ]);
-      final agree = RegExp(r'RATIO:\s*(\d+)').firstMatch(judge)?.group(1) ?? '${answers.length}';
-      final line = RegExp(r'CONSENSUS:\s*(.+)').firstMatch(judge)?.group(1)?.trim() ?? judge.split('\n').first;
-      final detail = RegExp(r'DETAIL:\s*([\s\S]+)').firstMatch(judge)?.group(1)?.trim() ?? judge;
+      final ratioMatch = RegExp(r'RATIO:\s*(\d+)\s*/\s*(\d+)').firstMatch(judge);
+      final line = RegExp(r'^SUMMARY:\s*(.+)$', multiLine: true).firstMatch(judge)?.group(1)?.trim() ?? judge.split('\n').first;
+      final chains = RegExp(r'CHAINS:\s*([\s\S]+?)(?=\nCONSENSUS_CHAIN:|$)').firstMatch(judge)?.group(1)?.trim();
+      final consensusChain = RegExp(r'CONSENSUS_CHAIN:\s*(.+)').firstMatch(judge)?.group(1)?.trim();
       if (!mounted) return;
       setState(() {
-        // NEED / SERVE lead, because the agent derives them from the prompt
-        // before it reads anything. Per-response one-liners are deliberately
-        // NOT written back onto individual tickers: the agent never sees which
-        // model said what, so attributing a summary back to a named model
-        // would be a fabrication.
-        final need = RegExp(r'NEED:\s*(.+)').firstMatch(judge)?.group(1)?.trim();
-        final serve = RegExp(r'SERVE:\s*(.+)').firstMatch(judge)?.group(1)?.trim();
-        final chains = RegExp(r'CHAINS:\s*([\s\S]+?)(?=\nDETAIL:|\n*$)').firstMatch(judge)?.group(1)?.trim();
         _isConsensusGenerating = false;
-        _consensusRatio = '$agree/$total Consensus';
+        // R17: the score is a count. An unparseable ratio shows an empty score.
+        final n = int.tryParse(ratioMatch?.group(1) ?? '');
+        final d = int.tryParse(ratioMatch?.group(2) ?? '');
+        _consensusRatio = (n != null && d != null && n > 0 && d > 0) ? '$n/$d' : '';
+        // Verbatim from the winning group. Per-response one-liners are not
+        // written back onto individual tickers: the agent never sees which
+        // model said what, so attributing a summary to a named model would be
+        // a fabrication.
         _consensusSummary = line;
         _consensusFull = [
-          if (need != null && need.isNotEmpty) 'Need: $need',
-          if (serve != null && serve.isNotEmpty) 'Serve: $serve',
-          detail,
           if (chains != null && chains.isNotEmpty) chains,
+          if (consensusChain != null && consensusChain.isNotEmpty) consensusChain,
         ].join('\n\n');
       });
     } catch (e) {
       if (!mounted) return;
-      final msg = friendlyErrorMessage(e).replaceFirst('This model', 'The consensus agent');
+      final msg = friendlyErrorMessage(e).replaceFirst('This model', 'The consensus recorder');
       setState(() {
         _isConsensusGenerating = false;
-        _consensusRatio = '${answers.length}/$total answered';
+        // A failure is not a score.
+        _consensusRatio = '';
         _consensusSummary = msg;
         _consensusFull = msg;
       });
@@ -1015,7 +1029,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       _currentPrompt = prompt;
       _promptTime = now;
       _isConsensusGenerating = true;
-      _consensusRatio = 'Consensus';
+      _consensusRatio = '';
       _consensusSummary = '';
       _consensusFull = '';
       _tickerItems = [
@@ -1064,7 +1078,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       _currentPrompt = prompt;
       _promptTime = now;
       _isConsensusGenerating = true;
-      _consensusRatio = 'Consensus';
+      _consensusRatio = '';
       _consensusSummary = '';
       _tickerItems = [
         for (final id in models)
@@ -1452,10 +1466,11 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                            // Pinned consensus row: score and the winning essence, verbatim.
+                            // Pinned consensus row: the count and the winning essence,
+                            // verbatim. R16: this is the only consensus entry point.
                             if (!_activeCategory.isMedia && _tickerItems.isNotEmpty) ...[
                               AmbientGlow(color: Colors.white, radius: 20, min: 0.06, max: 0.20, period: const Duration(milliseconds: 5200), child: ConsensusRow(
-                                agreementRatio: _consensusRatio,
+                                score: _consensusRatio,
                                 summary: _consensusSummary,
                                 isGenerating: _isConsensusGenerating,
                                 onTap: () => _onTogglePill(_kConsensusId)),

@@ -1,10 +1,18 @@
 import 'package:flutter/material.dart';
 import '../../../core/vision/vision_kit.dart';
 
-/// Pinned consensus header of the response stack: ratio capsule, chevron,
-/// and the full consensus summary (wrapped, never truncated or shrunk).
+/// Pinned consensus row on the ticker. The only consensus entry point: tap
+/// opens the map. It is not an app and it is not on the dock or the side nav.
+///
+/// R16: "a count such as 4/7, then one full line" and "The line is not cut
+/// off." So the line wraps to its full length and is never ellipsised.
+///
+/// R17: "Incomplete shows an empty score. No partial wording." While a shared
+/// send is unfinished the score is empty and no label is invented for it. The
+/// row is not replaced by a "waiting" line and the score is never a percent.
 class ConsensusRow extends StatelessWidget {
-  final String agreementRatio;
+  /// A count rendered as n/total, e.g. "4/7". Empty while incomplete.
+  final String score;
   final String summary;
   final bool isGenerating;
   final VoidCallback? onGenerateConsensus;
@@ -12,7 +20,7 @@ class ConsensusRow extends StatelessWidget {
 
   const ConsensusRow({
     super.key,
-    required this.agreementRatio,
+    required this.score,
     required this.summary,
     this.onGenerateConsensus,
     this.onTap,
@@ -21,9 +29,9 @@ class ConsensusRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final label = agreementRatio.contains('Consensus') ? agreementRatio : '$agreementRatio Consensus';
-    // v8.3.1: elevated above the model list: finer glass, luminous hairline
-    // edge, deeper two-layer shadow, refined type; one line of agreed answer.
+    // Empty score renders as nothing at all rather than a placeholder.
+    final hasScore = score.trim().isNotEmpty;
+    final showLine = summary.trim().isNotEmpty;
     return VPress(
       onTap: onTap ?? onGenerateConsensus,
       child: Container(
@@ -51,14 +59,19 @@ class ConsensusRow extends StatelessWidget {
               children: [
                 const Icon(Icons.balance_rounded, size: 13, color: Color(0xE6FFFFFF)),
                 const SizedBox(width: 6),
-                Text(label.toUpperCase(),
-                    style: VType.caption(color: const Color(0xE6FFFFFF), weight: FontWeight.w600).copyWith(letterSpacing: 1.2)),
+                // The count, verbatim. No percent sign is ever added.
+                if (hasScore)
+                  Text(
+                    score,
+                    style: VType.caption(color: const Color(0xE6FFFFFF), weight: FontWeight.w600)
+                        .copyWith(letterSpacing: 1.2),
+                  ),
                 const Spacer(),
                 Icon(isGenerating ? Icons.sync_rounded : Icons.chevron_right_rounded, size: 18, color: VColors.textTertiary),
               ],
             ),
-            const SizedBox(height: 4),
-            if (isGenerating)
+            if (isGenerating) ...[
+              const SizedBox(height: 4),
               ClipRRect(
                 borderRadius: BorderRadius.circular(VRadius.full),
                 child: const LinearProgressIndicator(
@@ -66,10 +79,16 @@ class ConsensusRow extends StatelessWidget {
                   backgroundColor: VColors.fillCell,
                   valueColor: AlwaysStoppedAnimation<Color>(VColors.textSecondary),
                 ),
-              )
-            else
-              Text(summary.split('\n').first, maxLines: 1, overflow: TextOverflow.ellipsis,
-                  style: VType.callout(color: Colors.white, weight: FontWeight.w500).copyWith(height: 1.3, letterSpacing: 0.1)),
+              ),
+            ] else if (showLine) ...[
+              const SizedBox(height: 4),
+              // Full line, wrapped. R16: the line is not cut off.
+              Text(
+                summary.split('\n').first,
+                style: VType.callout(color: Colors.white, weight: FontWeight.w500)
+                    .copyWith(height: 1.3, letterSpacing: 0.1),
+              ),
+            ],
           ],
         ),
       ),
