@@ -110,7 +110,6 @@ class ContextualSideNav extends StatefulWidget {
 }
 
 class _ContextualSideNavState extends State<ContextualSideNav> {
-  SideNavTab _chatTab = SideNavTab.global;
   final TextEditingController _chatSearchCtrl = TextEditingController();
   String _chatQuery = '';
   final TextEditingController _marketSearchCtrl = TextEditingController();

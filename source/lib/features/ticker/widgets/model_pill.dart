@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
@@ -119,16 +121,37 @@ class _ModelPillState extends State<ModelPill> {
   Widget _buildPane(BuildContext context) {
     final item = widget.item;
     final c = item.modelDef.providerColor;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(VSpace.sm, 10, VSpace.xs, 8),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [c.withValues(alpha: 0.22), c.withValues(alpha: 0.08)]),
-        borderRadius: BorderRadius.circular(VRadius.lg - 4),
-        border: Border.all(color: c.withValues(alpha: 0.30), width: 0.6),
+    // The opened answer is the nearest plane: it needs real occlusion to sit
+    // in front of the room. Without a shadow and a frost pass it read as a
+    // flat gradient painted on another flat surface.
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(VRadius.lg - 4),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [c.withValues(alpha: 0.30), c.withValues(alpha: 0.12), Colors.black.withValues(alpha: 0.30)]),
+            borderRadius: BorderRadius.circular(VRadius.lg - 4),
+            border: Border.all(color: c.withValues(alpha: 0.42), width: 0.8),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withValues(alpha: 0.46), blurRadius: 34, spreadRadius: -6, offset: const Offset(0, 18)),
+              BoxShadow(color: c.withValues(alpha: 0.22), blurRadius: 22, spreadRadius: -10),
+            ],
+          ),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(VSpace.sm, 10, VSpace.xs, 8),
+            child: _paneBody(context, c),
+          ),
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+    );
+  }
+
+  Widget _paneBody(BuildContext context, Color c) {
+    final item = widget.item;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -158,8 +181,7 @@ class _ModelPillState extends State<ModelPill> {
             ],
           ),
           ..._expanded(item, fill: true),
-        ],
-      ),
+      ],
     );
   }
 
@@ -182,10 +204,26 @@ class _ModelPillState extends State<ModelPill> {
         borderRadius: BorderRadius.circular(VRadius.lg - 4),
         border: Border.all(color: c.withValues(alpha: 0.18 + 0.14 * e), width: 0.6),
         boxShadow: [
+          // Two shadows: a tight contact shadow that grounds the card on the
+          // surface below, and a wide soft one that lifts it off. One shadow
+          // alone cannot do both, and over a bright wallpaper the old single
+          // 10% shadow was invisible.
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.10 + 0.16 * e),
-            blurRadius: 10 + 18 * e,
-            offset: Offset(0, 3 + 7 * e),
+            color: Colors.black.withValues(alpha: 0.30 + 0.22 * e),
+            blurRadius: 6 + 10 * e,
+            offset: Offset(0, 1 + 3 * e),
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.20 + 0.24 * e),
+            blurRadius: 18 + 26 * e,
+            spreadRadius: -4,
+            offset: Offset(0, 6 + 12 * e),
+          ),
+          BoxShadow(
+            color: c.withValues(alpha: 0.18 + 0.16 * e),
+            blurRadius: 20 + 18 * e,
+            spreadRadius: -12,
+            offset: Offset(0, 2 + 4 * e),
           ),
         ],
       ),

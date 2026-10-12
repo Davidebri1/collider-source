@@ -48,7 +48,12 @@ class MusicPlayer extends ChangeNotifier {
     final out = <MusicTrack>[];
     for (final s in t.tracks) {
       if (s.title.trim().isEmpty) continue;
-      final m = MusicTrack(s.title.trim(), t.posterUrl, s.audioUrl ?? '', subtitle: _clean(t.name), themeId: t.id);
+      final title = s.title.trim();
+      // A pack imported from Drive can carry a track title identical to its
+      // own theme name; printing it twice reads as a rendering bug.
+      var sub = _clean(t.name);
+      if (sub.toLowerCase() == title.toLowerCase()) sub = '';
+      final m = MusicTrack(title, t.posterUrl, s.audioUrl ?? '', subtitle: sub, themeId: t.id);
       if (seen.add(m.key)) out.add(m);
     }
     return out;

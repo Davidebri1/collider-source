@@ -1,0 +1,9 @@
+# Flutter / Dart build artefacts
+source/build/
+source/.dart_tool/
+source/.flutter-plugins
+source/.flutter-plugins-dependencies
+source/**/generated_plugin_registrant.dart
+
+# Local QA screenshots (evidence only, not source)
+audit-shots/

@@ -17,7 +17,7 @@ class StoredFile {
   final String id;
   final String name;
   final int sizeBytes;
-  final String type; // Document | Writing | Image | Video | Data
+  final String type; // Document | Writing | Image | Video | Audio | Data
   final int addedAtMs;
   final String source; // files | composer | model
 
@@ -43,7 +43,9 @@ class StoredFile {
       id: (j['id'] as String?) ?? name,
       name: name,
       sizeBytes: (j['size'] as num?)?.toInt() ?? 0,
-      type: (j['type'] as String?) ?? FileStore.typeFor(name),
+      // The name is authoritative: records written before audio/office had
+      // their own type saved every one of them as 'Document', so re-derive.
+      type: FileStore.typeFor(name),
       addedAtMs: (j['at'] as num?)?.toInt() ?? 0,
       source: (j['src'] as String?) ?? 'files',
     );
@@ -71,11 +73,17 @@ class FileStore extends ChangeNotifier {
   /// Newest first.
   List<StoredFile> get files => List.unmodifiable(_files);
 
-  static String typeFor(String name) {
+  /// The lower-case extension, or '' when the name has none.
+  static String extOf(String name) {
     final dot = name.lastIndexOf('.');
-    final ext = dot < 0 ? '' : name.substring(dot + 1).toLowerCase();
+    return dot < 0 ? '' : name.substring(dot + 1).toLowerCase();
+  }
+
+  static String typeFor(String name) {
+    final ext = extOf(name);
     if (const ['png', 'jpg', 'jpeg', 'webp', 'gif', 'heic', 'svg', 'bmp'].contains(ext)) return 'Image';
     if (_videoExt.contains(ext)) return 'Video';
+    if (_audioExt.contains(ext)) return 'Audio';
     if (const ['json', 'csv', 'tsv', 'yaml', 'yml', 'xml', 'xlsx', 'xls', 'parquet', 'sqlite'].contains(ext)) return 'Data';
     if (const ['txt', 'md', 'markdown', 'doc', 'docx', 'rtf', 'odt', 'pages'].contains(ext)) return 'Writing';
     return 'Document';
@@ -173,39 +181,64 @@ class FileStore extends ChangeNotifier {
   }
 
   static String mimeFor(String name) {
-    final dot = name.lastIndexOf('.');
-    final ext = dot < 0 ? '' : name.substring(dot + 1).toLowerCase();
     return const {
           'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'webp': 'image/webp', 'gif': 'image/gif',
           'bmp': 'image/bmp', 'svg': 'image/svg+xml', 'pdf': 'application/pdf', 'txt': 'text/plain', 'md': 'text/markdown',
           'csv': 'text/csv', 'json': 'application/json', 'xml': 'application/xml', 'html': 'text/html',
           'mp4': 'video/mp4', 'm4v': 'video/mp4', 'mov': 'video/quicktime', 'webm': 'video/webm', 'ogv': 'video/ogg',
-        }[ext] ??
+          // Audio used to fall through to octet-stream, which is what made an
+          // mp3 open as a download rather than a file.
+          'mp3': 'audio/mpeg', 'm4a': 'audio/mp4', 'aac': 'audio/aac', 'wav': 'audio/wav', 'wave': 'audio/wav',
+          'ogg': 'audio/ogg', 'oga': 'audio/ogg', 'opus': 'audio/opus', 'flac': 'audio/flac', 'm4b': 'audio/mp4',
+          'weba': 'audio/webm', 'aiff': 'audio/aiff', 'aif': 'audio/aiff',
+          // Documents.
+          'rtf': 'application/rtf', 'doc': 'application/msword',
+          'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'odt': 'application/vnd.oasis.opendocument.text',
+          'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+          'xls': 'application/vnd.ms-excel',
+          'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'yaml': 'text/yaml', 'yml': 'text/yaml', 'tsv': 'text/tab-separated-values', 'log': 'text/plain',
+        }[extOf(name)] ??
         'application/octet-stream';
   }
 
   /// Opens in-app as text (plain-text formats).
   static bool isText(String name) {
-    final dot = name.lastIndexOf('.');
-    final ext = dot < 0 ? '' : name.substring(dot + 1).toLowerCase();
+    final ext = extOf(name);
     return const ['txt', 'md', 'markdown', 'csv', 'tsv', 'json', 'yaml', 'yml', 'xml', 'log', 'dart', 'py', 'js', 'ts', 'html', 'css']
         .contains(ext);
   }
 
   static const _videoExt = ['mp4', 'm4v', 'mov', 'webm', 'ogv'];
+  static const _audioExt = ['mp3', 'm4a', 'aac', 'wav', 'wave', 'ogg', 'oga', 'opus', 'flac', 'm4b', 'weba', 'aiff', 'aif'];
 
   /// Plays in the in-app video player (map row 19).
-  static bool isVideo(String name) {
-    final dot = name.lastIndexOf('.');
-    return dot >= 0 && _videoExt.contains(name.substring(dot + 1).toLowerCase());
-  }
+  static bool isVideo(String name) => _videoExt.contains(extOf(name));
+
+  /// Plays in the in-app audio player.
+  static bool isAudio(String name) => _audioExt.contains(extOf(name));
+
+  static bool isPdf(String name) => extOf(name) == 'pdf';
+
+  /// Markdown, rendered as markdown rather than dumped as source.
+  static bool isMarkdown(String name) => const ['md', 'markdown'].contains(extOf(name));
+
+  /// Source and tabular text: shown with line numbers, not as prose.
+  static bool isCode(String name) => const ['json', 'csv', 'tsv', 'yaml', 'yml', 'xml', 'dart', 'py', 'js', 'ts', 'html', 'css', 'log'].contains(extOf(name));
+
+  /// Office formats we can read text out of with the zip probe.
+  static bool isOfficeText(String name) => const ['docx', 'odt', 'pptx', 'xlsx', 'xlsm'].contains(extOf(name));
+
+  static bool isRtf(String name) => extOf(name) == 'rtf';
 
   /// Opens in-app as an image (formats Flutter decodes).
-  static bool isImage(String name) {
-    final dot = name.lastIndexOf('.');
-    final ext = dot < 0 ? '' : name.substring(dot + 1).toLowerCase();
-    return const ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'].contains(ext);
-  }
+  static bool isImage(String name) => const ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'].contains(extOf(name));
+
+  /// Anything Files has a real in-app viewer for. Everything else gets the
+  /// unsupported plate, which still offers "Open with another app".
+  static bool isSupportedInApp(String name) =>
+      isImage(name) || isVideo(name) || isAudio(name) || isText(name) || isPdf(name) || isOfficeText(name) || isRtf(name);
 
   static String sizeLabel(int b) {
     if (b <= 0) return '';

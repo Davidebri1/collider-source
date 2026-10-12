@@ -574,7 +574,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
     final price = _store.priceLabelFor(t.id, catalogPrice: t.priceLabel);
     return _GlassCapsule(
       key: _capsuleKey,
-      label: 'Buy · $price',
+      label: 'Buy Â· $price',
       onTap: () => _confirmBuy(t, price),
     );
   }
@@ -586,7 +586,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
       context,
       icon: Icons.diamond_outlined,
       title: _displayName(t),
-      actions: [VAlertChoice('Buy · $price'), const VAlertChoice('Cancel')],
+      actions: [VAlertChoice('Buy Â· $price'), const VAlertChoice('Cancel')],
     );
     if (i != 0 || !mounted) return;
     // No store on this link: the purchase fails honestly instead of granting
@@ -1236,7 +1236,7 @@ class _CoverCard extends StatelessWidget {
           ),
           // Builder ReflectionComponent: absolute top-full, w-full h-full, rounded-lg,
           // background cover, scaleY(-1), opacity 0.9/0.75 (duration-500), mask
-          // to-top, filter blur(0.5px) brightness(0.6) contrast(1.3) — cached image.
+          // to-top, filter blur(0.5px) brightness(0.6) contrast(1.3) â€” cached image.
           Positioned(
             left: 0,
             top: size,
@@ -1649,19 +1649,18 @@ TextStyle _actionTextStyle(Color color, FontWeight weight) => _inter(TextStyle(
 class _GlassCapsule extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
-  final bool small;
-  const _GlassCapsule({super.key, required this.label, required this.onTap, this.small = false});
+  const _GlassCapsule({super.key, required this.label, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final h = small ? 28.0 : _kCapsuleHeight;
+    const h = _kCapsuleHeight;
     final r = BorderRadius.circular(h / 2);
     const material = VMaterial.elevated;
     Widget body = CustomPaint(
       foregroundPainter: SpecularRimPainter(borderRadius: h / 2, strokeWidth: 0.6),
       child: Container(
         height: h,
-        padding: EdgeInsets.symmetric(horizontal: small ? 12 : 20),
+        padding: const EdgeInsets.symmetric(horizontal: 20),
         decoration: BoxDecoration(
           color: material.fill,
           borderRadius: r,
@@ -1674,8 +1673,8 @@ class _GlassCapsule extends StatelessWidget {
             label,
             maxLines: 1,
             style: _actionTextStyle(
-                const Color(0xFFFFFFFF), small ? FontWeight.w400 : FontWeight.w500)
-                .copyWith(fontSize: small ? 13 : 14),
+                const Color(0xFFFFFFFF), FontWeight.w500)
+                .copyWith(fontSize: 14),
           ),
         ),
       ),

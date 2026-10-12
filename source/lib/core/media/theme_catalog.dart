@@ -53,7 +53,7 @@ class ThemeCatalogData {
       final audio = ThemeCatalog.resolve(a['audio'] as String?, base);
       if (audio == null) continue;
       ambient.add(CatalogAmbientTrack(
-        title: (a['title'] as String?) ?? 'Track',
+        title: humanizeThemeName((a['title'] as String?) ?? 'Track'),
         audioUrl: audio,
         artUrl: ThemeCatalog.resolve(a['art'] as String?, base) ?? ThemeCatalog.offlineWallpaperAsset,
       ));

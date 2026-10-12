@@ -207,7 +207,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   String _smartGenView = 'cards';
   String _smartGenBoardType = 'kanban';
   String _marketCategory = 'prompts';
-  String _marketSearchQuery = '';
   String _themeSection = 'gallery';
   String _filesCategory = 'all';
   String _chatSection = 'global';
@@ -216,8 +215,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   bool get _railVisible {
     if (_localHistoryModel != null || _zoomedMessage != null || _browserOpen || _genOptionsOpen) return false;
     // Summoning the composer no longer hides the rail: "New Chat" was making
-    // the navigation disappear. Focus comes from depth — the world blurs
-    // behind the composer — not from deleting the frame.
+    // the navigation disappear. Focus comes from depth â€” the world blurs
+    // behind the composer â€” not from deleting the frame.
     // An open answer takes the phone's full width (row 15); closing it brings the rail back.
     if (_activeDrawer == null && MediaQuery.of(context).size.width < 768 && _openPill(_tickerItems) != null) return false;
     // Home (chat) and themes only: the Smart Gen, Market and Files rails
@@ -501,14 +500,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     });
   }
 
-  void _newConversation() {
-    setState(() {
-      _closeAllPanes();
-      _expandedModelIds.clear();
-      _isComposerSummoned = true;
-    });
-  }
-
   // One answer open at a time (row 15): tapping a card opens it in the
   // middle; tapping it again, or the pane's close button, closes it.
   void _onTogglePill(String id) {
@@ -668,13 +659,13 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       final w = MediaQuery.of(context).size.width;
       return Align(
         alignment: Alignment.centerLeft,
-        child: SizedBox(width: (w * 0.62).clamp(200.0, 300.0), child: column()),
+        child: SizedBox(width: (w * 0.40).clamp(180.0, 260.0), child: column()),
       );
     }
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SizedBox(width: isMobile ? 124 : 200, child: column()),
+        SizedBox(width: isMobile ? 108 : 180, child: column()),
         const SizedBox(width: 6),
         Expanded(child: _pill(open, elevation: 1, pane: true)),
       ],
@@ -723,7 +714,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     try {
       // Consensus Agent (per the Consensus Agent spec): the agent reads only
       // the responses. It is never told which model produced which response,
-      // because source identity is not an input it uses — need and intent are
+      // because source identity is not an input it uses â€” need and intent are
       // derived from the prompt, and the responses are read against that.
       final judge = await MediaGen.instance.consensus([
         {
@@ -736,14 +727,14 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               'Also count each response\'s logical chains: explicit (sequential '
               'clarifications that extend meaning) and implicit (definitions, statements or '
               'narrative that support a logical conclusion). Count meaning, never words. Report '
-              'the count and the longest chain. Split chains do not exist — what looks like a '
+              'the count and the longest chain. Split chains do not exist â€” what looks like a '
               'split is clarification and counts as one.\n\n'
               'Reply in exactly this format, nothing else:\n'
               'NEED: <the derived need, one line>\n'
               'SERVE: <how the consensus serves it, one line>\n'
               'CONSENSUS: <the agreed sentiment, verbatim from the winning group>\n'
               'RATIO: <agreed responses>/<total responses>\n'
-              'CHAINS: <response> <count> (max <n>) — one per response, then a CONSENSUS line '
+              'CHAINS: <response> <count> (max <n>) â€” one per response, then a CONSENSUS line '
               'using the longest chain among the agreed group\n'
               'DETAIL: <the agreed answer in full, noting real disagreement>'
         },
@@ -1291,7 +1282,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       onSelectSmartGenBoardType: (b) => setState(() => _smartGenBoardType = b),
       activeMarketCategory: _marketCategory,
       onSelectMarketCategory: (c) => setState(() => _marketCategory = c),
-      onMarketSearch: (q) => setState(() => _marketSearchQuery = q),
       activeThemeSection: _themeSection,
       onSelectThemeSection: (s) {
         setState(() {
@@ -1340,7 +1330,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           .toList();
     }
 
-    final activePills = categoryPills;
     final isMobile = MediaQuery.of(context).size.width < 768;
 
     return Scaffold(
@@ -1438,7 +1427,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                     // Compact, content-hugging half-width layout with generous negative space
                     Center(
                       child: Container(
-                        // Master Spec §4.2: height strictly <= 40% of screen height at all times,
+                        // Master Spec Â§4.2: height strictly <= 40% of screen height at all times,
                         // width strictly equal to the nav bar width, never more than 50% of screen.
                         constraints: BoxConstraints(
                           // Never more than 50% of viewport width (user layout contract),
