@@ -35,7 +35,9 @@ List<SideRailEntry> sideRailEntries(ActiveWorkSurface s) => switch (s) {
       ActiveWorkSurface.market => const [
           SideRailEntry('search', Icons.search_rounded, 'Search'),
           SideRailEntry('library', Icons.photo_library_outlined, 'Library'),
-          SideRailEntry('looks', Icons.auto_awesome_outlined, 'Looks'),
+          // Not Icons.auto_awesome_outlined: sparkle-shaped glyphs are banned. "Looks"
+// is a set of curated appearances, so it reads as a filter, not a wish.
+          SideRailEntry('looks', Icons.filter_list_rounded, 'Looks'),
         ],
       ActiveWorkSurface.themes => [
           const SideRailEntry('premium', Icons.workspace_premium_rounded, 'Premium Marketplace'),

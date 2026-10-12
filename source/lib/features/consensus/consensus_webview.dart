@@ -87,7 +87,6 @@ class _ConsensusWebViewState extends State<ConsensusWebView> {
   String? _html;
   // Live essences are full sentences; labels open on demand so the spheres stay readable.
   bool _labels = false;
-  String _tab = 'total';
 
   @override
   void initState() {
@@ -248,7 +247,6 @@ class _ConsensusWebViewState extends State<ConsensusWebView> {
       'glowRadius': (14 + derived.agreement * 36).round(),
       'excluded': derived.excluded.map((c) => c.modelId).toList(),
       'labels': _labels,
-      'activeTab': _tab,
     });
   }
 
@@ -266,7 +264,6 @@ class _ConsensusWebViewState extends State<ConsensusWebView> {
               payloadJson: payload,
               onClose: widget.onClose,
               onLabelsChange: (v) => setState(() => _labels = v),
-              onTabChange: (t) => setState(() => _tab = t),
             ),
           ),
         if (_isLoading)

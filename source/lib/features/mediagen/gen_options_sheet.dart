@@ -89,7 +89,9 @@ class _GenOptionsSheetState extends State<GenOptionsSheet> {
           _Opt('ar', Icons.crop_portrait_rounded, 'Aspect ratio', s.ar, [for (final r in sorted) (r, r)], (v) => s.ar = v),
           if (o != null && o.resolutions.isNotEmpty)
             _Opt('res', Icons.high_quality_outlined, 'Resolution', s.resolution ?? o.resolutions.first, [for (final r in o.resolutions) (r, r)], (v) => s.resolution = v),
-          _Opt('quality', Icons.auto_awesome_outlined, 'Quality', _q(s.quality), const [('standard', 'Standard'), ('hd', 'HD'), ('ultra', 'Ultra')], (v) => s.quality = v,
+          // Not Icons.auto_awesome_outlined: sparkle-shaped glyphs are banned. Quality is
+          // a fidelity setting, so it reads as a gauge.
+          _Opt('quality', Icons.speed_rounded, 'Quality', _q(s.quality), const [('standard', 'Standard'), ('hd', 'HD'), ('ultra', 'Ultra')], (v) => s.quality = v,
               (v) => GenFlags(task: s.task, ar: s.ar, quality: v, count: 1)),
           _Opt('style', Icons.palette_outlined, 'Style', _style(s.style), const [('neutral', 'Neutral'), ('photorealistic', 'Realistic'), ('3d-render', '3D Render'), ('anime', 'Anime'), ('cyberpunk', 'Cyberpunk')], (v) => s.style = v),
         ];
@@ -299,9 +301,12 @@ class _GenOptionsSheetState extends State<GenOptionsSheet> {
               if (m != null) ...[
                 Row(children: [
                   Expanded(child: Text(m.provider, style: VType.callout(weight: FontWeight.w700).copyWith(fontSize: 14))),
-                  Icon(Icons.star_border_rounded, size: 18, color: TierInfo.all[m.tier]!.color),
-                  const SizedBox(width: 4),
-                  Text(TierInfo.all[m.tier]!.label, style: VType.callout(color: VColors.textSecondary)),
+                  // Not Icons.star_border_rounded: star glyphs are banned. The tier is a rank,
+                  // so it reads as a label chip.
+                  Text(TierInfo.all[m.tier]!.label,
+                      style: VType.callout(weight: FontWeight.w600)
+                          .copyWith(color: TierInfo.all[m.tier]!.color)),
+                  const SizedBox(width: 6),
                 ]),
                 const SizedBox(height: 4),
                 if (spec != null) Text(spec, style: VType.footnote()),

@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'core/theme/edge_fade.dart';
 import 'core/vision/vision_kit.dart';
 import 'core/api/collider_api.dart';
 import 'core/audio/music_player.dart';
@@ -67,8 +66,11 @@ Future<void> main() async {
 /// {touch, stylus, invertedStylus, trackpad} — mouse is not in it, so on web
 /// nothing could be dragged with the mouse unless it opted in individually.
 /// That left the ticker rows, the theme strip and the market carousels
-/// dead to a mouse. The default has no scrollbars, which is also the rule:
-/// edges fade, never a scrollbar.
+/// dead to a mouse.
+///
+/// The no-scrollbar rule needs BOTH overrides. buildOverscrollIndicator kills
+/// the overscroll glow, but the default buildScrollbar still inserts a real
+/// Scrollbar on web and desktop, so a track appeared during every drag.
 class _MouseDraggableScrollBehavior extends MaterialScrollBehavior {
   const _MouseDraggableScrollBehavior();
 
@@ -83,6 +85,9 @@ class _MouseDraggableScrollBehavior extends MaterialScrollBehavior {
 
   @override
   Widget buildOverscrollIndicator(BuildContext context, Widget child, ScrollableDetails details) => child;
+
+  @override
+  Widget buildScrollbar(BuildContext context, Widget child, ScrollableDetails details) => child;
 }
 
 /// Lays the ticker window's two parts out and reports the height it actually
@@ -827,13 +832,31 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         ],
       );
 
+  /// Every line the recorder emitted carrying `label:`, in order.
+  ///
+  /// The recorder's GROUP, CHAIN and CONSENSUS_CHAIN fields are tables: one
+  /// line per group, one per response. A regex that stops at the next all-caps
+  /// label reads only the first row, because the rows themselves are labelled —
+  /// so the rest vanish with no error. This collects them all.
+  static List<String> _fieldLines(String text, String label) => [
+        for (final l in text.split('\n'))
+          if (l.trimLeft().startsWith('$label:')) l.trim(),
+      ];
+
   /// Direct mode consensus: a real call to the keyless judge, over the real answers.
   ///
   /// Output contract is the Consensus Agent spec's Recap, and only that:
   /// Consensus Ratio (a count, never a percent), Consensus Summary (verbatim
-  /// from the winning group), and the Logical Chain Length Table. There is no
-  /// NEED, no SERVE and no DETAIL: those were advisory additions, and the spec
-  /// is explicit that this records reality rather than advising.
+  /// from the winning group), the Sentiment Group table, and the Logical Chain
+  /// Length Table. There is no NEED, no SERVE and no DETAIL: those were
+  /// advisory additions, and the spec is explicit that this records reality
+  /// rather than advising.
+  ///
+  /// This judge reads numbered responses, never model names — it is not told
+  /// which model said what, so its table is keyed by response number. The
+  /// server-side judge (collider-server.mjs) is told the model names and keys
+  /// its table by them. Same spec, two judges, two framings; they never hand
+  /// each other's output to a parser.
   final Set<String> _errTexts = {};
   bool _isErr(String t) => t.startsWith('Error: ') || _errTexts.contains(t);
 
@@ -887,7 +910,11 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               'Answer with exactly these lines and nothing else. Do not add commentary.\n'
               'RATIO: <count of responses in the winning group>/<total responses>\n'
               'SUMMARY: <the winning sentiment copied verbatim from a member response>\n'
-              'CHAINS: <response number> <chain count> (max <n>) — one line per response\n'
+              'Then one GROUP line per sentiment group, in order of size, largest first:\n'
+              'GROUP: <sentiment> = <response number>, <response number>\n'
+              'Then one CHAIN line per response:\n'
+              'CHAIN: <response number> = <chain count> chains, max <max length>\n'
+              'Then one final line:\n'
               'CONSENSUS_CHAIN: <chain count> chains, max <the largest max length among its members>'
         },
         {
@@ -897,8 +924,12 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       ]);
       final ratioMatch = RegExp(r'RATIO:\s*(\d+)\s*/\s*(\d+)').firstMatch(judge);
       final line = RegExp(r'^SUMMARY:\s*(.+)$', multiLine: true).firstMatch(judge)?.group(1)?.trim() ?? judge.split('\n').first;
-      final chains = RegExp(r'CHAINS:\s*([\s\S]+?)(?=\nCONSENSUS_CHAIN:|$)').firstMatch(judge)?.group(1)?.trim();
-      final consensusChain = RegExp(r'CONSENSUS_CHAIN:\s*(.+)').firstMatch(judge)?.group(1)?.trim();
+      // Every line carrying the label, not just the first one. A single-row
+      // regex silently drops the rest of the table, which is how 3 of 4 chain
+      // rows disappeared once already.
+      final groups = _fieldLines(judge, 'GROUP');
+      final chains = _fieldLines(judge, 'CHAIN');
+      final consensusChain = _fieldLines(judge, 'CONSENSUS_CHAIN');
       if (!mounted) return;
       setState(() {
         _isConsensusGenerating = false;
@@ -911,9 +942,11 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         // model said what, so attributing a summary to a named model would be
         // a fabrication.
         _consensusSummary = line;
+        // The Consensus Agent recap, all five fields, nothing else.
         _consensusFull = [
-          if (chains != null && chains.isNotEmpty) chains,
-          if (consensusChain != null && consensusChain.isNotEmpty) consensusChain,
+          if (groups.isNotEmpty) 'GROUPS\n${groups.join('\n')}',
+          if (chains.isNotEmpty) 'CHAINS\n${chains.join('\n')}',
+          if (consensusChain.isNotEmpty) 'CONSENSUS_CHAIN\n${consensusChain.join('\n')}',
         ].join('\n\n');
       });
     } catch (e) {
@@ -1536,9 +1569,13 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       onSelectThemeSection: (s) {
         setState(() {
           _themeSection = s;
-          if (s == 'gallery') _activeDrawer = 'themes';
-          else if (s == 'premium') _activeDrawer = 'premium';
-          else if (s == 'music') _activeDrawer = 'music';
+          if (s == 'gallery') {
+            _activeDrawer = 'themes';
+          } else if (s == 'premium') {
+            _activeDrawer = 'premium';
+          } else if (s == 'music') {
+            _activeDrawer = 'music';
+          }
         });
       },
       browserTabs: _browserTabs,
@@ -1642,14 +1679,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                     child: const SizedBox.expand(),
                   ),
                 ),
-              ),
-            ),
-          ),
-          Positioned.fill(
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              color: Colors.black.withOpacity(
-                _activeDrawer == 'themes' ? 0.10 : 0.0,
               ),
             ),
           ),

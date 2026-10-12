@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
-import 'dart:ui' show ImmutableBuffer;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';

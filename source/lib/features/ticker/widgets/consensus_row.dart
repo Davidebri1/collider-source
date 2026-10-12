@@ -75,20 +75,18 @@ class ConsensusRow extends StatelessWidget {
               ],
             ),
             if (isGenerating) ...[
-              const SizedBox(height: 4),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(VRadius.full),
-                child: const LinearProgressIndicator(
-                  minHeight: 2,
-                  backgroundColor: VColors.fillCell,
-                  valueColor: AlwaysStoppedAnimation<Color>(VColors.textSecondary),
-                ),
-              ),
+              // R17: an unfinished shared send shows an empty score and says
+              // nothing. This row used to draw a LinearProgressIndicator here,
+              // which is a waiting line, and suppressed the summary with it.
+              // The spinner glyph in the row above already carries "working".
             ] else if (showLine) ...[
               const SizedBox(height: 4),
-              // Full line, wrapped. R16: the line is not cut off.
+              // The whole summary, wrapped, newlines included. R16: the line is
+              // not cut off. `.split('\n').first` silently dropped everything
+              // after the first newline, and the recorder's SUMMARY field is
+              // free-form, so real text was disappearing here.
               Text(
-                summary.split('\n').first,
+                summary,
                 style: VType.callout(color: Colors.white, weight: FontWeight.w500)
                     .copyWith(height: 1.3, letterSpacing: 0.1),
               ),

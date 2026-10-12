@@ -16,7 +16,6 @@ class ConsensusSceneFrame extends StatefulWidget {
   final String payloadJson;
   final VoidCallback? onClose;
   final ValueChanged<bool>? onLabelsChange;
-  final ValueChanged<String>? onTabChange;
 
   const ConsensusSceneFrame({
     super.key,
@@ -24,7 +23,6 @@ class ConsensusSceneFrame extends StatefulWidget {
     required this.payloadJson,
     this.onClose,
     this.onLabelsChange,
-    this.onTabChange,
   });
 
   @override
@@ -74,8 +72,6 @@ class _ConsensusSceneFrameState extends State<ConsensusSceneFrame> {
         widget.onClose?.call();
       } else if (type == 'labels') {
         widget.onLabelsChange?.call(value == true);
-      } else if (type == 'tab' && (value == 'dissent' || value == 'total')) {
-        widget.onTabChange?.call(value as String);
       }
     }).toJS;
     web.window.addEventListener('message', _listener);
