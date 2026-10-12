@@ -110,39 +110,7 @@ class ThemeCatalog extends ChangeNotifier {
   List<WallpaperTheme> get freeThemes => List.unmodifiable(_themes.where((t) => !t.isPremium));
   List<CatalogAmbientTrack> get ambientTracks => List.unmodifiable(_ambient);
 
-  /// The first thing anyone sees, so it has to be a deliberate choice.
-///
-/// A catalog can arrive with a `defaultSlug` that points at a raw Drive
-/// import - the published catalog shipped
-/// `0251d1e0-16a1-49ad-9807-19d1bceac3e9_1080_hd` as its default, which is how
-/// the app came up on somebody's artwork with no way to tell it apart from
-/// the other 148. A machine-named default is never used; the bundled curated
-/// default is preferred, then a real product name, then anything free.
-WallpaperTheme get defaultTheme {
-    final t = bySlug(_defaultSlug);
-    if (t != null && !_machineNamed(t.id)) return t;
-    for (final curated in const ['starbridge']) {
-      final c = bySlug(curated);
-      if (c != null && !_machineNamed(c.id)) return c;
-    }
-    for (final th in _themes) {
-      if (!_machineNamed(th.id)) return th;
-    }
-    return freeThemes.isNotEmpty ? freeThemes.first : _builtinDefault;
-  }
-
-  /// True for slugs that are clearly a filename or an id rather than a product
-  /// name: a UUID / hash prefix, a leading digit, or resolution and copy
-  /// markers.
-  static bool _machineNamed(String slug) {
-    final s = slug.toLowerCase();
-    if (RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-').hasMatch(s)) return true;
-    if (RegExp(r'^\d+[-_]').hasMatch(s)) return true;
-    if (RegExp(r'_(4k|8k|hd|uhd|sd)(\W|$)').hasMatch(s)) return true;
-    if (RegExp(r'\d{3,4}\s*[x\u00d7]\s*\d{3,4}').hasMatch(s)) return true;
-    if (RegExp(r'[-_]copy(\W|$)').hasMatch(s)) return true;
-    return false;
-  }
+  WallpaperTheme get defaultTheme => bySlug(_defaultSlug) ?? (freeThemes.isNotEmpty ? freeThemes.first : _builtinDefault);
 
   WallpaperTheme? bySlug(String slug) {
     for (final t in _themes) {
