@@ -728,13 +728,20 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     });
   }
 
-  List<TickerItem> _tickerRows(ModelCategory c) => [
-        for (final m in ModelRoster.forCategory(c))
-          _tickerItems.firstWhere(
-            (t) => t.modelDef.id == m.id,
-            orElse: () => TickerItem(modelDef: m, relativeTime: '', summary: '', conversation: const []),
-          ),
-      ];
+  List<TickerItem> _tickerRows(ModelCategory c) {
+    // v9: this built one card per model in the category whether or not that
+    // model had ever answered, so a cold app opened on four or five blank
+    // tinted cards with nothing written in them — which is exactly the "no
+    // information that's supposed to be there". A row now exists only when
+    // there is something to read: an answer, or one on the way.
+    final out = <TickerItem>[];
+    for (final m in ModelRoster.forCategory(c)) {
+      for (final t in _tickerItems.where((t) => t.modelDef.id == m.id)) {
+        if (t.conversation.isNotEmpty || t.isStreaming) out.add(t);
+      }
+    }
+    return out;
+  }
 
   Widget _tickerRow(ModelCategory c, TickerItem item, double elevation) {
     final selected = _selByCat[c]!.contains(item.modelDef.id);
@@ -781,6 +788,23 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   Widget _tickerPage(ModelCategory c) {
     final rows = _tickerRows(c);
     final sc = _tickerScroll[c]!;
+    // v9: nothing has been asked in this category yet. Say so once, quietly,
+    // instead of leaving the column as bare glass.
+    if (rows.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 6),
+        child: Text(
+          'Nothing here yet',
+          style: TextStyle(
+            fontFamily: 'InstrumentSans',
+            fontSize: 11,
+            height: 1.3,
+            fontWeight: FontWeight.w500,
+            color: Color(0x8AFFFFFF),
+          ),
+        ),
+      );
+    }
     // No Scrollbar: a hard grey track on a glass surface reads as a debug
     // affordance and flattens the illusion. The EdgeFade plus the chevron
     // carry the affordance instead.
