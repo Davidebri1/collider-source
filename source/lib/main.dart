@@ -430,7 +430,10 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     final app = qp['app'];
     if (app != null && openable.contains(app)) {
       debugPrint('Collider: deep link app=$app');
-      setState(() => _activeDrawer = app);
+      // Through the one switch funnel, like a tap on the dock. Setting the field
+      // directly left the rest of the switch (composer dismissed, panes closed,
+      // preview baseline recorded) unapplied, and the surface did not open.
+      _requestSwitchSurface(app);
     }
     if (_tickerItems.isNotEmpty) {
       setState(() {
@@ -670,10 +673,12 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   /// The category strip that closes the window, with its gap.
   static const double _chipStripHeight = 32;
 
-  /// The composer needs more room than a ticker row, so it gets the full
-  /// floatable width and keeps it in every state: summoning it must not
-  /// resize it (that was the composer growing huge over the expanded card).
-  double get _composerWidth => MediaQuery.sizeOf(context).width - _windowInset * 2;
+  /// The composer is the same measure as the answer tray: wider than the ticker's
+  /// dock so a sentence has room, and nowhere near the screen width. It used to
+  /// take the whole floatable width - 398pt on a 430pt phone, twice the
+  /// ticker - which is why it sat on top of the side rail and read as a sheet
+  /// rather than a floating window.
+  double get _composerWidth => _trayWidth;
 
   /// The opened answer is a tray anchored over the ticker: wider than the dock
   /// so a thread reads, and nowhere near the screen width (bug 5).
