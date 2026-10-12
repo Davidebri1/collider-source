@@ -87,16 +87,19 @@ class ThemeCatalog extends ChangeNotifier {
 
   static const String _prefsKey = 'theme_catalog_json_v1';
 
+  /// Last-resort theme shown before any catalog has loaded. It must be a real
+  /// published slug: this used to be 'starbridge', which the media host spells
+  /// 'star-bridge-eutidx', so the boot wallpaper 404'd its own poster.
   static const WallpaperTheme _builtinDefault = WallpaperTheme(
-    id: 'starbridge',
-    name: 'Star Bridge',
+    id: '0-beach-waves-3840x2160-gqapqv',
+    name: 'Shoreline at Sunset',
     assetPath: offlineWallpaperAsset,
-    tier: 'Free Spatial Canvas',
+    tier: 'Free Live Loop',
   );
 
   List<WallpaperTheme> _themes = const [_builtinDefault];
   List<CatalogAmbientTrack> _ambient = const [];
-  String _defaultSlug = 'starbridge';
+  String _defaultSlug = '0-beach-waves-3840x2160-gqapqv';
   String _source = 'builtin';
   String _updated = '';
   Future<void>? _remoteInFlight;

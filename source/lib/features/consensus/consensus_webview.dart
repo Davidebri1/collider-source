@@ -272,16 +272,31 @@ class _ConsensusWebViewState extends State<ConsensusWebView> {
     );
   }
 
-  // No real consensus job yet (or no model has answered): say so, with a way out.
-  Widget _empty() => Stack(
-        children: [
-          if (MediaQuery.of(context).size.width < 768)
-            Positioned(
-              left: VSpace.sm,
-              top: VSpace.sm,
-              child: VCircleButton(icon: Icons.close_rounded, tooltip: 'Close', onTap: widget.onClose),
+  // No real consensus job yet (or no model has answered): say so, with a way
+  // out. This used to be a Stack holding only a close button, which read as a
+  // screen that failed to load rather than one with nothing on it.
+  Widget _empty() => Container(
+        color: const Color(0xFF07080B),
+        child: Stack(
+          children: [
+            if (MediaQuery.of(context).size.width < 768)
+              Positioned(
+                left: VSpace.sm,
+                top: VSpace.sm,
+                child: VCircleButton(icon: Icons.close_rounded, tooltip: 'Close', onTap: widget.onClose),
+              ),
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 40),
+                child: Text(
+                  'Nothing has been collided yet.',
+                  textAlign: TextAlign.center,
+                  style: VType.callout(color: VColors.textTertiary).copyWith(height: 1.5),
+                ),
+              ),
             ),
-        ],
+          ],
+        ),
       );
 
   @override

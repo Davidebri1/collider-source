@@ -409,7 +409,15 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     setState(() {
       _selByCat[ModelCategory.general] = live.take(6).toList();
     });
-    await _reloadHistory(restoreLatest: true);
+    // A history failure must not swallow the deep link below. This call was
+    // awaited unguarded, so one bad session record silently skipped every
+    // subsequent boot step - including ?app=, which is how the launcher and
+    // the screenshot tour open a surface.
+    try {
+      await _reloadHistory(restoreLatest: true);
+    } catch (e) {
+      debugPrint('Collider: history restore failed, continuing boot: $e');
+    }
     // Deep links used by the launcher and the screenshot tour: ?ask=...&mode=research
     final qp = Uri.base.queryParameters;
     if (qp['mode'] != null) {
@@ -421,6 +429,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     const openable = {'smartgen', 'market', 'themes', 'premium', 'music', 'files', 'consensus', 'apps'};
     final app = qp['app'];
     if (app != null && openable.contains(app)) {
+      debugPrint('Collider: deep link app=$app');
       setState(() => _activeDrawer = app);
     }
     if (_tickerItems.isNotEmpty) {

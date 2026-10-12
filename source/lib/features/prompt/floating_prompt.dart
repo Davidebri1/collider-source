@@ -237,28 +237,23 @@ class _FloatingPromptState extends State<FloatingPrompt> {
 
   @override
   Widget build(BuildContext context) {
-    // v8.4: Figma 1-240 (760 x 116) built at its own size and scaled as one
-    // unit to the width it is given (factor = width / 760): padding 16 / 40 /
-    // 40, attach circle 60 (white 30 %), gap 16, field pill 60 high
-    // (black 30 %, radius 32, 1 px white-50 % lip, inset shade), action
-    // button 48 (white 30 %). Text 24. No placeholder (D43).
+    // This row is built natively at the width it is given, not scaled down from
+    // a 760pt design. It used to be FittedBox(fitWidth) around a fixed 760pt
+    // box, so on a 398pt slot everything was multiplied by 0.52: the send
+    // button landed at 25pt and the field at 31pt. Legible and hittable beats
+    // pixel-identical to a frame this size was never shown at.
     return GestureDetector(
       onVerticalDragEnd: (d) {
         final v = d.primaryVelocity ?? 0;
         if (v > 200 && widget.summoned) widget.onTuck();
         if (v < -200 && !widget.summoned) widget.onSummon();
       },
-      child: FittedBox(
-        fit: BoxFit.fitWidth,
-        alignment: Alignment.bottomCenter,
-        child: SizedBox(
-          width: 760,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(40, 16, 40, 40),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
                 // Attached files: the file names are the only way to tell them apart.
                 if (_files.isNotEmpty) ...[
                   Wrap(spacing: 12, runSpacing: 12, children: [
@@ -268,7 +263,7 @@ class _FloatingPromptState extends State<FloatingPrompt> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                           decoration: BoxDecoration(color: const Color(0x4DFFFFFF), borderRadius: BorderRadius.circular(32)),
-                          child: Text(f, style: const TextStyle(fontSize: 20, color: Colors.white)),
+                          child: Text(f, style: const TextStyle(fontSize: 13, color: Colors.white)),
                         ),
                       ),
                   ]),
@@ -285,25 +280,25 @@ class _FloatingPromptState extends State<FloatingPrompt> {
                         behavior: HitTestBehavior.opaque,
                         onTap: _openMenu,
                         child: Container(
-                          width: 60,
-                          height: 60,
-                          decoration: BoxDecoration(color: const Color(0x4DFFFFFF), borderRadius: BorderRadius.circular(32)),
-                          child: const Icon(Icons.add_rounded, size: 30, color: Colors.white),
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(color: const Color(0x4DFFFFFF), borderRadius: BorderRadius.circular(22)),
+                          child: const Icon(Icons.add_rounded, size: 24, color: Colors.white),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Container(
-                        constraints: const BoxConstraints(minHeight: 60),
-                        padding: const EdgeInsets.fromLTRB(24, 6, 6, 6),
+                        constraints: const BoxConstraints(minHeight: 44),
+                        padding: const EdgeInsets.fromLTRB(16, 4, 4, 4),
                         decoration: BoxDecoration(
                           color: const Color(0x4D000000),
-                          borderRadius: BorderRadius.circular(32),
+                          borderRadius: BorderRadius.circular(22),
                           boxShadow: const [BoxShadow(color: Color(0x80FFFFFF), offset: Offset(0, 1), blurRadius: 1)],
                         ),
                         foregroundDecoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(32),
+                          borderRadius: BorderRadius.circular(22),
                           gradient: const LinearGradient(
                             begin: Alignment.topLeft,
                             end: Alignment(0.2, 0.6),
@@ -315,7 +310,7 @@ class _FloatingPromptState extends State<FloatingPrompt> {
                           children: [
                             Expanded(
                               child: Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                padding: const EdgeInsets.symmetric(vertical: 11),
                                 child: TextField(
                                   controller: _ctrl,
                                   focusNode: _focus,
@@ -323,7 +318,7 @@ class _FloatingPromptState extends State<FloatingPrompt> {
                                   maxLines: 5,
                                   cursorColor: Colors.white,
                                   textInputAction: TextInputAction.send,
-                                  style: const TextStyle(fontSize: 24, height: 1.17, fontWeight: FontWeight.w500, color: Colors.white),
+                                  style: const TextStyle(fontSize: 15, height: 1.3, fontWeight: FontWeight.w500, color: Colors.white),
                                   decoration: const InputDecoration(
                                     border: InputBorder.none,
                                     isDense: true,
@@ -333,7 +328,7 @@ class _FloatingPromptState extends State<FloatingPrompt> {
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 6),
+                            const SizedBox(width: 4),
                             _SendButton(busy: widget.busy, onTap: _submit),
                           ],
                         ),
@@ -342,8 +337,6 @@ class _FloatingPromptState extends State<FloatingPrompt> {
                   ],
                 ),
               ],
-            ),
-          ),
         ),
       ),
     );
@@ -379,8 +372,8 @@ class _SendButtonState extends State<_SendButton> {
         curve: Curves.easeOutBack,
         child: AnimatedContainer(
           duration: VMotion.base,
-          width: 48,
-          height: 48,
+          width: 40,
+          height: 40,
           decoration: const BoxDecoration(
             color: Color(0x4DFFFFFF),
             shape: BoxShape.circle,
@@ -389,8 +382,8 @@ class _SendButtonState extends State<_SendButton> {
             child: AnimatedSwitcher(
               duration: VMotion.fast,
               child: widget.busy
-                  ? const SizedBox(key: ValueKey('b'), width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
-                  : const Icon(Icons.arrow_upward_rounded, key: ValueKey('s'), size: 26, color: Colors.white),
+                  ? const SizedBox(key: ValueKey('b'), width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
+                  : const Icon(Icons.arrow_upward_rounded, key: ValueKey('s'), size: 22, color: Colors.white),
             ),
           ),
         ),

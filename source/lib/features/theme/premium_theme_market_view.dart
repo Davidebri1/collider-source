@@ -75,8 +75,20 @@ class PremiumThemeMarketView extends StatefulWidget {
 
 // hooks/useResponsive.ts
 const double _kMobileBreakpoint = 768; // width < 768
-const double _kCoverSizeMobile = 170;
-const double _kCoverSizeDesktop = 200;
+
+// Cover WIDTH. The height follows from [_kCoverArtAspectH], so the covers are
+// portrait at the reference proportion rather than square.
+const double _kCoverSizeMobile = 196;
+const double _kCoverSizeDesktop = 220;
+
+// The reference cover proportion: 317 x 470, so height / width = 1.4827.
+// 1700s-era square covers left a wide dead band above and below the card on a
+// 430x932 phone, which read as "one small card in a void".
+const double _kCoverArtAspectH = 470 / 317; // 1.4827
+
+// How much of the cover height the mirrored floor shows. The full art height
+// would double the card and push the labels off the stage.
+const double _kReflectionShare = 0.34;
 
 // The Premium carousel.
 //
@@ -95,9 +107,15 @@ const double _kSpacingMobile = 120;
 const double _kSpacingDesktop = 160;
 
 // The stage box the carousel is laid out in. The label form below is
-// positioned off the stage height, so these stay.
-const double _kStageHeight = 384;
+// positioned off the stage height, so this is derived from the cover rather
+// than fixed: a taller (portrait) cover needs a taller stage or it clips.
 const double _kStageMaxWidth = 1280;
+
+double _stageHeight(bool isMobile) {
+  final cover = isMobile ? _kCoverSizeMobile : _kCoverSizeDesktop;
+  final artH = cover * _kCoverArtAspectH;
+  return artH * (1 + _kReflectionShare) + _kFloorOffset + _kFloorHeight + 8;
+}
 
 // Chevrons at the two ends of the strip. No scrollbar (the owner's constraint):
 // the edge fades say "more this way", the chevrons move it.
@@ -325,12 +343,13 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
       const mainTop =
           _kHeaderHeight + _kSearchPad + _kSearchHeight + _kSearchHintGap + _kSearchPad;
       final mainHeight = math.max(0.0, h - mainTop - barReserve);
-      const contentHeight =
-          _kStageHeight + _kLabelsMarginTop + _kLabelsBlockHeight;
+      final stageHeight = _stageHeight(isMobile);
+      final contentHeight =
+          stageHeight + _kLabelsMarginTop + _kLabelsBlockHeight;
       final contentTop =
           mainTop + math.max(0.0, (mainHeight - contentHeight) / 2);
       final stageTop = contentTop;
-      final labelsTop = stageTop + _kStageHeight + _kLabelsMarginTop;
+      final labelsTop = stageTop + stageHeight + _kLabelsMarginTop;
       final contentWidth = w - _kMainPadX * 2;
       final searchWidth = math.min(w - _kSearchPad * 2, _kSearchMaxWidth);
 
@@ -433,11 +452,11 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
                   left: _kMainPadX,
                   right: _kMainPadX,
                   top: stageTop,
-                  height: _kStageHeight,
+                  height: stageHeight,
                   child: Center(
                     child: SizedBox(
                       width: math.min(contentWidth, _kStageMaxWidth),
-                      height: _kStageHeight,
+                      height: stageHeight,
                       child: _CoverFlow(
                         themes: _themes,
                         currentIndex: _currentIndex,
@@ -981,8 +1000,10 @@ class _CoverFlowState extends State<_CoverFlow> {
       void step() {
         if (--pending == 0 && !done.isCompleted) done.complete();
       }
-      if (_RasterCache.cover(context, t, size - 2, scale, step) != null) step();
-      if (_RasterCache.reflection(context, t, size, scale, step) != null) step();
+      final prewarmArtH = size * _kCoverArtAspectH;
+      final prewarmReflH = prewarmArtH * _kReflectionShare;
+      if (_RasterCache.cover(context, t, size - 2, prewarmArtH - 2, scale, step) != null) step();
+      if (_RasterCache.reflection(context, t, size, prewarmReflH, prewarmArtH, scale, step) != null) step();
       await done.future.timeout(const Duration(seconds: 8), onTimeout: () {});
       // Never do this work while a finger is down; one card per idle gap.
       while (mounted && gen == _prewarmGen && _drag.dragging) {
@@ -1193,9 +1214,14 @@ class _CoverCard extends StatelessWidget {
     // ReflectionComponent opacity: index === currentIndex ? 0.9 : 0.75
     final reflectionOpacity =
         isCurrent ? _kReflectionOpacityCenter : _kReflectionOpacitySide;
+    // The cover is portrait, at the reference proportion (317x470 = 0.6745
+    // wide). It was a square, which is why a 932-tall phone had a wide dead
+    // band above and below the card: a 1:1 box in a portrait frame.
+    final artH = size * _kCoverArtAspectH;
+    final reflH = artH * _kReflectionShare;
     return SizedBox(
       width: size,
-      height: size * 2,
+      height: artH + reflH + _kFloorOffset + _kFloorHeight,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -1204,13 +1230,13 @@ class _CoverCard extends StatelessWidget {
             left: -_shadowPad,
             top: -_shadowPad,
             width: size + _shadowPad * 2,
-            height: size + _shadowPad * 2,
+            height: artH + _shadowPad * 2,
             child: _CachedPaint(
               cacheKey: 'cover-shadow|$size',
-              size: Size(size + _shadowPad * 2, size + _shadowPad * 2),
+              size: Size(size + _shadowPad * 2, artH + _shadowPad * 2),
               painter: _OffsetPainter(
                 const Offset(_shadowPad, _shadowPad),
-                Size(size, size),
+                Size(size, artH),
                 const _CssShadowPainter(_kCoverShadowsBlurred, _kRadius),
               ),
             ),
@@ -1219,7 +1245,7 @@ class _CoverCard extends StatelessWidget {
             left: 0,
             top: 0,
             width: size,
-            height: size,
+            height: artH,
             child: CustomPaint(painter: _RingPainter(_kRadius, 1, _kCoverShadows[2].color)),
           ),
           // <img> object-cover rounded-lg border border-gray-800/30
@@ -1227,7 +1253,7 @@ class _CoverCard extends StatelessWidget {
             left: 0,
             top: 0,
             width: size,
-            height: size,
+            height: artH,
             child: Stack(
               fit: StackFit.expand,
               children: [
@@ -1237,10 +1263,10 @@ class _CoverCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(_kRadius - 1),
                     child: live
                         ? Stack(fit: StackFit.expand, children: [
-                            _CoverPoster(theme: theme, inner: size - 2),
+                            _CoverPoster(theme: theme, innerW: size - 2, innerH: artH - 2),
                             LiveCoverVideo(key: ValueKey('live-${theme.id}'), url: theme.videoUrl!),
                           ])
-                        : _CoverPoster(theme: theme, inner: size - 2),
+                        : _CoverPoster(theme: theme, innerW: size - 2, innerH: artH - 2),
                   ),
                 ),
                 DecoratedBox(
@@ -1270,12 +1296,14 @@ class _CoverCard extends StatelessWidget {
           // to-top, filter blur(0.5px) brightness(0.6) contrast(1.3) Ã¢â‚¬â€ cached image.
           Positioned(
             left: 0,
-            top: size,
+            top: artH,
             width: size,
-            height: size,
+            height: reflH,
             child: _Reflection(
               theme: theme,
-              size: size,
+              w: size,
+              h: reflH,
+              artH: artH,
               opacity: reflectionOpacity,
             ),
           ),
@@ -1283,7 +1311,7 @@ class _CoverCard extends StatelessWidget {
           // linear-gradient(to bottom, rgba(255,255,255,0.06) 0%, 0.12 40%, transparent 100%)
           Positioned(
             left: 0,
-            top: size + _kFloorOffset,
+            top: artH + _kFloorOffset,
             width: size,
             height: _kFloorHeight,
             child: TweenAnimationBuilder<double>(
@@ -1299,13 +1327,13 @@ class _CoverCard extends StatelessWidget {
               left: -_shadowPad,
               top: -_shadowPad,
               width: size + _shadowPad * 2,
-              height: size + _shadowPad * 2,
+              height: artH + _shadowPad * 2,
               child: _CachedPaint(
                 cacheKey: 'center-shadow|$size',
-                size: Size(size + _shadowPad * 2, size + _shadowPad * 2),
+                size: Size(size + _shadowPad * 2, artH + _shadowPad * 2),
                 painter: _OffsetPainter(
                   const Offset(_shadowPad, _shadowPad),
-                  Size(size, size),
+                  Size(size, artH),
                   const _CssShadowPainter(_kShadow2xl, _kRadius),
                 ),
               ),
@@ -1314,7 +1342,7 @@ class _CoverCard extends StatelessWidget {
               left: 0,
               top: 0,
               width: size,
-              height: size,
+              height: artH,
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(_kRadius),
@@ -1368,9 +1396,9 @@ class _RasterCache {
 
   /// Reflection image for [theme]'s poster; null until the poster is decoded.
   static ui.Image? reflection(BuildContext context, WallpaperTheme theme,
-          double size, double scale, VoidCallback onReady) =>
-      _fromPoster(context, 'refl|${theme.posterUrl}|$size|$scale', theme,
-          Size(size, size), scale, (c, img) => _paintReflection(c, img, size), onReady);
+          double w, double h, double artH, double scale, VoidCallback onReady) =>
+      _fromPoster(context, 'refl|${theme.posterUrl}|$w|$h|$artH|$scale', theme,
+          Size(w, h), scale, (c, img) => _paintReflection(c, img, w, h, artH), onReady);
 
   /// The cover's poster pixels (object-cover into the card's inner box),
   /// rasterised once. On web the decoded <img> poster is a lazy texture that
@@ -1381,12 +1409,16 @@ class _RasterCache {
   /// [record], so `high` here is a proper downsample of a large poster into a
   /// card-sized box. `medium` was the box filter that made the covers look
   /// soft-edged.
+  ///
+  /// The box is [w] x [h], not a square. The covers are portrait, at the
+  /// reference proportion, so rasterising a square and stretching it into a
+  /// portrait frame was distorting every wallpaper.
   static ui.Image? cover(BuildContext context, WallpaperTheme theme,
-          double inner, double scale, VoidCallback onReady) =>
-      _fromPoster(context, 'cover|${theme.posterUrl}|$inner|$scale', theme,
-          Size(inner, inner), scale, (c, img) => paintImage(
+          double w, double h, double scale, VoidCallback onReady) =>
+      _fromPoster(context, 'cover|${theme.posterUrl}|$w|$h|$scale', theme,
+          Size(w, h), scale, (c, img) => paintImage(
                 canvas: c,
-                rect: Offset.zero & Size(inner, inner),
+                rect: Offset.zero & Size(w, h),
                 image: img,
                 fit: BoxFit.cover,
                 filterQuality: FilterQuality.high,
@@ -1423,8 +1455,8 @@ class _RasterCache {
   // Same operations as the widget version: ClipRRect(poster, cover) ->
   // ImageFiltered blur(0.5px) -> ColorFiltered brightness(0.6) contrast(1.3)
   // -> ClipRect -> ShaderMask(dstIn, to-top mask) -> scaleY(-1).
-  static void _paintReflection(Canvas canvas, ui.Image poster, double size) {
-    final rect = Offset.zero & Size(size, size);
+  static void _paintReflection(Canvas canvas, ui.Image poster, double w, double h, double artH) {
+    final rect = Offset.zero & Size(w, h);
     // brightness(0.6) then contrast(1.3): 1.3 * 0.6x + (0.5 - 0.65) = 0.78x - 0.15
     const s = _kReflectionContrast * _kReflectionBrightness;
     const t = (0.5 - 0.5 * _kReflectionContrast) * 255.0;
@@ -1435,7 +1467,7 @@ class _RasterCache {
       0, 0, 0, 1, 0,
     ]);
     canvas.save();
-    canvas.translate(0, size);
+    canvas.translate(0, h);
     canvas.scale(1, -1); // scaleY(-1) about the centre
     canvas.clipRect(rect);
     canvas.saveLayer(rect, Paint()); // ShaderMask layer
@@ -1448,9 +1480,12 @@ class _RasterCache {
               sigmaY: _kReflectionBlur,
               tileMode: TileMode.decal));
     canvas.clipRRect(RRect.fromRectAndRadius(rect, const Radius.circular(_kRadius)));
+    // The reflection is the BOTTOM slice of the cover, mirrored. Painting the
+    // whole portrait art here and flipping it would put the cover's top edge
+    // against its own bottom edge and double the card's height.
     paintImage(
       canvas: canvas,
-      rect: rect,
+      rect: Rect.fromLTWH(0, -(artH - h), w, artH),
       image: poster,
       fit: BoxFit.cover,
       filterQuality: FilterQuality.high,
@@ -1519,8 +1554,9 @@ class _CachedPaint extends StatelessWidget {
 /// is shown until the raster copy exists (same pixels, no visual change).
 class _CoverPoster extends StatefulWidget {
   final WallpaperTheme theme;
-  final double inner;
-  const _CoverPoster({required this.theme, required this.inner});
+  final double innerW;
+  final double innerH;
+  const _CoverPoster({required this.theme, required this.innerW, required this.innerH});
 
   @override
   State<_CoverPoster> createState() => _CoverPosterState();
@@ -1529,7 +1565,7 @@ class _CoverPoster extends StatefulWidget {
 class _CoverPosterState extends State<_CoverPoster> {
   @override
   Widget build(BuildContext context) {
-    final img = _RasterCache.cover(context, widget.theme, widget.inner,
+    final img = _RasterCache.cover(context, widget.theme, widget.innerW, widget.innerH,
         _rasterScale(context), () {
       if (mounted) setState(() {});
     });
@@ -1544,8 +1580,8 @@ class _CoverPosterState extends State<_CoverPoster> {
     // the blit is 1:1 and must not be resampled (bug 5).
     return RawImage(
       image: img,
-      width: widget.inner,
-      height: widget.inner,
+      width: widget.innerW,
+      height: widget.innerH,
       fit: BoxFit.fill,
       filterQuality: FilterQuality.none,
     );
@@ -1554,9 +1590,16 @@ class _CoverPosterState extends State<_CoverPoster> {
 
 class _Reflection extends StatefulWidget {
   final WallpaperTheme theme;
-  final double size;
+  final double w;
+  final double h;
+  final double artH;
   final double opacity;
-  const _Reflection({required this.theme, required this.size, required this.opacity});
+  const _Reflection(
+      {required this.theme,
+      required this.w,
+      required this.h,
+      required this.artH,
+      required this.opacity});
 
   @override
   State<_Reflection> createState() => _ReflectionState();
@@ -1565,7 +1608,7 @@ class _Reflection extends StatefulWidget {
 class _ReflectionState extends State<_Reflection> {
   @override
   Widget build(BuildContext context) {
-    final img = _RasterCache.reflection(context, widget.theme, widget.size,
+    final img = _RasterCache.reflection(context, widget.theme, widget.w, widget.h, widget.artH,
         _rasterScale(context), () {
       if (mounted) setState(() {});
     });
@@ -1576,8 +1619,8 @@ class _ReflectionState extends State<_Reflection> {
       curve: _kTwEase,
       builder: (context, o, _) => RawImage(
         image: img,
-        width: widget.size,
-        height: widget.size,
+        width: widget.w,
+        height: widget.h,
         fit: BoxFit.fill,
         filterQuality: FilterQuality.none,
         opacity: AlwaysStoppedAnimation<double>(o),
