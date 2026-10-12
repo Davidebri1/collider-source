@@ -321,11 +321,15 @@ async function serveStatic(req, res, pathname) {
   try {
     const buf = await readFile(file);
     const type = MIME[extname(file).toLowerCase()] || 'application/octet-stream';
-    const immutable = /\/assets\/|\/canvaskit\/|main\.dart\.js$/.test(file.replace(/\\/g, '/'));
+    // Only fingerprinted, content-addressed files may be cached hard. The
+    // entry bundle and the service worker are not fingerprinted, so caching
+    // them pins the browser to a stale build until it expires.
+    const rel = file.replace(/\\/g, '/');
+    const fingerprinted = /\/assets\/(assets|fonts|shaders)\//.test(rel) || /\/canvaskit\//.test(rel);
     res.writeHead(200, {
       'Content-Type': type,
       'Content-Length': buf.length,
-      'Cache-Control': immutable ? 'public, max-age=86400' : 'no-store',
+      'Cache-Control': fingerprinted ? 'public, max-age=86400' : 'no-store',
       // the app talks to itself, so it needs no cross-origin anything
       'X-Content-Type-Options': 'nosniff',
     });

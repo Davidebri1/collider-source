@@ -334,6 +334,13 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       _mode = AskMode.values.firstWhere((m) => m.wire == qp['mode'], orElse: () => AskMode.chat);
     }
     if (qp['ask'] != null && qp['ask']!.trim().isNotEmpty) _onSendPrompt(qp['ask']!);
+    // ?app=smartgen|market|themes|files — open a surface directly. Used by the
+    // screenshot pass and as shortcuts on the phone.
+    const openable = {'smartgen', 'market', 'themes', 'files', 'consensus', 'apps'};
+    final app = qp['app'];
+    if (app != null && openable.contains(app)) {
+      setState(() => _activeDrawer = app);
+    }
     if (_tickerItems.isNotEmpty) {
       setState(() {
         if (qp['expand'] == '1') _expandedModelIds.add(_tickerItems.first.modelDef.id);

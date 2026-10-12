@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../../../core/api/media_gen.dart';
 import '../../../core/vision/vision_kit.dart';
-import '../../../core/vision/work_surface.dart';
 import '../kanban_store.dart';
 
 /// Parses the Smart Gen agent's reply into the derived need, how the cards
@@ -26,15 +25,14 @@ import '../kanban_store.dart';
   return (need: need, serve: serve, cards: cards);
 }
 
-/// REQ-10 Smart Gen (map rows 23-25, v8.3, D54): a real local Kanban board.
-/// Layout from Vision Pro UI Kit 30-75 (Keynote window): the columns are the
-/// left sidebar (Keynote's slide list), the open column fills the window
-/// with a toolbar on top. Cards and their colours from Nimo Spatial OS
-/// 2012-201531 (the light widget cards: header with source and ⋯, bold
-/// title, one note). Editing from Spatial UI UX 59-170: tap a title or note
-/// to edit it in place; ⋯ opens the glass menu (Move to, Colour, Delete).
-/// Long-press a card and drop it on a column to move it. No sample cards:
-/// an empty column shows only the add tile.
+/// REQ-10 Smart Gen (map rows 23-25, v8.3, D54): the board as a media market.
+/// Layout from the visionOS Smart Gen surface: one floating glass window inset
+/// from all four screen edges, the newest generation as a large hero picture
+/// with a compact control strip over it, a horizontal strip of smaller
+/// pictures beneath, and a thin icon-only rail floating at the left over the
+/// scene. The window is the picture plane, so the cards are pictures and text
+/// is reduced to one short name each; the note a card carries lives on in the
+/// card's detail sheet rather than on its face.
 class SmartGenScreen extends StatefulWidget {
   final VoidCallback onClose;
 
@@ -46,14 +44,21 @@ class SmartGenScreen extends StatefulWidget {
 
 class _SmartGenScreenState extends State<SmartGenScreen> {
   final KanbanStore _store = KanbanStore.instance;
+  final ScrollController _strip = ScrollController();
   int _col = 0;
-  String? _editingId;
   bool _generating = false;
+  double _stripMax = 0;
+  double _stripAt = 0;
 
-  // Nimo widget card fills (light), with their accent for the header mark.
+  // Nimo widget card fills (light), with their accent for the card's picture
+  // and its header mark.
   static const List<Color> palette = [Color(0xFFDDE8FB), Color(0xFFF6DEE7), Color(0xFFDAF1E4), Color(0xFFF5EDD8)];
   static const List<Color> accents = [Color(0xFF2F6FE4), Color(0xFFD9466F), Color(0xFF1F9D63), Color(0xFFC08A12)];
   static const List<IconData> colIcons = [Icons.radio_button_unchecked_rounded, Icons.timelapse_rounded, Icons.check_circle_outline_rounded];
+
+  // The strip is the only scroller on the screen; its height is fixed so the
+  // rail can be centred over the hero above it.
+  static const double _stripH = 148;
 
   @override
   void initState() {
@@ -61,9 +66,15 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
     _store.init();
   }
 
+  @override
+  void dispose() {
+    _strip.dispose();
+    super.dispose();
+  }
+
   void _add() {
     final c = _store.add(_col);
-    setState(() => _editingId = c.id);
+    _openDetail(c, editing: true);
   }
 
   /// Smart Gen agent. Same framing as the Consensus Agent: derive the need
@@ -136,6 +147,26 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
     }
   }
 
+  /// A card opens as a sheet over the window: the picture large at the top,
+  /// then the title and the note the face does not carry.
+  Future<void> _openDetail(KanbanCard c, {bool editing = false}) {
+    return showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      barrierLabel: 'Close',
+      barrierColor: Colors.transparent,
+      transitionDuration: const Duration(milliseconds: 180),
+      transitionBuilder: (_, a, __, child) => FadeTransition(
+        opacity: a,
+        child: ScaleTransition(
+          scale: Tween(begin: 0.96, end: 1.0).animate(CurvedAnimation(parent: a, curve: Curves.easeOutCubic)),
+          child: child,
+        ),
+      ),
+      pageBuilder: (ctx, _, __) => _CardSheet(card: c, accent: accents[c.color % accents.length], startEditing: editing),
+    );
+  }
+
   Future<void> _menu(KanbanCard c, Rect anchor) async {
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox?;
     if (overlay == null) return;
@@ -173,7 +204,7 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
     );
     if (!mounted || choice == null) return;
     if (choice == 'edit') {
-      setState(() => _editingId = c.id);
+      await _openDetail(c, editing: true);
     } else if (choice.startsWith('move')) {
       await _store.move(c, int.parse(choice.substring(4)));
     } else if (choice == 'color') {
@@ -192,82 +223,54 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 768;
-    return VWorkSurface(
-      onClose: widget.onClose,
-      child: ListenableBuilder(
-        listenable: _store,
-        builder: (context, _) => Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _sidebar(isMobile ? 104 : 168),
-            Expanded(child: _board()),
-          ],
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(VSpace.md - 2, VSpace.xs, VSpace.md - 2, VSpace.md - 2),
+        child: VGlass(
+          material: VMaterial.work,
+          radius: VRadius.xl,
+          child: Stack(
+            children: [
+              Positioned.fill(child: _board()),
+              Positioned(
+                left: VSpace.sm,
+                top: VSpace.sm,
+                child: VCircleButton(icon: Icons.close_rounded, floating: true, tooltip: 'Close', onTap: widget.onClose),
+              ),
+              Positioned(
+                left: VSpace.xs,
+                top: 0,
+                bottom: _stripH + VSpace.lg,
+                child: Center(child: _rail()),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  // Keynote's slide list (30-75): one tile per column, numbered, with its
-  // card count; a drop target for dragged cards.
-  Widget _sidebar(double w) {
-    return Container(
-      width: w,
-      color: Colors.black.withValues(alpha: 0.16),
-      padding: const EdgeInsets.fromLTRB(8, 60, 8, 8),
+  // The three columns as icon-only circles, floating over the scene, and a
+  // drop target each: long-press a card and drop it on a column to move it.
+  Widget _rail() {
+    return VOrnament(
+      padding: const EdgeInsets.all(3),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           for (var i = 0; i < KanbanStore.columns.length; i++) ...[
-            if (i > 0) const SizedBox(height: 8),
+            if (i > 0) const SizedBox(height: VSpace.xxs),
             DragTarget<KanbanCard>(
               onWillAcceptWithDetails: (d) => d.data.column != i,
               onAcceptWithDetails: (d) => _store.move(d.data, i),
-              builder: (context, cand, _) {
-                final sel = i == _col;
-                final hover = cand.isNotEmpty;
-                return VPress(
-                  onTap: () => setState(() {
-                    _col = i;
-                    _editingId = null;
-                  }),
-                  tooltip: KanbanStore.columns[i],
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                        width: 14,
-                        child: Text('${i + 1}', style: VType.caption(color: sel ? VColors.textPrimary : VColors.textTertiary, weight: FontWeight.w600)),
-                      ),
-                      Expanded(
-                        child: AnimatedContainer(
-                          duration: VMotion.fast,
-                          height: 64,
-                          padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
-                          decoration: BoxDecoration(
-                            color: hover ? Colors.white.withValues(alpha: 0.30) : (sel ? Colors.white.withValues(alpha: 0.18) : Colors.white.withValues(alpha: 0.07)),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: sel || hover ? Colors.white.withValues(alpha: 0.7) : Colors.white.withValues(alpha: 0.12), width: sel || hover ? 1.5 : 0.6),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Icon(colIcons[i], size: 16, color: VColors.textSecondary),
-                              Row(children: [
-                                Expanded(
-                                  child: Text(KanbanStore.columns[i], maxLines: 1, overflow: TextOverflow.ellipsis,
-                                      style: VType.footnote(color: VColors.textPrimary, weight: FontWeight.w600)),
-                                ),
-                                Text('${_store.count(i)}', style: VType.caption(color: VColors.textSecondary)),
-                              ]),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
+              builder: (context, cand, _) => VCircleButton(
+                icon: colIcons[i],
+                size: 34,
+                selected: i == _col,
+                tooltip: KanbanStore.columns[i],
+                onTap: () => setState(() => _col = i),
+                iconColor: cand.isEmpty ? null : VColors.accentBlue,
+              ),
             ),
           ],
         ],
@@ -276,164 +279,436 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
   }
 
   Widget _board() {
+    if (!_store.loaded) return const SizedBox.shrink();
     final cards = _store.inColumn(_col);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Toolbar (30-75): the open column's name, and add.
-        Padding(
-          padding: const EdgeInsets.fromLTRB(VSpace.sm, VSpace.sm, VSpace.sm, VSpace.xs),
-          child: Row(children: [
-            Expanded(child: Text(KanbanStore.columns[_col], maxLines: 1, overflow: TextOverflow.ellipsis, style: VType.headline())),
-            VCircleButton(
-              icon: _generating ? Icons.hourglass_top_rounded : Icons.psychology_alt_outlined,
-              tooltip: _generating ? 'Working' : 'Smart Gen agent',
-              onTap: _generating ? null : _generate,
-            ),
-            const SizedBox(width: VSpace.xxs),
-            VCircleButton(icon: Icons.add_rounded, tooltip: 'New card', onTap: _add),
-          ]),
-        ),
-        Expanded(
-          child: !_store.loaded
-              ? const SizedBox.shrink()
-              : VFadeScroll(
-                  padding: const EdgeInsets.fromLTRB(VSpace.sm, VSpace.xxs, VSpace.sm, VSpace.md),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      for (final c in cards) ...[
-                        _KanbanCardView(
-                          key: ValueKey(c.id),
-                          card: c,
-                          fill: palette[c.color % palette.length],
-                          accent: accents[c.color % accents.length],
-                          columnIcon: colIcons[c.column],
-                          editing: _editingId == c.id,
-                          onStartEdit: () => setState(() => _editingId = c.id),
-                          onEndEdit: (title, notes) {
-                            setState(() => _editingId = null);
-                            _store.edit(c, title: title, notes: notes);
-                          },
-                          onMenu: (r) => _menu(c, r),
-                        ),
-                        const SizedBox(height: VSpace.xs),
-                      ],
-                      if (cards.isEmpty) _AddTile(onTap: _add),
-                    ],
-                  ),
-                ),
-        ),
-      ],
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(VSpace.xs, VSpace.sm, VSpace.xs, VSpace.xs),
+      child: Column(
+        children: [
+          Expanded(child: _hero(cards.isEmpty ? null : cards.first)),
+          const SizedBox(height: VSpace.sm),
+          SizedBox(height: _stripH, child: _stripRow(cards.skip(1).toList())),
+        ],
+      ),
     );
+  }
+
+  /// The newest card: a large picture filling a floating rounded panel, one
+  /// short name over it, and the compact control strip.
+  Widget _hero(KanbanCard? c) {
+    final controls = _controlStrip(c);
+    if (c == null) {
+      return VPress(
+        onTap: _add,
+        tooltip: 'New card',
+        child: _Panel(
+          shadow: VShadow.heavy,
+          child: _Plate(
+            seed: 7,
+            accent: accents[0],
+            center: const Icon(Icons.image_outlined, size: 34, color: VColors.textTertiary),
+            overlay: Align(alignment: Alignment.bottomRight, child: controls),
+          ),
+        ),
+      );
+    }
+    final accent = accents[c.color % accents.length];
+    return LongPressDraggable<KanbanCard>(
+      data: c,
+      feedback: Material(
+        type: MaterialType.transparency,
+        child: SizedBox(width: 240, height: 300, child: _HeroView(card: c, accent: accent, onOpen: () => _openDetail(c), dragging: true)),
+      ),
+      childWhenDragging: Opacity(opacity: 0.4, child: _HeroView(card: c, accent: accent, onOpen: () => _openDetail(c))),
+      child: _HeroView(card: c, accent: accent, onOpen: () => _openDetail(c), controls: controls),
+    );
+  }
+
+  /// The compact strip over the hero: menu, agent, add.
+  Widget _controlStrip(KanbanCard? c) {
+    return VOrnament(
+      padding: const EdgeInsets.all(3),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (c != null)
+            VCircleButton(
+              icon: Icons.more_horiz_rounded,
+              size: 32,
+              tooltip: 'More',
+              onTap: () => _menu(c, _controlRect),
+            ),
+          if (_generating)
+            const SizedBox(width: 32, height: 32, child: Center(child: _Busy()))
+          else
+            VCircleButton(icon: Icons.psychology_alt_outlined, size: 32, tooltip: 'Smart Gen agent', onTap: _generate),
+          VCircleButton(icon: Icons.add_rounded, size: 32, tooltip: 'New card', onTap: _add),
+        ],
+      ),
+    );
+  }
+
+  // The ⋯ target is the strip's left end; anchoring the menu to the whole
+  // strip keeps the anchor valid wherever the hero sits on screen.
+  Rect get _controlRect {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null) return Offset.zero & const Size(32, 32);
+    final size = box.size;
+    return (box.localToGlobal(Offset(size.width - 96, size.height - 44))) & const Size(32, 32);
+  }
+
+  /// The rest of the column as a horizontal strip: pictures, edge fades,
+  /// chevrons. No scrollbar, ever.
+  Widget _stripRow(List<KanbanCard> rest) {
+    final empty = SizedBox(
+      height: _stripH,
+      child: Center(
+        child: VPress(
+          onTap: _add,
+          tooltip: 'New card',
+          child: Container(
+            width: _stripH,
+            height: _stripH,
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(VRadius.lg), boxShadow: VShadow.medium),
+            child: _Plate(
+              seed: 11,
+              accent: accents[_col % accents.length],
+              center: const Icon(Icons.add_rounded, size: 26, color: VColors.textSecondary),
+            ),
+          ),
+        ),
+      ),
+    );
+    return NotificationListener<ScrollNotification>(
+      onNotification: (n) {
+        final m = n.metrics;
+        if (m.maxScrollExtent == _stripMax && m.pixels == _stripAt) return false;
+        // Metrics can arrive mid-layout; move the rebuild past the frame.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || (m.maxScrollExtent == _stripMax && m.pixels == _stripAt)) return;
+          setState(() {
+            _stripMax = m.maxScrollExtent;
+            _stripAt = m.pixels;
+          });
+        });
+        return false;
+      },
+      child: Row(
+        children: [
+          if (rest.isNotEmpty)
+            VCircleButton(
+              icon: Icons.chevron_left_rounded,
+              size: 30,
+              floating: true,
+              tooltip: 'Scroll back',
+              onTap: _stripAt <= 1 ? null : () => _nudge(-1),
+            ),
+          if (rest.isNotEmpty) const SizedBox(width: VSpace.xxs),
+          Expanded(child: rest.isEmpty ? empty : _stripStrip(rest)),
+          if (rest.isNotEmpty) const SizedBox(width: VSpace.xxs),
+          if (rest.isNotEmpty)
+            VCircleButton(
+              icon: Icons.chevron_right_rounded,
+              size: 30,
+              floating: true,
+              tooltip: 'Scroll on',
+              onTap: _stripAt >= _stripMax - 1 ? null : () => _nudge(1),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _stripStrip(List<KanbanCard> rest) {
+    return VFadeScroll(
+      axis: Axis.horizontal,
+      fade: 22,
+      child: SizedBox(
+        height: _stripH,
+        child: ListView.separated(
+          controller: _strip,
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          itemCount: rest.length,
+          separatorBuilder: (_, __) => const SizedBox(width: VSpace.xs),
+          itemBuilder: (_, i) {
+            final c = rest[i];
+            return _CardFace(
+              card: c,
+              accent: accents[c.color % accents.length],
+              onOpen: () => _openDetail(c),
+              onMenu: _menu,
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  void _nudge(double dir) {
+    if (!_strip.hasClients) return;
+    final p = _strip.position;
+    p.animateTo((p.pixels + dir * (_stripH - 24)).clamp(0.0, p.maxScrollExtent),
+        duration: VMotion.base, curve: Curves.easeOutCubic);
   }
 }
 
-/// The empty column's one affordance: a dashed add tile.
-class _AddTile extends StatelessWidget {
-  final VoidCallback onTap;
-  const _AddTile({required this.onTap});
+/// A small card picture in the strip: the visual first, one short name over
+/// its foot, and a ⋯ over its corner. Long-press it and drop it on a column in
+/// the rail to move it.
+class _CardFace extends StatelessWidget {
+  const _CardFace({required this.card, required this.accent, required this.onOpen, required this.onMenu});
+
+  final KanbanCard card;
+  final Color accent;
+  final VoidCallback onOpen;
+  final void Function(KanbanCard, Rect) onMenu;
+
   @override
   Widget build(BuildContext context) {
-    return VPress(
-      onTap: onTap,
-      tooltip: 'New card',
-      child: CustomPaint(
-        painter: _DashedRRect(),
-        child: const SizedBox(height: 88, child: Center(child: Icon(Icons.add_rounded, size: 28, color: VColors.textSecondary))),
+    return LongPressDraggable<KanbanCard>(
+      data: card,
+      feedback: Material(
+        type: MaterialType.transparency,
+        child: SizedBox(width: 116, height: 116, child: Opacity(opacity: 0.92, child: _face(context, dragging: true))),
+      ),
+      childWhenDragging: Opacity(opacity: 0.35, child: _face(context)),
+      child: _face(context),
+    );
+  }
+
+  Widget _face(BuildContext context, {bool dragging = false}) {
+    return SizedBox(
+      width: 116,
+      child: _Panel(
+        shadow: dragging ? VShadow.heavy : VShadow.medium,
+        child: VPress(
+          onTap: onOpen,
+          child: _Plate(
+            seed: card.id.hashCode,
+            accent: accent,
+            overlay: Stack(
+              children: [
+                if (card.title.isEmpty)
+                  const Center(child: Icon(Icons.image_outlined, size: 22, color: VColors.textTertiary)),
+                Positioned(
+                  left: 8,
+                  right: 8,
+                  bottom: 7,
+                  child: Text(card.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: VType.footnote(color: Colors.white, weight: FontWeight.w600).copyWith(shadows: _textShadow)),
+                ),
+                if (!dragging)
+                  Positioned(
+                    right: 2,
+                    top: 2,
+                    child: Builder(
+                      builder: (more) => VPress(
+                        tooltip: 'More',
+                        onTap: () {
+                          final b = more.findRenderObject() as RenderBox?;
+                          if (b == null) return;
+                          onMenu(card, b.localToGlobal(Offset.zero) & b.size);
+                        },
+                        child: const SizedBox(width: 28, height: 28, child: Icon(Icons.more_horiz_rounded, size: 18, color: Colors.white, shadows: _textShadow)),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
 }
 
-class _DashedRRect extends CustomPainter {
+/// The hero card: a picture filling the panel, one short name over its foot,
+/// and the control strip if the screen passed one in.
+class _HeroView extends StatelessWidget {
+  const _HeroView({required this.card, required this.accent, required this.onOpen, this.controls, this.dragging = false});
+
+  final KanbanCard card;
+  final Color accent;
+  final VoidCallback onOpen;
+  final Widget? controls;
+  final bool dragging;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 240,
+      child: _Panel(
+        shadow: VShadow.heavy,
+        child: VPress(
+          onTap: onOpen,
+          child: _Plate(
+            seed: card.id.hashCode,
+            accent: accent,
+            overlay: Stack(
+              children: [
+                Positioned(
+                  left: VSpace.sm,
+                  right: VSpace.sm,
+                  bottom: 10,
+                  child: Text(card.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: VType.callout(color: Colors.white, weight: FontWeight.w600).copyWith(fontSize: VType.lg, shadows: _textShadow)),
+                ),
+                if (controls != null) Positioned(right: VSpace.xs, bottom: VSpace.xs, child: controls!),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Text that sits over a picture needs its own shadow, not the panel's.
+const List<Shadow> _textShadow = [Shadow(color: Color(0x99000000), blurRadius: 12)];
+
+/// A floating rounded surface with a real drop shadow. The picture planes are
+/// opaque, so the shadow is what lifts them off the scene.
+class _Panel extends StatelessWidget {
+  const _Panel({required this.child, this.shadow = VShadow.medium});
+
+  final Widget child;
+  final List<BoxShadow> shadow;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(VRadius.lg), boxShadow: shadow),
+      child: ClipRRect(borderRadius: BorderRadius.circular(VRadius.lg), child: child),
+    );
+  }
+}
+
+/// A card's visual. A card carries no image file, so the picture is generated
+/// from the card's id and colour: soft overlapping fields, so a card is never
+/// a blank box. [center] is the empty state's small mark.
+class _Plate extends StatelessWidget {
+  const _Plate({required this.seed, required this.accent, this.overlay = const SizedBox.shrink(), this.center});
+
+  final int seed;
+  final Color accent;
+  final Widget overlay;
+  final Widget? center;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        CustomPaint(painter: _PlatePainter(seed: seed, accent: accent)),
+        // Reads as depth rather than as a star field: a broad falloff only.
+        const DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              radius: 1.05,
+              colors: [Color(0x00000000), Color(0x40000000)],
+              stops: [0.45, 1],
+            ),
+          ),
+        ),
+        if (center != null) Center(child: center!),
+        overlay,
+      ],
+    );
+  }
+}
+
+class _PlatePainter extends CustomPainter {
+  const _PlatePainter({required this.seed, required this.accent});
+
+  final int seed;
+  final Color accent;
+
   @override
   void paint(Canvas canvas, Size size) {
-    final p = Paint()
-      ..color = Colors.white.withValues(alpha: 0.35)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2;
-    final path = Path()..addRRect(RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(14)));
-    for (final m in path.computeMetrics()) {
-      for (double d = 0; d < m.length; d += 10) {
-        canvas.drawPath(m.extractPath(d, (d + 5).clamp(0, m.length)), p);
-      }
+    final r = Offset.zero & size;
+    final deep = Color.lerp(accent, const Color(0xFF14141E), 0.62)!;
+    final bright = Color.lerp(accent, Colors.white, 0.34)!;
+    canvas.drawRect(
+      r,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [deep, Color.lerp(deep, bright, 0.45)!, bright],
+        ).createShader(r),
+    );
+    final s = size.shortestSide;
+    for (var i = 0; i < 3; i++) {
+      final c = Offset(_n(i) * size.width, _n(i + 7) * size.height);
+      canvas.drawCircle(
+        c,
+        s * (0.32 + _n(i + 13) * 0.45),
+        Paint()
+          ..color = (i.isEven ? Colors.white : bright).withValues(alpha: 0.14 + _n(i + 19) * 0.12)
+          ..maskFilter = MaskFilter.blur(BlurStyle.normal, s * 0.16),
+      );
     }
   }
 
+  /// Deterministic per card, so a card keeps the same picture every rebuild.
+  double _n(int salt) {
+    final x = (seed * 1103515245 + salt * 12345) & 0x7FFFFFFF;
+    return (x % 1024) / 1024.0;
+  }
+
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _PlatePainter old) => old.seed != seed || old.accent != accent;
 }
 
-/// A Nimo widget card: header (column mark, age, ⋯), bold title, a note.
-/// Title and note edit in place.
-class _KanbanCardView extends StatefulWidget {
+/// The agent's own progress mark: a plain ring, no sparkle.
+class _Busy extends StatelessWidget {
+  const _Busy();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      width: 16,
+      height: 16,
+      child: CircularProgressIndicator(strokeWidth: 1.6, color: VColors.textSecondary),
+    );
+  }
+}
+
+/// The card's detail sheet: the picture large, then the title and the note
+/// that the card face deliberately does not carry. Opened over the window as
+/// an overlay surface, so it is its own glass, not glass inside glass.
+class _CardSheet extends StatefulWidget {
+  const _CardSheet({required this.card, required this.accent, this.startEditing = false});
+
   final KanbanCard card;
-  final Color fill;
   final Color accent;
-  final IconData columnIcon;
-  final bool editing;
-  final VoidCallback onStartEdit;
-  final void Function(String title, String notes) onEndEdit;
-  final ValueChanged<Rect> onMenu;
-
-  const _KanbanCardView({
-    super.key,
-    required this.card,
-    required this.fill,
-    required this.accent,
-    required this.columnIcon,
-    required this.editing,
-    required this.onStartEdit,
-    required this.onEndEdit,
-    required this.onMenu,
-  });
+  final bool startEditing;
 
   @override
-  State<_KanbanCardView> createState() => _KanbanCardViewState();
+  State<_CardSheet> createState() => _CardSheetState();
 }
 
-class _KanbanCardViewState extends State<_KanbanCardView> {
+class _CardSheetState extends State<_CardSheet> {
   late final TextEditingController _title = TextEditingController(text: widget.card.title);
   late final TextEditingController _notes = TextEditingController(text: widget.card.notes);
   final FocusNode _titleFocus = FocusNode();
   final FocusNode _notesFocus = FocusNode();
-  final GlobalKey _moreKey = GlobalKey();
+  bool _editing = false;
   bool _notesFirst = false;
 
-  static const _ink = Color(0xFF1C1C1E);
-  static const _ink2 = Color(0xFF5B5B60);
+  static const _ink2 = Color(0xB3FFFFFF);
 
   @override
   void initState() {
     super.initState();
     _titleFocus.addListener(_focusChanged);
     _notesFocus.addListener(_focusChanged);
-    if (widget.editing) _focusSoon();
-  }
-
-  @override
-  void didUpdateWidget(covariant _KanbanCardView old) {
-    super.didUpdateWidget(old);
-    if (widget.editing && !old.editing) {
-      _title.text = widget.card.title;
-      _notes.text = widget.card.notes;
-      _focusSoon();
-    }
-  }
-
-  void _focusSoon() => WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        (_notesFirst ? _notesFocus : _titleFocus).requestFocus();
-        _notesFirst = false;
-      });
-
-  // Editing ends when focus leaves both fields.
-  void _focusChanged() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !widget.editing) return;
-      if (!_titleFocus.hasFocus && !_notesFocus.hasFocus) widget.onEndEdit(_title.text, _notes.text);
-    });
+    if (widget.startEditing) WidgetsBinding.instance.addPostFrameCallback((_) => _startEdit());
   }
 
   @override
@@ -445,106 +720,125 @@ class _KanbanCardViewState extends State<_KanbanCardView> {
     super.dispose();
   }
 
-  String _age() {
-    final d = DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(widget.card.updatedMs));
-    if (d.inMinutes < 1) return 'now';
-    if (d.inHours < 1) return '${d.inMinutes}m';
-    if (d.inDays < 1) return '${d.inHours}h';
-    return '${d.inDays}d';
+  void _startEdit() {
+    if (!mounted) return;
+    setState(() => _editing = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      (_notesFirst ? _notesFocus : _titleFocus).requestFocus();
+      _notesFirst = false;
+    });
   }
 
-  Widget _field(TextEditingController c, FocusNode f, TextStyle style, {int? maxLines, TextInputAction action = TextInputAction.next, VoidCallback? onDone}) =>
-      TextField(
-        controller: c,
-        focusNode: f,
-        style: style,
-        maxLines: maxLines,
-        minLines: 1,
-        cursorColor: widget.accent,
-        textInputAction: action,
-        onSubmitted: (_) => onDone?.call(),
-        decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.zero),
-      );
+  // Editing ends when focus leaves both fields.
+  void _focusChanged() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_editing) return;
+      if (!_titleFocus.hasFocus && !_notesFocus.hasFocus) _commit();
+    });
+  }
 
-  Widget _body(TextStyle titleStyle, TextStyle noteStyle) {
-    final c = widget.card;
-    if (widget.editing) {
-      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        _field(_title, _titleFocus, titleStyle, maxLines: 3, onDone: () => _notesFocus.requestFocus()),
-        const SizedBox(height: 4),
-        _field(_notes, _notesFocus, noteStyle, maxLines: 6, action: TextInputAction.done, onDone: () => FocusScope.of(context).unfocus()),
-      ]);
+  void _commit() {
+    if (!mounted) return;
+    setState(() => _editing = false);
+    KanbanStore.instance.edit(widget.card, title: _title.text, notes: _notes.text);
+    // A card with neither a title nor a note is dropped by the store, so the
+    // sheet has nothing left to show.
+    if (_title.text.trim().isEmpty && _notes.text.trim().isEmpty) _close(commit: false);
+  }
+
+  void _close({bool commit = true}) {
+    if (commit && _editing) {
+      setState(() => _editing = false);
+      KanbanStore.instance.edit(widget.card, title: _title.text, notes: _notes.text);
     }
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      if (c.title.isNotEmpty)
-        GestureDetector(onTap: widget.onStartEdit, child: Text(c.title, style: titleStyle)),
-      if (c.notes.isNotEmpty) ...[
-        const SizedBox(height: 4),
-        GestureDetector(
-          onTap: () {
-            _notesFirst = true;
-            widget.onStartEdit();
-          },
-          child: Text(c.notes, maxLines: 4, overflow: TextOverflow.ellipsis, style: noteStyle),
-        ),
-      ],
-    ]);
+    Navigator.of(context).pop();
   }
 
-  Widget _card(BuildContext context, {bool feedback = false}) {
-    final titleStyle = VType.callout(color: _ink, weight: FontWeight.w700).copyWith(height: 1.3);
-    final noteStyle = VType.footnote(color: _ink2, weight: FontWeight.w400).copyWith(height: 1.35);
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 8, 6, 12),
-      decoration: BoxDecoration(
-        color: widget.fill,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: feedback ? 0.35 : 0.18), blurRadius: feedback ? 24 : 10, offset: const Offset(0, 4))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(children: [
-            Container(
-              width: 18,
-              height: 18,
-              decoration: BoxDecoration(color: widget.accent, borderRadius: BorderRadius.circular(5)),
-              child: Icon(widget.columnIcon, size: 12, color: Colors.white),
-            ),
-            const SizedBox(width: 6),
-            Expanded(child: Text(KanbanStore.columns[widget.card.column], style: VType.caption(color: _ink2, weight: FontWeight.w600))),
-            Text(_age(), style: VType.caption(color: _ink2)),
-            if (!feedback)
-              VPress(
-                key: _moreKey,
-                tooltip: 'More',
-                onTap: () {
-                  final b = _moreKey.currentContext?.findRenderObject() as RenderBox?;
-                  if (b == null) return;
-                  widget.onMenu(b.localToGlobal(Offset.zero) & b.size);
-                },
-                child: const SizedBox(width: 32, height: 28, child: Icon(Icons.more_horiz_rounded, size: 18, color: _ink2)),
-              )
-            else
-              const SizedBox(width: 32, height: 28),
-          ]),
-          const SizedBox(height: 4),
-          _body(titleStyle, noteStyle),
-        ],
-      ),
+  Widget _field(TextEditingController c, FocusNode f, {int maxLines = 1, TextInputAction action = TextInputAction.next, VoidCallback? onDone}) {
+    return TextField(
+      controller: c,
+      focusNode: f,
+      maxLines: maxLines,
+      minLines: 1,
+      cursorColor: widget.accent,
+      textInputAction: action,
+      onSubmitted: (_) => onDone?.call(),
+      style: maxLines == 1
+          ? VType.callout(color: VColors.textPrimary, weight: FontWeight.w600).copyWith(height: 1.3)
+          : VType.footnote(color: _ink2, weight: FontWeight.w400).copyWith(height: 1.4),
+      decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.zero),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    if (widget.editing) return _card(context);
-    return LayoutBuilder(
-      builder: (context, box) => LongPressDraggable<KanbanCard>(
-        data: widget.card,
-        feedback: Material(type: MaterialType.transparency, child: SizedBox(width: box.maxWidth, child: Opacity(opacity: 0.92, child: _card(context, feedback: true)))),
-        childWhenDragging: Opacity(opacity: 0.35, child: _card(context)),
-        child: _card(context),
+    final c = widget.card;
+    final picture = _Panel(
+      shadow: VShadow.heavy,
+      child: SizedBox(
+        height: 200,
+        child: _Plate(
+          seed: c.id.hashCode,
+          accent: widget.accent,
+          center: c.title.isEmpty ? const Icon(Icons.image_outlined, size: 28, color: VColors.textTertiary) : null,
+          overlay: const SizedBox.shrink(),
+        ),
       ),
+    );
+    return Stack(
+      children: [
+        Positioned.fill(child: VScrim(onTap: _close, blur: true)),
+        SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(VSpace.md),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420, maxHeight: 620),
+                child: VGlass(
+                  material: VMaterial.modal,
+                  radius: VRadius.xl,
+                  padding: const EdgeInsets.fromLTRB(VSpace.md, VSpace.sm, VSpace.md, VSpace.md),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        picture,
+                        const SizedBox(height: VSpace.sm),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: VCircleButton(icon: Icons.close_rounded, tooltip: 'Close', onTap: _close),
+                        ),
+                        if (_editing)
+                          _field(_title, _titleFocus, maxLines: 2, onDone: () => _notesFocus.requestFocus())
+                        else
+                          GestureDetector(
+                            onTap: _startEdit,
+                            child: Text(c.title.isEmpty ? 'Untitled' : c.title,
+                                style: VType.title2(color: c.title.isEmpty ? VColors.textTertiary : VColors.textPrimary)),
+                          ),
+                        const SizedBox(height: VSpace.xxs),
+                        if (_editing)
+                          _field(_notes, _notesFocus, maxLines: 5, action: TextInputAction.done, onDone: () => FocusScope.of(context).unfocus())
+                        else
+                          GestureDetector(
+                            onTap: () {
+                              _notesFirst = true;
+                              _startEdit();
+                            },
+                            child: Text(c.notes.isEmpty ? 'Add a note' : c.notes,
+                                style: VType.footnote(color: c.notes.isEmpty ? VColors.textTertiary : _ink2).copyWith(height: 1.4)),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
