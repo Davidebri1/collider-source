@@ -1741,7 +1741,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // Nothing here is measured from the rail, the composer or the open card
           // any more, so navigating cannot snap the layout into a different
           // full-width arrangement. Nothing touches an edge.
-          if (!_browserOpen && !(isMobile && _isMobileSideNavOpen) && !const {'premium', 'themes', 'apps', 'smartgen', 'market', 'files', 'consensus'}.contains(_activeDrawer))
+          if (!_settingsOpen && !_browserOpen && !(isMobile && _isMobileSideNavOpen) && !const {'premium', 'themes', 'apps', 'smartgen', 'market', 'files', 'consensus'}.contains(_activeDrawer))
           Positioned.fill(
             bottom: 74,
             child: SafeArea(
