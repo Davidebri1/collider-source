@@ -220,7 +220,12 @@ class ThemeCatalog extends ChangeNotifier {
               title: niceName('${o['name']}').replaceAll(RegExp(r'\s+song$'), ''),
               audioUrl: o['url'] as String,
               // No shared tag: borrow a stable wallpaper so no row is a blank tile.
-              artUrl: best?.assetPath ?? (themes.isEmpty ? '' : themes['${o['name']}'.hashCode.abs() % themes.length].assetPath));
+              artUrl: () {
+                bool img(String u) => RegExp(r'\.(png|jpe?g|webp|avif)(\?|$)', caseSensitive: false).hasMatch(u);
+                if (best != null && img(best.assetPath)) return best.assetPath;
+                final pics = [for (final t in themes) if (img(t.assetPath)) t.assetPath];
+                return pics.isEmpty ? (best?.assetPath ?? '') : pics['${o['name']}'.hashCode.abs() % pics.length];
+              }());
         }(),
     ];
     return themes;
