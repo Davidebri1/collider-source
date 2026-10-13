@@ -484,7 +484,7 @@ class _FilesScreenState extends State<FilesScreen> {
                     : Icon(_icon(f.type), size: 52, color: const Color(0xCCFFFFFF)),
               ),
             ),
-            if (_sel.has(f.id)) const Padding(padding: EdgeInsets.only(top: 2), child: Icon(Icons.check_circle_rounded, color: Color(0xFF0A84FF), size: 34)),
+            if (_sel.has(f.id)) const Padding(padding: EdgeInsets.only(top: 4), child: Icon(Icons.check_circle_rounded, color: Color(0xFF0A84FF), size: 34)),
             const SizedBox(height: 3),
             FText(f.name, size: 22, weight: FontWeight.w500),
             FText(meta, size: 16, opacity: 0.6, weight: FontWeight.w500),
