@@ -63,6 +63,18 @@ String humanizeThemeName(String raw) {
   return s;
 }
 
+/// v9.1.4 (playtest #10): a title a person would have chosen, or [fallback].
+/// An id-shaped name ("0251d1e0-16a1-…") tidies into letter salad such as
+/// "D E A Ad D Bceac E"; those, and "Untitled …", give way to the fallback.
+String displayTitle(String raw, String fallback) {
+  final h = humanizeThemeName(raw);
+  final words = h.split(' ').where((w) => w.isNotEmpty).toList();
+  final short = words.where((w) => w.length <= 2).length;
+  final hexy = RegExp(r'^[0-9a-f]{4,}$', caseSensitive: false);
+  final bad = h.startsWith('Untitled') || words.isEmpty || short * 2 >= words.length || words.any((w) => hexy.hasMatch(w) && RegExp(r'\d').hasMatch(w));
+  return bad ? fallback : h;
+}
+
 /// One track in a theme pack's 5-track soundscape.
 class AmbientTrack {
   final int number;

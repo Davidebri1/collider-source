@@ -1,3 +1,4 @@
+import '../../../core/theme/edge_fade.dart';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -302,13 +303,20 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
             DragTarget<KanbanCard>(
               onWillAcceptWithDetails: (d) => d.data.column != i,
               onAcceptWithDetails: (d) => _store.move(d.data, i),
-              builder: (context, cand, _) => VCircleButton(
-                icon: colIcons[i],
-                size: 34,
-                selected: i == _col,
-                tooltip: KanbanStore.columns[i],
+              // v9.1.4 (playtest #8): each column says its name.
+              builder: (context, cand, _) => GestureDetector(
+                behavior: HitTestBehavior.opaque,
                 onTap: () => setState(() => _col = i),
-                iconColor: cand.isEmpty ? null : VColors.accentBlue,
+                child: Container(
+                  height: 36,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(color: i == _col ? const Color(0xE6FFFFFF) : VFrost.tint, borderRadius: BorderRadius.circular(18)),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(colIcons[i], size: 16, color: cand.isNotEmpty ? VColors.accentBlue : (i == _col ? const Color(0xFF111111) : Colors.white)),
+                    const SizedBox(width: 6),
+                    Text(KanbanStore.columns[i], style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: i == _col ? const Color(0xFF111111) : Colors.white)),
+                  ]),
+                ),
               ),
             ),
           ],
@@ -401,13 +409,15 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
   Widget _stripRow(List<KanbanCard> rest) {
     final empty = SizedBox(
       height: _stripH,
-      child: Center(
-        child: VPress(
+      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Text('Nothing in ${KanbanStore.columns[_col]} yet.\nTap to add a card.', style: const TextStyle(fontSize: 15, color: Colors.white, height: 1.35)),
+        const SizedBox(width: 14),
+        VPress(
           onTap: _add,
           tooltip: 'New card',
           child: Container(
-            width: _stripH,
-            height: _stripH,
+            width: 72,
+            height: 72,
             decoration: BoxDecoration(borderRadius: BorderRadius.circular(VRadius.lg), boxShadow: VShadow.medium),
             child: _Plate(
               seed: 11,
@@ -416,7 +426,7 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
             ),
           ),
         ),
-      ),
+      ]),
     );
     return NotificationListener<ScrollNotification>(
       onNotification: (n) {
@@ -434,25 +444,7 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
       },
       child: Row(
         children: [
-          if (rest.isNotEmpty)
-            VCircleButton(
-              icon: Icons.chevron_left_rounded,
-              size: 30,
-              floating: true,
-              tooltip: 'Scroll back',
-              onTap: _stripAt <= 1 ? null : () => _nudge(-1),
-            ),
-          if (rest.isNotEmpty) const SizedBox(width: VSpace.xxs),
           Expanded(child: rest.isEmpty ? empty : _stripStrip(rest)),
-          if (rest.isNotEmpty) const SizedBox(width: VSpace.xxs),
-          if (rest.isNotEmpty)
-            VCircleButton(
-              icon: Icons.chevron_right_rounded,
-              size: 30,
-              floating: true,
-              tooltip: 'Scroll on',
-              onTap: _stripAt >= _stripMax - 1 ? null : () => _nudge(1),
-            ),
         ],
       ),
     );
@@ -464,7 +456,7 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
       fade: 22,
       child: SizedBox(
         height: _stripH,
-        child: ListView.separated(
+        child: EdgeFade(fadeHeight: 24, child: ListView.separated(
           controller: _strip,
           scrollDirection: Axis.horizontal,
           physics: const BouncingScrollPhysics(),
@@ -480,7 +472,7 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
               onMenu: _menu,
             );
           },
-        ),
+        )),
       ),
     );
   }
@@ -839,7 +831,7 @@ class _CardSheetState extends State<_CardSheet> {
                   material: VMaterial.modal,
                   radius: VRadius.xl,
                   padding: const EdgeInsets.fromLTRB(VSpace.md, VSpace.sm, VSpace.md, VSpace.md),
-                  child: SingleChildScrollView(
+                  child: EdgeFade(fadeHeight: 24, child: SingleChildScrollView(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -872,7 +864,7 @@ class _CardSheetState extends State<_CardSheet> {
                           ),
                       ],
                     ),
-                  ),
+                  )),
                 ),
               ),
             ),

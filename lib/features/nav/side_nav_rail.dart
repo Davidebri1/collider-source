@@ -171,11 +171,12 @@ class _RailButton extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontFamily: 'GoogleSansFlex',
-                  fontSize: 8.5,
+                  fontSize: 11,
                   height: 1.1,
                   letterSpacing: -0.05,
                   fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                  color: selected ? Colors.white : Colors.white.withValues(alpha: 0.58),
+                  color: Colors.white, // v9.1.4 (playtest #15): readable over bright wallpaper
+                  shadows: const [Shadow(color: Color(0xB3000000), blurRadius: 6)],
                 ),
               ),
             ],

@@ -1,3 +1,4 @@
+import '../../core/theme/edge_fade.dart';
 import 'package:flutter/material.dart';
 import '../../../models/model_def.dart';
 import '../../../core/vision/vision_kit.dart';
@@ -61,7 +62,7 @@ class _ModelLadderDrawerState extends State<ModelLadderDrawer> {
                 children: [
                   SizedBox(
                     height: 30,
-                    child: ListView.separated(
+                    child: EdgeFade(fadeHeight: 24, child: ListView.separated(
                       scrollDirection: Axis.horizontal,
                       physics: const BouncingScrollPhysics(),
                       itemCount: ModelCategory.values.length,
@@ -70,7 +71,7 @@ class _ModelLadderDrawerState extends State<ModelLadderDrawer> {
                         final c = ModelCategory.values[i];
                         return VChip(label: c.label, selected: c == widget.activeCategory, onTap: () => widget.onSelectCategory(c));
                       },
-                    ),
+                    )),
                   ),
                   const SizedBox(height: VSpace.sm),
                   VSearchField(
@@ -84,7 +85,7 @@ class _ModelLadderDrawerState extends State<ModelLadderDrawer> {
                         ? const SizedBox(height: VSpace.xl)
                         : EdgeFade(
                             fadeHeight: 14,
-                            child: ListView.builder(
+                            child: EdgeFade(fadeHeight: 24, child: ListView.builder(
                               shrinkWrap: true,
                               physics: const BouncingScrollPhysics(),
                               padding: const EdgeInsets.symmetric(vertical: VSpace.xxs),
@@ -103,7 +104,7 @@ class _ModelLadderDrawerState extends State<ModelLadderDrawer> {
                                   onTap: () => widget.onToggleModel(m.id),
                                 );
                               },
-                            ),
+                            )),
                           ),
                   ),
                 ],

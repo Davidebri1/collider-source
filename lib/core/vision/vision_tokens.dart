@@ -74,6 +74,15 @@ class VSpace {
   static const double xxxl = 40;
 }
 
+/// v9.1.4 (playtest #3): the one depth convention. Everything behind a
+/// temporary panel gets exactly this blur and this dim; panels themselves
+/// use VFrost glass. Three tokens, every screen.
+class VDepth {
+  VDepth._();
+  static const double blur = 16;
+  static const Color dim = Color(0x47000000);
+}
+
 class VBlur {
   VBlur._();
   static const double light = 12;

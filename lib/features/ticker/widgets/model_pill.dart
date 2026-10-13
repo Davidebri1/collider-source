@@ -1,3 +1,4 @@
+import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
@@ -122,11 +123,15 @@ class _ModelPillState extends State<ModelPill> {
     // window, which is exactly the translucent-on-translucent stacking the
     // house rule forbids, and it still carries real elevation.
     final surface = Color.alphaBlend(c.withValues(alpha: 0.16), const Color(0xFF171722));
-    return DecoratedBox(
+    // v9.1.4 (playtest #6): the opened answer is frosted glass, no rim.
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(VRadius.lg - 4),
+      child: BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: VFrost.blur, sigmaY: VFrost.blur),
+      child: DecoratedBox(
       decoration: BoxDecoration(
-        color: surface, // v9.1: flat frost, no painted gradient
+        color: Color.alphaBlend(c.withValues(alpha: 0.06), VFrost.tint),
         borderRadius: BorderRadius.circular(VRadius.lg - 4),
-        border: Border.all(color: c.withValues(alpha: 0.42), width: 0.8),
         boxShadow: [
           BoxShadow(color: Colors.black.withValues(alpha: 0.46), blurRadius: 34, spreadRadius: -6, offset: const Offset(0, 18)),
           BoxShadow(color: c.withValues(alpha: 0.22), blurRadius: 22, spreadRadius: -10),
@@ -136,6 +141,8 @@ class _ModelPillState extends State<ModelPill> {
         padding: const EdgeInsets.fromLTRB(VSpace.sm, 10, VSpace.xs, 8),
         child: _paneBody(context, c),
       ),
+    ),
+    ),
     );
   }
 
@@ -167,7 +174,7 @@ class _ModelPillState extends State<ModelPill> {
                   ],
                 ),
               ),
-              VCircleButton(icon: Icons.close_rounded, size: 28, tooltip: 'Close', onTap: widget.onToggleExpand),
+              VCloseButton(onTap: widget.onToggleExpand),
             ],
           ),
           const SizedBox(height: 6),
@@ -353,7 +360,7 @@ class _ModelPillState extends State<ModelPill> {
                           // v9: a model message is stamped with its time only.
                           // "You" still marks the user's own turns; model names
                           // never appear on the thread.
-                          '${isUser ? 'You' : ''}  ${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}'.trim(),
+                          '${isUser ? 'You' : ''}  ${(t.hour % 12 == 0 ? 12 : t.hour % 12)}:${t.minute.toString().padLeft(2, '0')} ${t.hour < 12 ? 'AM' : 'PM'}'.trim(),
                           style: VType.caption(color: VColors.textSecondary, weight: FontWeight.w600),
                         ),
                         const SizedBox(height: 2),
@@ -373,32 +380,7 @@ class _ModelPillState extends State<ModelPill> {
           ),
         ),
       ),
-      const SizedBox(height: VSpace.xs),
-      // Isolated inline composer capsule (sends to this model only)
-      Container(
-        height: 40,
-        padding: const EdgeInsets.only(left: VSpace.sm, right: 4),
-        decoration: BoxDecoration(color: VColors.fillRecessed, borderRadius: BorderRadius.circular(VRadius.full)),
-        child: Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _inlineCtrl,
-                cursorColor: VColors.textPrimary,
-                style: VType.callout(weight: FontWeight.w400),
-                decoration: InputDecoration(
-                  hintStyle: VType.callout(color: VColors.textTertiary, weight: FontWeight.w400),
-                  border: InputBorder.none,
-                  isDense: true,
-                  contentPadding: EdgeInsets.zero,
-                ),
-                onSubmitted: (_) => _submitInline(),
-              ),
-            ),
-            VCircleButton(icon: Icons.arrow_upward_rounded, size: 32, selected: true, tooltip: 'Send', onTap: _submitInline),
-          ],
-        ),
-      ),
+      // v9.1.4 (playtest #6): no second input; the one composer is at the bottom.
     ];
   }
 }
@@ -480,7 +462,20 @@ class _SkeletonLines extends StatefulWidget {
 }
 
 class _SkeletonLinesState extends State<_SkeletonLines> with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat();
+  // v9.1.4 (playtest #13/#16): waiting is a quiet fade, not shimmer bars; a
+  // model that hasn't answered after 25 s says so plainly.
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600))..repeat(reverse: true);
+  bool _late = false;
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(const Duration(seconds: 25), () {
+      if (!mounted) return;
+      _c.stop();
+      setState(() => _late = true);
+    });
+  }
+
   @override
   void dispose() {
     _c.dispose();
@@ -489,27 +484,11 @@ class _SkeletonLinesState extends State<_SkeletonLines> with SingleTickerProvide
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _c,
-      builder: (_, __) {
-        Widget line(double w) => FractionallySizedBox(
-              widthFactor: w,
-              alignment: Alignment.centerLeft,
-              child: Container(
-                height: 9,
-                margin: const EdgeInsets.symmetric(vertical: 3),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(5),
-                  gradient: LinearGradient(
-                    begin: Alignment(-1.5 + 3 * _c.value, 0),
-                    end: Alignment(-0.5 + 3 * _c.value, 0),
-                    colors: [Colors.white.withValues(alpha: 0.08), widget.color.withValues(alpha: 0.35), Colors.white.withValues(alpha: 0.08)],
-                  ),
-                ),
-              ),
-            );
-        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [line(0.92), line(0.64)]);
-      },
+    const st = TextStyle(fontSize: 15, color: Color(0xB3FFFFFF));
+    if (_late) return const Text("Couldn't reach this model", style: st);
+    return FadeTransition(
+      opacity: Tween(begin: 0.25, end: 0.8).animate(CurvedAnimation(parent: _c, curve: Curves.easeInOut)),
+      child: const Text('Thinking…', style: st),
     );
   }
 }

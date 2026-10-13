@@ -1,3 +1,4 @@
+import '../../core/theme/edge_fade.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../core/audio/music_player.dart';
@@ -226,7 +227,7 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
         // models.ts CATEGORIES: General, Image, Video, Audio, Coding (D35 revoked).
         SizedBox(
           height: 30,
-          child: ListView.separated(
+          child: EdgeFade(fadeHeight: 24, child: ListView.separated(
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
             itemCount: ModelCategory.values.length,
@@ -242,13 +243,13 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
                 },
               );
             },
-          ),
+          )),
         ),
         const SizedBox(height: VSpace.sm),
         Expanded(
           child: EdgeFade(
             fadeHeight: 12,
-            child: ListView(
+            child: EdgeFade(fadeHeight: 24, child: ListView(
               physics: const BouncingScrollPhysics(),
               children: [
                 for (final m in models)
@@ -262,7 +263,7 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
                     },
                   ),
               ],
-            ),
+            )),
           ),
         ),
       ],
@@ -276,7 +277,7 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
     }
     return EdgeFade(
       fadeHeight: 12,
-      child: ListView.separated(
+      child: EdgeFade(fadeHeight: 24, child: ListView.separated(
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.symmetric(vertical: VSpace.xxs),
         itemCount: sessions.length,
@@ -303,7 +304,7 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
             ),
           );
         },
-      ),
+      )),
     );
   }
 
@@ -340,7 +341,7 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
       ('premium', 'Premium Market', Icons.workspace_premium_rounded),
       if (MusicPlayer.library.isNotEmpty) ('music', 'Music Collection', Icons.graphic_eq_rounded),
     ];
-    return ListView(
+    return EdgeFade(fadeHeight: 24, child: ListView(
       physics: const BouncingScrollPhysics(),
       children: [
         for (final s in sections)
@@ -351,7 +352,7 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
             onTap: () => widget.onSelectThemeSection?.call(s.$1),
           ),
       ],
-    );
+    ));
   }
 
   // ---------------- Browser ----------------
@@ -363,7 +364,7 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
         Expanded(
           child: tabs.isEmpty
               ? const SizedBox.shrink()
-              : ListView(
+              : EdgeFade(fadeHeight: 24, child: ListView(
                   physics: const BouncingScrollPhysics(),
                   children: [
                     for (final t in tabs)
@@ -377,7 +378,7 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
                             : VCircleButton(icon: Icons.close_rounded, size: 24, tooltip: 'Close tab', onTap: () => widget.onCloseBrowserTab!(t.id)),
                       ),
                   ],
-                ),
+                )),
         ),
         VButton(label: 'Clear Browser Cache', dense: true, expand: true, variant: VButtonVariant.ghost, onTap: widget.onClearBrowserCache),
       ],

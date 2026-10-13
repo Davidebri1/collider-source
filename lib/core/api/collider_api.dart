@@ -142,6 +142,9 @@ class ColliderApi {
   final Dio _dio = Dio(BaseOptions(connectTimeout: const Duration(seconds: 8), receiveTimeout: const Duration(seconds: 180)));
 
   String get _base => Uri.base.origin;
+  // v9.1.4 (playtest #16): GitHub Pages and the APK have no /api server;
+  // models are called directly instead, so don't ask for a roster there.
+  bool get _hasServer => Uri.base.scheme.startsWith('http') && !Uri.base.host.endsWith('github.io');
   bool online = false;
   bool webSearch = false;
   int nvidiaKeys = 0;
@@ -150,6 +153,7 @@ class ColliderApi {
 
   /// Loads the live roster from the server into [ModelRoster]. Returns true when connected.
   Future<bool> loadRoster() async {
+    if (!_hasServer) return false;
     try {
       final r = await _dio.get('$_base/api/models');
       final list = (r.data['models'] as List).cast<Map>();
@@ -239,6 +243,7 @@ class ColliderApi {
   }
 
   Future<List<JobState>> history() async {
+    if (!_hasServer) return const [];
     try {
       final r = await _dio.get('$_base/api/history');
       return [

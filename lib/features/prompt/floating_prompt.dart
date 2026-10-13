@@ -265,8 +265,6 @@ class _FloatingPromptState extends State<FloatingPrompt> {
         chip(Icons.language_rounded, 'Web', m == AskMode.internet, () => widget.onMode(m == AskMode.internet ? AskMode.chat : AskMode.internet)),
         chip(Icons.travel_explore_rounded, 'Research', m == AskMode.research, () => widget.onMode(m == AskMode.research ? AskMode.chat : AskMode.research)),
         chip(Icons.visibility_off_outlined, 'Private', widget.private, () => widget.onPrivate(!widget.private)),
-        chip(Icons.image_outlined, 'Image', cat == ModelCategory.image, () => widget.onCategory?.call(cat == ModelCategory.image ? ModelCategory.general : ModelCategory.image)),
-        chip(Icons.movie_outlined, 'Video', cat == ModelCategory.video, () => widget.onCategory?.call(cat == ModelCategory.video ? ModelCategory.general : ModelCategory.video)),
       ]),
     );
   }
@@ -326,7 +324,7 @@ class _FloatingPromptState extends State<FloatingPrompt> {
                       child: GestureDetector(
                         key: _plusKey,
                         behavior: HitTestBehavior.opaque,
-                        onTap: _openMenu,
+                        onTap: _attach, // v9.1.4 (playtest #5): + only attaches; modes live in the options row
                         child: Container(
                           width: 60,
                           height: 60,

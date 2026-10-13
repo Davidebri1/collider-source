@@ -30,19 +30,21 @@ class _AccountSheetState extends State<AccountSheet> {
     // v9: was `width - 2*VSpace.md`, which on a 430pt phone is nearly the full
     // width — a sheet flush to both edges reads as a fullscreen page and loses
     // the floating-panel depth the rest of the app is built on. Inset it.
-    final w = (MediaQuery.sizeOf(context).width - 2 * VSpace.lg).clamp(0.0, 420.0);
+    // Child of Settings: in front of it and smaller (Settings is 0.68).
+    final w = MediaQuery.sizeOf(context).width * 0.6;
     return Stack(
       fit: StackFit.expand,
       children: [
         // v8.7: no scrim; Settings stays visible, stepped back behind.
-        GestureDetector(behavior: HitTestBehavior.opaque, onTap: widget.onClose),
+        // v9.1.4 (playtest #17): Account replaces Settings, over the same backdrop.
+        VScrim(onTap: widget.onClose, blur: false), // Settings stays visible behind, softened
         Center(
           child: Padding(
             padding: const EdgeInsets.only(bottom: 70),
             // v8.7: a pane opened from Settings never exceeds Settings
             // (the largest overlay): scaled as one unit to fit inside it.
             child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: SettingsDrawer.panel.width * 0.92, maxHeight: SettingsDrawer.panel.height * 0.92),
+              constraints: BoxConstraints(maxWidth: w, maxHeight: MediaQuery.sizeOf(context).height * 0.7),
               child: FittedBox(
                 fit: BoxFit.scaleDown,
                 child: SizedBox(
@@ -113,7 +115,7 @@ class _UpgradePlansState extends State<UpgradePlans> {
   Widget build(BuildContext context) {
     return _GreySheet(
       title: 'Manage Subscription',
-      leading: VCircleButton(icon: Icons.chevron_left_rounded, size: 44, tooltip: 'Back', onTap: widget.onBack),
+      leading: VCloseButton(onTap: widget.onBack),
       children: [
         for (final t in ModelTier.values) ...[
           VPress(
@@ -179,7 +181,7 @@ class _GreySheet extends StatelessWidget {
         // stayed legible straight through it and the two layers read as one
         // smear. A sheet is a layer: it has to occlude. Dimmed glass is still
         // there at the rim, the body is not see-through.
-        fill: const Color(0xF012141A),
+        fill: VFrost.tint, // v9.1.4 (playtest #17): same glass as Settings
         padding: const EdgeInsets.fromLTRB(VSpace.md, VSpace.sm + 2, VSpace.md, VSpace.md),
         child: ConstrainedBox(
           constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.66),

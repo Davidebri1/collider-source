@@ -141,7 +141,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
     final frac = _scrub ?? (dur.inMilliseconds > 0 ? pos.inMilliseconds / dur.inMilliseconds : 0.0);
     final shown = _scrub != null ? Duration(milliseconds: (dur.inMilliseconds * _scrub!).round()) : pos;
     final aspect = ready && c.value.aspectRatio > 0 ? c.value.aspectRatio : 16 / 9;
-    final close = VCircleButton(icon: Icons.chevron_left_rounded, size: 32, floating: true, tooltip: 'Close', onTap: () => Navigator.of(context).pop());
+    final close = VCircleButton(icon: Icons.close_rounded, size: 32, floating: true, tooltip: 'Close', onTap: () => Navigator.of(context).pop());
 
     final Widget picture = _failed
         ? const Center(child: Icon(Icons.videocam_off_outlined, size: 40, color: VColors.textTertiary))

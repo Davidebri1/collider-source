@@ -20,6 +20,7 @@ import 'premium_market_ambient.dart';
 import 'theme_living_media.dart';
 import 'live_cover_video.dart';
 import 'theme_pack_store.dart';
+import '../wallpaper/widgets/windowless_theme_scroller.dart' show EdgeFadeHorizontal;
 
 /// Premium Theme Market: line-by-line port of the Builder.io export
 /// (briefs/figma-premium-theme-market/builder-export/src/app):
@@ -218,13 +219,53 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
 
   // v8.7 side nav: categories + a search button (popup search with DOF).
   // Categories = the bucket's top-level folders (theme.collection).
+  static const _kFormatTags = {'mp4', 'webm', 'mov', 'jpg', 'jpeg', 'png', 'gif', '4k', '1080p', '720p', 'hd', 'live wallpaper', 'video', 'image'};
+  static String _plain(String c) => c.isEmpty ? c : c.split(RegExp(r'[\s_-]+')).map((w) => w.isEmpty ? w : w[0].toUpperCase() + w.substring(1)).join(' ');
+
+  /// v9.1.4 (playtest #9/#11/#15): one crisp row above the covers (search,
+  /// plain category names) and a 44 pt close. Nothing overlaps the covers.
+  Widget _topBar(double w) {
+    final cats = _categories;
+    Widget chip(Widget child, bool on, VoidCallback tap) => GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: tap,
+          child: Container(
+            height: 36,
+            margin: const EdgeInsets.only(right: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: on ? const Color(0xE6FFFFFF) : VFrost.tint, borderRadius: BorderRadius.circular(18)),
+            child: DefaultTextStyle.merge(
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: on ? const Color(0xFF111111) : Colors.white),
+              child: IconTheme.merge(data: IconThemeData(size: 18, color: on ? const Color(0xFF111111) : Colors.white), child: child),
+            ),
+          ),
+        );
+    return SizedBox(
+      height: 44,
+      child: Row(children: [
+        Expanded(
+          child: EdgeFadeHorizontal(
+            child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.only(left: 8), children: [
+              chip(const Icon(Icons.search_rounded), _searchOpen || _searchQuery.isNotEmpty, () => _openSearch(true)),
+              for (final c in cats) chip(Text(_plain(c)), c == _category, () => _setCategory(c)),
+            ]),
+          ),
+        ),
+        VCloseButton(onTap: widget.onClose),
+        const SizedBox(width: 4),
+      ]),
+    );
+  }
+
   List<String> get _categories => [
         'All',
         // v8.7: the ghost menu filters by tag (most used first).
         ...(() {
           final n = <String, int>{};
           for (final t in [...WallpaperCatalog.premiumThemes, ...WallpaperCatalog.freeThemes]) {
-            for (final g in t.tags) {
+            // v9.1.4 (playtest #15): file formats aren't categories.
+            for (final g in t.tags.where((g) => !_kFormatTags.contains(g.toLowerCase()))) {
               n[g] = (n[g] ?? 0) + 1;
             }
           }
@@ -602,7 +643,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
               ],
 
               // v8.7 side nav (categories + search), left edge.
-              Positioned(left: 8, top: mainTop, child: _sideNav()),
+              Positioned(left: 0, right: 0, top: MediaQuery.paddingOf(context).top + 8, child: _topBar(w)),
 
               // Search popup (was the always-on SearchBar): DOF blur behind.
               if (_searchOpen) ...[
@@ -642,7 +683,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
 
   // ---------------- Label form (App.tsx) -----------------------------------
   String _displayName(WallpaperTheme t) =>
-      t.name.replaceAll(RegExp(r'\s*4K$'), '').trim();
+      displayTitle(t.name.replaceAll(RegExp(r'\s*4K$'), '').trim(), 'Untitled pack'); // v9.1.4 (playtest #10)
 
   // App.tsx:80 label form. h2 = wallpaper name; under it the theme's real
   // songs from the runtime catalog as a vertical carousel (SongWheel, v8.2,
@@ -665,7 +706,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
             SizedBox(
               height: 28,
               child: Text(
-                '${t.isLive ? '\u25B6\uFE0E ' : ''}${_displayName(t)}',
+                _displayName(t),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
@@ -1438,8 +1479,7 @@ class _CoverCard extends StatelessWidget {
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(_kRadius),
-                  border: Border.all(
-                      color: const Color.fromRGBO(255, 255, 255, 0.3), width: 1),
+
                 ),
               ),
             ),

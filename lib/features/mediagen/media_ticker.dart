@@ -39,7 +39,7 @@ class MediaTicker extends StatefulWidget {
 class _MediaTickerState extends State<MediaTicker> {
   int _i = 0;
 
-  String _hm(DateTime t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+  String _hm(DateTime t) => '${(t.hour % 12 == 0 ? 12 : t.hour % 12)}:${t.minute.toString().padLeft(2, '0')} ${t.hour < 12 ? 'AM' : 'PM'}';
 
   Future<void> _save(MediaGeneration g) async {
     final u = g.url;
@@ -111,14 +111,6 @@ class _MediaTickerState extends State<MediaTicker> {
                 ),
               ),
             ),
-          ]),
-        ),
-        // Pager handle (Figma: dot + bar).
-        Center(
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Container(width: 6, height: 6, decoration: const BoxDecoration(color: Colors.white54, shape: BoxShape.circle)),
-            const SizedBox(width: 8),
-            Container(width: 56, height: 5, decoration: BoxDecoration(color: Colors.white54, borderRadius: BorderRadius.circular(3))),
           ]),
         ),
         const SizedBox(height: VSpace.sm),

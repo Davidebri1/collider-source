@@ -6,6 +6,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import '../media/theme_catalog.dart';
+import '../../models/theme_def.dart' show displayTitle;
 // Audio: HTMLAudioElement on web, just_audio on iOS / Android (v8.3, D25).
 import 'audio_engine_native.dart' if (dart.library.js_interop) 'audio_engine_web.dart';
 
@@ -48,10 +49,10 @@ class MusicPlayer extends ChangeNotifier {
     final out = <MusicTrack>[];
     for (final s in t.tracks) {
       if (s.title.trim().isEmpty) continue;
-      final title = s.title.trim();
+      var sub = displayTitle(_clean(t.name), _clean(t.name));
+      final title = displayTitle(s.title.trim(), sub);
       // A pack imported from Drive can carry a track title identical to its
       // own theme name; printing it twice reads as a rendering bug.
-      var sub = _clean(t.name);
       if (sub.toLowerCase() == title.toLowerCase()) sub = '';
       // v9.1.1: a live (video) theme has no still; use the song's matched
       // wallpaper still instead so no row is a blank tile.
@@ -84,7 +85,7 @@ class MusicPlayer extends ChangeNotifier {
     final seen = <String>{};
     for (final a in [...ThemeCatalog.instance.r2Songs, ...ThemeCatalog.instance.ambientTracks]) {
       if (a.title.trim().isEmpty) continue;
-      final m = MusicTrack(a.title.trim(), a.artUrl, a.audioUrl);
+      final m = MusicTrack(displayTitle(a.title.trim(), 'Ambient'), a.artUrl, a.audioUrl);
       if (!inPacks.contains(m.key) && seen.add(m.key)) out.add(m);
     }
     return out;

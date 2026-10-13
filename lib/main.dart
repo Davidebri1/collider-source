@@ -170,7 +170,9 @@ class ColliderApp extends StatelessWidget {
       scrollBehavior: const _MouseDraggableScrollBehavior(),
       theme: ThemeData.dark(useMaterial3: true).copyWith(
         scaffoldBackgroundColor: const Color(0xFF07080B),
-        textTheme: GoogleFonts.instrumentSansTextTheme(ThemeData.dark().textTheme),
+        // v9.1.4 (playtest #15): every default text style is Google Sans Flex.
+        textTheme: ThemeData.dark().textTheme.apply(fontFamily: 'GoogleSansFlex'),
+        primaryTextTheme: ThemeData.dark().primaryTextTheme.apply(fontFamily: 'GoogleSansFlex'),
       ),
       // Remote theme posters resolve through the same bundle as local assets.
       builder: (context, child) => DefaultAssetBundle(
@@ -344,8 +346,17 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     });
   }
 
+  bool _onKey(KeyEvent e) {
+    if (e is KeyDownEvent && e.logicalKey == LogicalKeyboardKey.escape) {
+      _escape();
+      return true;
+    }
+    return false;
+  }
+
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onKey);
     ThemeCatalog.instance.removeListener(_onCatalogChanged);
     super.dispose();
   }
@@ -354,16 +365,16 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   void initState() {
     super.initState();
     installBackGuard(_escape);
+    // v9.1.4: Escape works whatever holds focus (or when nothing does).
+    HardwareKeyboard.instance.addHandler(_onKey);
     if (Uri.base.queryParameters['seed'] == '1') _seedSamples();
     ThemeCatalog.instance.addListener(_onCatalogChanged);
     KeyboardDof.install();
     if (Uri.base.queryParameters['drawer'] == 'premium') {
       _activeDrawer = 'premium';
-      // Seed Plane 0 to a live premium loop before CoverFlow preview callback
-      _currentTheme = WallpaperCatalog.premiumThemes.isNotEmpty
-          ? WallpaperCatalog.premiumThemes.first
-          : WallpaperCatalog.defaultTheme;
+      // v9.1.4 (playtest #2): keep the home wallpaper; the store only previews.
       _savedThemeBeforePreview = _currentTheme;
+      _prevDrawer = 'premium';
     } else if (Uri.base.queryParameters['drawer'] != null) {
       _activeDrawer = Uri.base.queryParameters['drawer'];
     }
@@ -612,6 +623,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         _zoomedMessage = null;
         _zoomedModelDef = null;
         _localHistoryModel = null;
+      } else if (_expandedModelIds.isNotEmpty && _activeDrawer == null) {
+        _expandedModelIds.clear(); // v9.1.4 (playtest #6): Esc closes the opened answer
       } else if (_activeDrawer != null || _isMobileSideNavOpen) {
         _closeAllPanes();
       } else if (_isComposerSummoned) {
@@ -637,6 +650,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   void _proceedSwitchSurface(String? targetDrawer) {
     setState(() {
       _closeAllPanes();
+      _settingsOpen = false; // peers replace each other
       _activeDrawer = targetDrawer;
       _isComposerSummoned = (targetDrawer == null);
       if (targetDrawer == 'themes') {
@@ -649,10 +663,35 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     _requestSwitchSurface(drawer);
   }
 
+  // ===== v9.1.4 layer manager =====
+  // Three kinds of layer: the persistent conversation (ticker, answers, the
+  // open answer, the draft) is never cleared by navigation; peers (Settings,
+  // Apps, every Apps/side-nav destination) replace each other through a
+  // cross-fade (MaterializeSwitch / Materialize); children (Account from
+  // Settings, viewers from Files, the zoomed answer) open in front of their
+  // parent, smaller, and leave the parent in place. See briefs/qa/layer-audit.md.
+  void _openPeer(String id) {
+    setState(() {
+      final wasOpen = id == 'settings' ? _settingsOpen : _activeDrawer == id;
+      _browserOpen = false;
+      _zoomedMessage = null;
+      _zoomedModelDef = null;
+      _localHistoryModel = null;
+      _isMobileSideNavOpen = false;
+      _settingsOpen = false;
+      _activeDrawer = null;
+      if (wasOpen) return; // tapping the open peer's button closes it
+      if (id == 'settings') {
+        _settingsOpen = true;
+      } else {
+        _activeDrawer = id;
+      }
+    });
+  }
+
   void _openHomeComposer() {
     setState(() {
       _closeAllPanes();
-      _expandedModelIds.clear();
       _isComposerSummoned = true;
     });
   }
@@ -660,7 +699,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   void _toggleComposer() {
     setState(() {
       _closeAllPanes();
-      _expandedModelIds.clear();
       _isComposerSummoned = !_isComposerSummoned;
     });
   }
@@ -691,7 +729,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         item: item,
         pane: pane,
         elevation: elevation,
-        isExpanded: _expandedModelIds.contains(item.modelDef.id),
+        // v9.1.4 (playtest #6): the answer shows once, in the pane.
+        isExpanded: pane && _expandedModelIds.contains(item.modelDef.id),
         onToggleExpand: () => _onTogglePill(item.modelDef.id),
         onSendInlineReply: (reply) => _onSendInlineReply(item.modelDef.id, reply),
         onOpenBrowser: () => _openBrowserForTab(_browserTabs.length > 1 ? _browserTabs[1].id : 'user_default'),
@@ -1161,7 +1200,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     return AnimatedOpacity(
       duration: VMotion.base,
       curve: Curves.easeOutCubic,
-      opacity: _isComposerSummoned ? 0.34 : 1,
+      opacity: _isComposerSummoned ? 0.9 : 1,
       child: IgnorePointer(ignoring: _isComposerSummoned, child: window),
     );
   }
@@ -1348,7 +1387,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     });
   }
 
-  static String _clock(DateTime t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+  static String _clock(DateTime t) => '${(t.hour % 12 == 0 ? 12 : t.hour % 12)}:${t.minute.toString().padLeft(2, '0')} ${t.hour < 12 ? 'AM' : 'PM'}';
 
   Future<void> _onSendDirect(String prompt, List<String> models) async {
     final now = DateTime.now();
@@ -1661,8 +1700,22 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     );
   }
 
+  // v9.1.4 (playtest #1): browsing the store or gallery never changes the
+  // wallpaper. Entering saves it; leaving without Set puts it back (Set
+  // updates the saved theme, so restoring is then a no-op).
+  String? _prevDrawer;
+  static const _previewDrawers = {'premium', 'themes'};
+  void _guardPreview() {
+    final was = _previewDrawers.contains(_prevDrawer);
+    final now = _previewDrawers.contains(_activeDrawer);
+    if (!was && now) _savedThemeBeforePreview = _currentTheme;
+    if (was && !now && _currentTheme.id != _savedThemeBeforePreview.id) _currentTheme = _savedThemeBeforePreview;
+    _prevDrawer = _activeDrawer;
+  }
+
   @override
   Widget build(BuildContext context) {
+    _guardPreview();
     // Max 9 active model rows filtered by active category with fallback
     var categoryPills = _tickerItems
         .where((it) => it.modelDef.categories.contains(_activeCategory) && _selectedModelIds.contains(it.modelDef.id))
@@ -1679,9 +1732,16 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     final isMobile = MediaQuery.of(context).size.width < 768;
 
     return CallbackShortcuts(
-      bindings: {const SingleActivator(LogicalKeyboardKey.escape): _escape},
+      bindings: const {},
       child: Focus(autofocus: true, child: Scaffold(
-      body: Stack(
+      // v9.1.4: swipe down dismisses the top sheet (mobile convention);
+      // scrolling lists inside still win their own drags.
+      body: GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onVerticalDragEnd: (d) {
+        if (_anythingOpen && !_browserOpen && _activeDrawer != 'premium' && (d.primaryVelocity ?? 0) > 600) _escape();
+      },
+      child: Stack(
         fit: StackFit.expand,
         children: [
           // ================= PLANE 0: BACKGROUND WALLPAPER =================
@@ -1708,13 +1768,13 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // Base ambient dim. Overlays and work surfaces bring their own VScrim
           // (kit overlay 0.35 + medium blur) so the wallpaper stays visible;
           // the theme gallery keeps a light tint.
-          if (_activeDrawer == 'themes')
-            Positioned.fill(child: BackdropFilter(filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24), child: const SizedBox.expand())),
+          // v9.1.4 (playtest #14): dissolves out instead of a hard cut.
+            Positioned.fill(child: MaterializeSwitch(show: _activeDrawer == 'themes', builder: (_) => VScrim(onTap: () => setState(_closeAllPanes)))),
           // v9.1.3 depth rule: a work surface over the main view blurs (takes
           // away the background's capability) and dims (cinematic focus) what
           // is behind it. Nothing sits flat over the main view.
-          if (_browserOpen || const {'files', 'smartgen', 'history', 'music', 'apps', 'consensus', 'market'}.contains(_activeDrawer))
-            Positioned.fill(child: IgnorePointer(child: BackdropFilter(filter: ui.ImageFilter.blur(sigmaX: 16, sigmaY: 16), child: const ColoredBox(color: Color(0x47000000))))),
+          // v9.1.4 (playtest #14): dissolves out instead of a hard cut.
+            Positioned.fill(child: MaterializeSwitch(show: _browserOpen || const {'files', 'smartgen', 'history', 'music', 'apps', 'consensus', 'market'}.contains(_activeDrawer), builder: (_) => VScrim(onTap: () => setState(() { _browserOpen = false; _closeAllPanes(); })))),
 
           // Depth of field for the summoned composer: the world falls out of
           // focus behind the writing surface. Previously summoning only
@@ -1774,6 +1834,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // Nothing here is measured from the rail, the composer or the open card
           // any more, so navigating cannot snap the layout into a different
           // full-width arrangement. Nothing touches an edge.
+          // v9.1.4 (playtest #6): a tap outside the opened answer closes it.
+          if (_expandedModelIds.isNotEmpty && _activeDrawer == null && !_settingsOpen && !_browserOpen)
+            Positioned.fill(child: VScrim(onTap: () => setState(_expandedModelIds.clear))),
           if (!_settingsOpen && !_browserOpen && !(isMobile && _isMobileSideNavOpen) && !const {'premium', 'themes', 'apps', 'smartgen', 'market', 'files', 'consensus', 'history', 'music', 'account'}.contains(_activeDrawer))
           Positioned.fill(
             bottom: 12,
@@ -1803,7 +1866,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                       // Bug 10: this one dims when the composer is summoned.
                       ValueListenableBuilder<bool>(
                         valueListenable: KeyboardDof.active,
-                        builder: (_, on, child) => ImageFiltered(enabled: on, imageFilter: ui.ImageFilter.blur(sigmaX: 4, sigmaY: 4), child: child!),
+                        builder: (_, on, child) => ImageFiltered(enabled: on, imageFilter: ui.ImageFilter.blur(sigmaX: 1.2, sigmaY: 1.2), child: child!),
                         child: _buildTickerWindow(),
                       ),
                       const Spacer(),
@@ -1827,9 +1890,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
           // ================= PLANE 2: APPS POPUP PANE =================
           // Middle neutral area, no visible canvas, blurred background, clickaway + close icon
-          if (_activeDrawer == 'apps')
-            Positioned.fill(
-              child: AppsPopupPane(
+          // v9.1.4 (playtest #14): dissolves out instead of a hard cut.
+            Positioned.fill(child: MaterializeSwitch(show: _activeDrawer == 'apps', builder: (_) => AppsPopupPane(
                 onClose: () => setState(() => _activeDrawer = null),
                 onOpenSmartGen: () => _requestSwitchSurface('smartgen'),
                 onOpenDiscoverMarket: () => _requestSwitchSurface('market'),
@@ -1839,27 +1901,23 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                 onOpenMusicPlayer: () => _requestSwitchSurface('music'),
                 onOpenBrowser: () => _openBrowserForTab('user_default'),
                 onOpenSettings: () => setState(() { _activeDrawer = null; _settingsOpen = true; }),
-              ),
-            ),
+              ))),
 
           // ================= PLANE 3: LOCAL MODEL HISTORY PANE =================
           // Centered popup pane, searches body & title, relative timestamps
-          if (_localHistoryModel != null)
-            Positioned.fill(
-              child: LocalHistoryPane(
+          // v9.1.4 (playtest #14): dissolves out instead of a hard cut.
+            Positioned.fill(child: MaterializeSwitch(show: _localHistoryModel != null, builder: (_) => LocalHistoryPane(
                 modelDef: _localHistoryModel!,
                 // Real history only (D30): no invented fallback session.
                 sessions: _localHistorySessions[_localHistoryModel!.id] ?? const [],
                 onSelectSession: (sess) => _loadAndExpandSession(sess),
                 onClose: () => setState(() => _localHistoryModel = null),
-              ),
-            ),
+              ))),
 
           // ================= PLANE 4: MESSAGE ZOOM OVERLAY =================
           // Dimmed/blurred backdrop, no visible window, faded edges, bottom actions
-          if (_zoomedMessage != null && _zoomedModelDef != null)
-            Positioned.fill(
-              child: MessageZoomOverlay(
+          // v9.1.4 (playtest #14): dissolves out instead of a hard cut.
+            Positioned.fill(child: MaterializeSwitch(show: _zoomedMessage != null && _zoomedModelDef != null, builder: (_) => MessageZoomOverlay(
                 message: _zoomedMessage!,
                 modelName: _zoomedModelDef!.label,
                 providerColor: _zoomedModelDef!.providerColor,
@@ -1867,22 +1925,18 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                 onBranchIsolated: () {
                   _onSendInlineReply(_zoomedModelDef!.id, "Branched branch from zoomed message.");
                 },
-              ),
-            ),
+              ))),
 
           // ================= PLANE 5: DRAWERS & DURABLE WORK SURFACES =================
-          if (_activeDrawer == 'history')
-            Positioned.fill(
-              child: HistoryDrawer(
+          // v9.1.4 (playtest #14): dissolves out instead of a hard cut.
+            Positioned.fill(child: MaterializeSwitch(show: _activeDrawer == 'history', builder: (_) => HistoryDrawer(
                 sessions: _globalHistorySessions,
                 onSelectSession: (sess) => _loadAndExpandSession(sess),
                 onClose: () => setState(() => _activeDrawer = null),
-              ),
-            ),
+              ))),
 
-          if (_activeDrawer == 'model_ladder')
-            Positioned.fill(
-              child: ModelLadderDrawer(
+          // v9.1.4 (playtest #14): dissolves out instead of a hard cut.
+            Positioned.fill(child: MaterializeSwitch(show: _activeDrawer == 'model_ladder', builder: (_) => ModelLadderDrawer(
                 activeCategory: _activeCategory,
                 selectedModelIds: _selectedModelIds,
                 onSelectCategory: (cat) {
@@ -1904,12 +1958,10 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                   });
                 },
                 onClose: () => setState(() => _activeDrawer = null),
-              ),
-            ),
+              ))),
 
-          if (_activeDrawer == 'themes')
-            Positioned.fill(
-              child: WindowlessThemeScroller(
+          // v9.1.4 (playtest #14): dissolves out instead of a hard cut.
+            Positioned.fill(child: MaterializeSwitch(show: _activeDrawer == 'themes', builder: (_) => WindowlessThemeScroller(
                 currentTheme: _currentTheme,
                 // v8.3.1: browsing never changes the app background (only Set does).
                 onLivePreview: (_) {},
@@ -1923,18 +1975,18 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                   _activeDrawer = null;
                 }),
                 onUpgradeTier: () => setState(() => _activeDrawer = 'premium'),
-              ),
-            ),
+              ))),
 
-          if (_activeDrawer == 'premium')
-            Positioned.fill(
-              // Swipe down returns to the free Theme Gallery.
-              child: GestureDetector(
+          // v9.1.4 (playtest #14): dissolves out instead of a hard cut.
+            Positioned.fill(child: MaterializeSwitch(show: _activeDrawer == 'premium', builder: (_) => GestureDetector(
                 behavior: HitTestBehavior.translucent,
                 onVerticalDragEnd: (d) {
                   if ((d.primaryVelocity ?? 0) > 300) setState(() => _activeDrawer = 'themes');
                 },
                 child: PremiumThemeMarketView(
+                // v9.1.4 (playtest #2): rebuild once the catalog arrives, so a
+                // direct link shows real covers.
+                key: ValueKey('market-${WallpaperCatalog.premiumThemes.length}'),
                 currentTheme: _currentTheme,
                 onApplyTheme: (theme) => setState(() {
                   _currentTheme = theme;
@@ -1944,28 +1996,26 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                 onPreviewTheme: (theme) {
                   // Only the focused theme streams video; warm neighbour posters.
                   ThemeMediaPrefetch.precacheNeighbors(context, WallpaperCatalog.premiumThemes, theme);
+                  // v9.1.4: a preview that lands while the store dissolves out
+                  // must not overwrite the restored wallpaper.
+                  if (_activeDrawer != 'premium') return;
                   setState(() {
                     _currentTheme = theme;
                   });
                 },
                 onClose: () => setState(() => _activeDrawer = null),
               ),
-              ),
-            ),
+              ))),
 
           // No songs in the catalog: no Music drawer (v8.3, D46).
-          if (_activeDrawer == 'music' && MusicPlayer.library.isNotEmpty)
-            Positioned.fill(
-              child: MusicCollectionDrawer(
+          // v9.1.4 (playtest #14): dissolves out instead of a hard cut.
+            Positioned.fill(child: MaterializeSwitch(show: _activeDrawer == 'music' && MusicPlayer.library.isNotEmpty, builder: (_) => MusicCollectionDrawer(
                 onClose: () => setState(() => _activeDrawer = null),
-              ),
-            ),
+              ))),
 
 
-          if (_activeDrawer == 'account' && !_settingsOpen)
-            Positioned.fill(
-              child: AccountSheet(tier: ModelTier.free, onClose: () => setState(() => _activeDrawer = null)),
-            ),
+          // v9.1.4 (playtest #14): dissolves out instead of a hard cut.
+            Positioned.fill(child: MaterializeSwitch(show: _activeDrawer == 'account' && !_settingsOpen, builder: (_) => AccountSheet(tier: ModelTier.free, onClose: () => setState(() => _activeDrawer = null)))),
 
           // Durable work surfaces sit over one shared scrim (kit overlay + medium blur).
           if (_activeDrawer == 'smartgen' || _activeDrawer == 'market' || _activeDrawer == 'files')
@@ -2045,10 +2095,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // ================= PLANE 3: CONTEXTUAL SIDE NAV =================
           if (isMobile) ...[
             // Mobile backdrop when side nav is open
-            if (_isMobileSideNavOpen && _railVisible)
-              Positioned.fill(
-                child: VScrim(onTap: () => setState(() => _isMobileSideNavOpen = false)),
-              ),
+            // v9.1.4 (playtest #14): dissolves out instead of a hard cut.
+              Positioned.fill(child: MaterializeSwitch(show: _isMobileSideNavOpen && _railVisible, builder: (_) => VScrim(onTap: () => setState(() => _isMobileSideNavOpen = false)))),
 
             // REQ-21: the rail ornament is present on the resting canvas and every
             // durable work surface; focused overlays own the stage while open.
@@ -2169,14 +2217,8 @@ AnimatedScale(
                       _openHomeComposer();
                     }
                   },
-                  onApps: () {
-                    _closeBrowser();
-                    _openDrawer('apps');
-                  },
-                  onSettings: () {
-                    _closeBrowser();
-                    setState(() => _settingsOpen = !_settingsOpen);
-                  },
+                  onApps: () => _openPeer('apps'),
+                  onSettings: () => _openPeer('settings'),
                   activeDrawer: _activeDrawer,
                 )),
               ),
@@ -2193,6 +2235,7 @@ AnimatedScale(
               ),
             ),
         ],
+      ),
       ),
     )));
   }

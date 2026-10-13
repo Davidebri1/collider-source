@@ -85,12 +85,12 @@ class VScrim extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dim = Container(color: VOverlay.scrim);
+    final dim = Container(color: VDepth.dim);
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: blur
-          ? BackdropFilter(filter: ImageFilter.blur(sigmaX: VBlur.medium, sigmaY: VBlur.medium), child: dim)
+          ? BackdropFilter(filter: ImageFilter.blur(sigmaX: VDepth.blur, sigmaY: VDepth.blur), child: dim)
           : dim,
     );
   }
@@ -240,8 +240,75 @@ class VCircleButton extends StatelessWidget {
             ),
           )
         : core;
-    return Semantics(button: true, label: tooltip, child: VPress(onTap: onTap, tooltip: tooltip, child: body));
+    return Semantics(button: true, label: tooltip, child: VPress(onTap: onTap, tooltip: tooltip, child: icon == Icons.close_rounded && size < 44 ? SizedBox(width: 44, height: 44, child: Center(child: body)) : body));
   }
+}
+
+/// v9.1.4 (playtest #15): category picker as one crisp horizontal row of
+/// plain names (format tags such as "mp4" are not categories).
+class VCategoryRow extends StatelessWidget {
+  final List<String> items;
+  final String selected;
+  final ValueChanged<String> onSelected;
+  const VCategoryRow({super.key, required this.items, required this.selected, required this.onSelected});
+  static const formatTags = {'mp4', 'webm', 'mov', 'jpg', 'jpeg', 'png', 'gif', '4k', '1080p', '720p', 'hd', 'live wallpaper', 'video', 'image'};
+  static String plain(String c) => c.split(RegExp(r'[\s_-]+')).map((w) => w.isEmpty ? w : w[0].toUpperCase() + w.substring(1)).join(' ');
+  @override
+  Widget build(BuildContext context) {
+    final shown = items.where((c) => !formatTags.contains(c.toLowerCase())).toList();
+    return SizedBox(
+      height: 44,
+      child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 8), children: [
+        for (final c in shown)
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => onSelected(c),
+            child: Container(
+              height: 36,
+              margin: const EdgeInsets.only(right: 8, top: 4, bottom: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(color: c == selected ? const Color(0xE6FFFFFF) : const Color(0x7A18181E), borderRadius: BorderRadius.circular(18)),
+              child: Text(plain(c), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: c == selected ? const Color(0xFF111111) : Colors.white)),
+            ),
+          ),
+      ]),
+    );
+  }
+}
+
+/// v9.1.4 (playtest #9): the one close control for every temporary view:
+/// a 44 pt target with a frosted 36 pt circle, same corner everywhere.
+class VCloseButton extends StatelessWidget {
+  final VoidCallback? onTap;
+  const VCloseButton({super.key, this.onTap});
+  @override
+  Widget build(BuildContext context) => Semantics(
+        button: true,
+        label: 'Close',
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: SizedBox(
+            width: 44,
+            height: 44,
+            child: Center(
+              child: ClipOval(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    color: const Color(0x7A18181E),
+                    alignment: Alignment.center,
+                    child: const Icon(Icons.close_rounded, size: 20, color: Colors.white),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
 }
 
 enum VButtonVariant { primary, secondary, ghost, destructive }
@@ -728,16 +795,8 @@ class VToggle extends StatelessWidget {
 class VWindowBar extends StatelessWidget {
   const VWindowBar({super.key});
   @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(width: 7, height: 7, decoration: const BoxDecoration(shape: BoxShape.circle, color: VColors.textTertiary)),
-        const SizedBox(width: VSpace.xs),
-        Container(width: 64, height: 5, decoration: BoxDecoration(color: VColors.textSecondary, borderRadius: BorderRadius.circular(VRadius.full))),
-      ],
-    );
-  }
+  // v9.1.4 (playtest #13): no dot-and-bar under windows on a phone.
+  Widget build(BuildContext context) => const SizedBox.shrink();
 }
 
 /// A bounded glass window with a visionOS header: leading circle, title, trailing circles.
@@ -1210,9 +1269,9 @@ class _GhostMenuState extends State<GhostMenu> {
                       behavior: HitTestBehavior.opaque,
                       onTap: () => _c.animateToItem(i, duration: VMotion.base, curve: Curves.easeOutCubic),
                       child: Opacity(
-                        opacity: (1 - d * 0.32).clamp(0.08, 1.0),
+                        opacity: (1 - d * 0.18).clamp(0.6, 1.0), // v9.1.4 (playtest #15): crisp, never smeared
                         child: ImageFiltered(
-                          enabled: sigma > 0.05,
+                          enabled: false,
                           imageFilter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
                           child: Center(
                             child: Row(mainAxisSize: MainAxisSize.min, children: [

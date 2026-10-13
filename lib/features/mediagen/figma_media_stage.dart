@@ -23,7 +23,7 @@ class Row13 {
   static const rail = Rect.fromLTWH(540, 624, 76, 220);
 }
 
-String _hm(DateTime t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+String _hm(DateTime t) => '${(t.hour % 12 == 0 ? 12 : t.hour % 12)}:${t.minute.toString().padLeft(2, '0')} ${t.hour < 12 ? 'AM' : 'PM'}';
 
 class MediaStageContent extends StatefulWidget {
   const MediaStageContent({super.key, required this.items, required this.onRemix, required this.onNotice, required this.onOptions});

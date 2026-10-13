@@ -1,3 +1,4 @@
+import '../../../core/theme/edge_fade.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -141,39 +142,11 @@ class _FilesScreenState extends State<FilesScreen> {
             Positioned(left: 390.4, top: 0, width: 946, height: 740, child: _main(title, files, cat)),
             // Segmented ornament 3231_frame at (518.8, 721), 394.1 x 60.2.
             Positioned(left: 518.8, top: 721, width: 394.1, height: 60.2, child: _segments()),
-            // Window controls 2686_frame at (625.4, 821.2): dot (close) + bar.
-            Positioned(
-              left: 625.4,
-              top: 815,
-              width: 181,
-              height: 26,
-              child: Row(children: [
-                Semantics(
-                  button: true,
-                  label: 'Close',
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: widget.onClose,
-                    child: Container(
-                      width: 26,
-                      height: 26,
-                      alignment: Alignment.center,
-                      child: Container(width: 14, height: 14, decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0x99FFFFFF))),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 26),
-                GestureDetector(
-                  onVerticalDragEnd: (d) {
-                    if ((d.primaryVelocity ?? 0) > 200) widget.onClose();
-                  },
-                  child: Container(width: 143, height: 12, decoration: BoxDecoration(color: const Color(0x99FFFFFF), borderRadius: BorderRadius.circular(6))),
-                ),
-              ]),
-            ),
+            // v9.1.4 (playtest #9/#13): the dot + bar are gone; one 44 pt ✕.
           ],
         )),
           if (_sel.active) Positioned(left: 0, right: 0, bottom: 40, child: Center(child: _selBar(files))),
+          Positioned(top: MediaQuery.paddingOf(context).top + 8, right: 8, child: VCloseButton(onTap: widget.onClose)),
         ]);
       },
     );
@@ -364,7 +337,7 @@ class _FilesScreenState extends State<FilesScreen> {
           top: 75,
           width: 866,
           bottom: 0,
-          child: CustomScrollView(
+          child: EdgeFade(fadeHeight: 24, child: CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
               // v8.6: Images / Videos use the Photos browser (Figma 8:1352,
@@ -399,7 +372,7 @@ class _FilesScreenState extends State<FilesScreen> {
                 ),
               const SliverToBoxAdapter(child: SizedBox(height: 60)),
             ],
-          ),
+          )),
         ),
       ]),
     );
@@ -604,13 +577,13 @@ class _FileViewer extends StatelessWidget {
       var text = utf8.decode(bytes, allowMalformed: true);
       final cut = text.length > _maxChars;
       if (cut) text = text.substring(0, _maxChars);
-      content = SingleChildScrollView(
+      content = EdgeFade(fadeHeight: 24, child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(VSpace.md, VSpace.xs, VSpace.md, VSpace.md),
         child: SelectableText(
           cut ? '$text\n…' : text,
           style: VType.callout(weight: FontWeight.w400).copyWith(fontFamily: 'monospace', fontSize: 13, height: 1.45),
         ),
-      );
+      ));
     }
     return SafeArea(
       child: Center(

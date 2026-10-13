@@ -119,23 +119,15 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
               ),
               // v8.7 floating ghost category menu.
                 Positioned(
-                  left: 4,
-                  top: pad.top + 120,
-                  child: Builder(builder: (_) {
-                    final cats = _categories;
-                    return GhostMenu(
-                      width: 104,
-                      visible: 5,
-                      items: cats,
-                      selected: math.max(0, cats.indexOf(_category)),
-                      onSelected: (i) => setState(() => _category = cats[i]),
-                    );
-                  }),
+                  left: 0,
+                  right: 0,
+                  top: pad.top + 8,
+                  child: VCategoryRow(items: _categories, selected: _category, onSelected: (c) => setState(() => _category = c)),
                 ),
               Positioned(
-                  left: 112,
+                  left: 0,
                   right: 0,
-                  top: pad.top,
+                  top: pad.top + 56,
                   bottom: 84,
                   child: Center(
                     child: Column(
@@ -157,7 +149,7 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                           final widget = (onBack: this.widget.onCancel, onSet: () => this.widget.onConfirmTheme(_previewed));
                           return Row(
               children: [
-                VCircleButton(icon: Icons.chevron_left_rounded, size: 32, floating: true, tooltip: 'Back', onTap: widget.onBack),
+                VCloseButton(onTap: widget.onBack), // v9.1.4: a ✕, not a back arrow
                 const Spacer(),
                 // Expand View is gone: it opened a full-bleed preview, and
                 // nothing in this app goes edge to edge. The two window exits

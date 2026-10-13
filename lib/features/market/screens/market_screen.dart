@@ -170,27 +170,7 @@ class _MarketScreenState extends State<MarketScreen> {
                   ),
                 ),
               ),
-              // The market's own composer (MarketComposer): field and send.
-              Padding(
-                padding: const EdgeInsets.fromLTRB(VSpace.sm, VSpace.xs, VSpace.sm, VSpace.sm),
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(14, 4, 4, 4),
-                  decoration: BoxDecoration(color: VColors.overlayLight, borderRadius: BorderRadius.circular(VRadius.lg), border: Border.all(color: VColors.borderLight, width: 0.5)),
-                  child: Row(children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _ctrl,
-                        cursorColor: VColors.textPrimary,
-                        textInputAction: TextInputAction.send,
-                        style: VType.callout(weight: FontWeight.w400).copyWith(fontSize: VType.md),
-                        decoration: const InputDecoration(border: InputBorder.none, isDense: true),
-                        onSubmitted: (_) => _submit(),
-                      ),
-                    ),
-                    VCircleButton(icon: _busy ? Icons.more_horiz_rounded : Icons.arrow_upward_rounded, size: 36, selected: true, tooltip: 'Send', onTap: _submit),
-                  ]),
-                ),
-              ),
+              // v9.1.4 (playtest #12): no second input; the app has one composer.
             ],
           ),
         ),
@@ -200,25 +180,14 @@ class _MarketScreenState extends State<MarketScreen> {
   }
 
   Widget _hero(_Tile t) {
-    return SizedBox(
-      height: 230,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          _img(t),
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0x59000000), Color(0x00000000), Color(0x8C000000)],
-              ),
-            ),
-          ),
-          Positioned(
-            left: VSpace.md,
-            right: VSpace.md,
-            bottom: VSpace.md,
+    // v9.1.4 (playtest #12): no painted gradient and nothing on the media;
+    // the title and actions sit below the picture.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+          SizedBox(height: 200, child: ClipRRect(borderRadius: BorderRadius.circular(VRadius.sm), child: _img(t))),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(VSpace.md, VSpace.sm, VSpace.md, 0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -233,14 +202,15 @@ class _MarketScreenState extends State<MarketScreen> {
             ),
           ),
         ],
-      ),
     );
   }
 
   void _remix(_Tile t) {
     // MarketScreen.tsx onRemix: the item's prompt goes into the composer.
+    // v9.1.4: no market composer any more, so Remix runs the item's prompt.
     _ctrl.text = t.title;
     setState(() => _open = null);
+    _submit();
   }
 
   /// MediaExploder: the asset full size over a blurred scrim, with Remix.

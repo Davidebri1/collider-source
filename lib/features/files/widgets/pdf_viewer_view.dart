@@ -59,20 +59,15 @@ class _PdfViewerViewState extends State<PdfViewerView> {
             maxHeight: VOverlay.toolMaxHeight(context),
             leading: close,
             actions: [
-              if (pages.length > 1) ...[
-                VCircleButton(
-                  icon: Icons.chevron_left_rounded,
-                  tooltip: 'Previous page',
-                  onTap: index == 0 ? null : () => setState(() => _page = index - 1),
-                ),
-                VCircleButton(
-                  icon: Icons.chevron_right_rounded,
-                  tooltip: 'Next page',
-                  onTap: index >= pages.length - 1 ? null : () => setState(() => _page = index + 1),
-                ),
-              ],
             ],
-            child: doc == null
+            // v9.1.4: pages turn with a horizontal swipe, not arrows.
+            child: GestureDetector(
+              onHorizontalDragEnd: (d) {
+                final v = d.primaryVelocity ?? 0;
+                if (v < -250 && index < pages.length - 1) setState(() => _page = index + 1);
+                if (v > 250 && index > 0) setState(() => _page = index - 1);
+              },
+              child: doc == null
                 ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
                 : pages.isEmpty
                     ? const Center(
@@ -104,6 +99,7 @@ class _PdfViewerViewState extends State<PdfViewerView> {
                           ),
                         ],
                       ),
+            ),
           ),
         ),
       ),

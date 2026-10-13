@@ -65,7 +65,7 @@ class _MaterializeSwitchState extends State<MaterializeSwitch> {
       _mounted = true;
       _last = widget.builder(context);
     } else if (_mounted) {
-      Future.delayed(const Duration(milliseconds: 420), () {
+      Future.delayed(const Duration(milliseconds: 300), () {
         if (mounted && !widget.show) setState(() => _mounted = false);
       });
     }

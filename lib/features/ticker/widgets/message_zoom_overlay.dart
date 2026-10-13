@@ -60,7 +60,7 @@ class MessageZoomOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     final isUser = message.sender == 'user';
     final t = message.timestamp;
-    final time = '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+    final time = '${(t.hour % 12 == 0 ? 12 : t.hour % 12)}:${t.minute.toString().padLeft(2, '0')} ${t.hour < 12 ? 'AM' : 'PM'}';
     final size = MediaQuery.of(context).size;
 
     return Stack(

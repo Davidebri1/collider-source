@@ -22,7 +22,7 @@ class Row15 {
   static const textBox = Rect.fromLTWH(1136, 952, 726, 149);
 }
 
-String _clock(DateTime t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+String _clock(DateTime t) => '${(t.hour % 12 == 0 ? 12 : t.hour % 12)}:${t.minute.toString().padLeft(2, '0')} ${t.hour < 12 ? 'AM' : 'PM'}';
 
 String initials(String label) {
   final parts = label.split(RegExp(r'[\s\-]+')).where((p) => p.isNotEmpty).toList();

@@ -1,3 +1,4 @@
+import '../../../core/theme/edge_fade.dart';
 import 'package:flutter/material.dart';
 import '../../../core/vision/vision_kit.dart';
 import '../models/browser_tab.dart';
@@ -143,10 +144,6 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
             children: [
               VCircleButton(icon: Icons.close_rounded, size: 32, tooltip: 'Close', onTap: widget.onClose),
               const SizedBox(width: VSpace.xs - 2),
-              if ((_back[tab.id] ?? const []).isNotEmpty) ...[
-                VCircleButton(icon: Icons.arrow_back_rounded, size: 32, tooltip: 'Back', onTap: _goBack),
-                const SizedBox(width: VSpace.xs - 2),
-              ],
               Expanded(
                 child: Container(
                   height: 32,
@@ -224,7 +221,7 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
         final cols = c.maxWidth < 420 ? 2 : 3;
         return Padding(
           padding: const EdgeInsets.all(VSpace.sm),
-          child: GridView.builder(
+          child: EdgeFade(fadeHeight: 24, child: GridView.builder(
             physics: const BouncingScrollPhysics(),
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: cols, childAspectRatio: 0.9),
             itemCount: widget.tabs.length,
@@ -242,7 +239,7 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
                 ),
               );
             },
-          ),
+          )),
         );
       },
     );

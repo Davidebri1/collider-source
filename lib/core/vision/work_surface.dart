@@ -43,7 +43,8 @@ class VWorkSurface extends StatelessWidget {
     return SafeArea(
       bottom: false,
       child: Padding(
-        padding: EdgeInsets.fromLTRB(isMobile ? 56 : 0, 40, 0, 0),
+        // v9.1.4 (playtest #12): centred inside the screen margins.
+        padding: EdgeInsets.fromLTRB(isMobile ? VSpace.md : 0, 40, isMobile ? VSpace.md : 0, 0),
         child: Column(
           children: [
             Center(
@@ -55,7 +56,19 @@ class VWorkSurface extends StatelessWidget {
                     radius: VRadius.xl,
                     child: title == null
                         ? Stack(children: [
-                            ClipRRect(borderRadius: BorderRadius.circular(VRadius.xl), child: child),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(VRadius.xl),
+                              // v9.1.4 (playtest #12): the tabs live inside the panel.
+                              child: tabs.isEmpty
+                                  ? child
+                                  : Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                                      Padding(
+                                        padding: const EdgeInsets.fromLTRB(56, VSpace.sm, VSpace.sm, VSpace.xs),
+                                        child: VSegmented(labels: tabs, dense: denseTabs, active: activeTab, onSelect: (i) => onTab?.call(i)),
+                                      ),
+                                      Flexible(child: child),
+                                    ]),
+                            ),
                             Positioned(
                               left: VSpace.sm,
                               top: VSpace.sm,
@@ -89,7 +102,7 @@ class VWorkSurface extends StatelessWidget {
                   ),
                 ),
               ),
-            if (tabs.isNotEmpty) ...[
+            if (tabs.isNotEmpty && title != null) ...[
               const SizedBox(height: VSpace.sm),
               ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: VOverlay.toolWidth(context)),
