@@ -1164,7 +1164,8 @@ class _CoverFlowState extends State<_CoverFlow> {
     final owned = widget.ownedIds.contains(t.id);
     // The centre cover and its two neighbours play their live wallpaper;
     // the rest show the poster until they come near the centre.
-    final live = t.isLive && _rel(i).abs() <= 1;
+    // v9.1: no per-thumbnail motion; only the centred cover plays live.
+    final live = t.isLive && _rel(i).abs() < 0.5;
     return _cards.putIfAbsent(
       '${t.id}|$isCurrent|$owned|$size|$live',
       () => RepaintBoundary(
@@ -1725,18 +1726,14 @@ class _ReflectionState extends State<_Reflection> {
       if (mounted) setState(() {});
     });
     if (img == null) return const SizedBox.shrink();
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(end: widget.opacity),
-      duration: const Duration(milliseconds: 500),
-      curve: _kTwEase,
-      builder: (context, o, _) => RawImage(
-        image: img,
-        width: widget.size,
-        height: widget.size,
-        fit: BoxFit.fill,
-        filterQuality: FilterQuality.none,
-        opacity: AlwaysStoppedAnimation<double>(o),
-      ),
+    // v9.1: no per-thumbnail fade; the reflection follows the scroll directly.
+    return RawImage(
+      image: img,
+      width: widget.size,
+      height: widget.size,
+      fit: BoxFit.fill,
+      filterQuality: FilterQuality.none,
+      opacity: AlwaysStoppedAnimation<double>(widget.opacity),
     );
   }
 }
@@ -2014,7 +2011,7 @@ LinearGradient _cssLinearGradient(
 /// Inter was never bundled, so this helper pulled a second family off the CDN
 /// at runtime and the Theme Gallery / Settings surfaces rendered in a different
 /// face from everything around them. It now uses the one bundled family.
-TextStyle _inter(TextStyle s) => GoogleFonts.inter(textStyle: s);
+TextStyle _inter(TextStyle s) => GoogleFonts.instrumentSans(textStyle: s);
 
 /// CSS drop-shadow(x y blur color): sigma = blur / 2.
 Shadow _cssDropShadow(double x, double y, double blur, Color color) {

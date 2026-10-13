@@ -1138,7 +1138,7 @@ class GlassMenu extends StatelessWidget {
                   r.label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.white.withValues(alpha: op)),
+                  style: GoogleFonts.instrumentSans(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.white.withValues(alpha: op)),
                 ),
               ),
             ],

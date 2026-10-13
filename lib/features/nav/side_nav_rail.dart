@@ -1,4 +1,3 @@
-import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/material.dart';
 import '../../core/audio/music_player.dart';
 import '../../core/vision/vision_kit.dart';
@@ -175,7 +174,7 @@ class _RailButton extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontFamily: GoogleFonts.inter().fontFamily,
+                  fontFamily: 'InstrumentSans',
                   fontSize: 8.5,
                   height: 1.1,
                   letterSpacing: -0.05,

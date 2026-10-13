@@ -160,7 +160,7 @@ class ColliderApp extends StatelessWidget {
       scrollBehavior: const _MouseDraggableScrollBehavior(),
       theme: ThemeData.dark(useMaterial3: true).copyWith(
         scaffoldBackgroundColor: const Color(0xFF07080B),
-        textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
+        textTheme: GoogleFonts.instrumentSansTextTheme(ThemeData.dark().textTheme),
       ),
       // Remote theme posters resolve through the same bundle as local assets.
       builder: (context, child) => DefaultAssetBundle(
@@ -800,7 +800,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         child: Text(
           'Nothing here yet',
           style: TextStyle(
-            fontFamily: GoogleFonts.inter().fontFamily,
+            fontFamily: 'InstrumentSans',
             fontSize: 11,
             height: 1.3,
             fontWeight: FontWeight.w500,
