@@ -74,7 +74,7 @@ class MusicPlayer extends ChangeNotifier {
       }
     }
     final seen = <String>{};
-    for (final a in ThemeCatalog.instance.ambientTracks) {
+    for (final a in [...ThemeCatalog.instance.r2Songs, ...ThemeCatalog.instance.ambientTracks]) {
       if (a.title.trim().isEmpty) continue;
       final m = MusicTrack(a.title.trim(), a.artUrl, a.audioUrl);
       if (!inPacks.contains(m.key) && seen.add(m.key)) out.add(m);

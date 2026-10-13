@@ -40,6 +40,7 @@ import 'features/theme/premium_theme_market_view.dart';
 import 'features/theme/theme_living_media.dart';
 import 'core/media/theme_catalog.dart';
 import 'core/vision/keyboard_dof.dart';
+import 'core/vision/materialize.dart';
 import 'core/media/theme_media_bundle.dart';
 import 'core/api/media_gen.dart';
 import 'models/media_specs.dart';
@@ -124,7 +125,8 @@ class _TickerWindowLayout extends MultiChildLayoutDelegate {
     var used = 0.0;
 
     if (hasChild(pinned)) {
-      used = layoutChild(pinned, BoxConstraints(maxWidth: width)).height;
+      // v9.1: consensus pinned on top, never more than 40 % of the ticker.
+      used = layoutChild(pinned, BoxConstraints(maxWidth: width, maxHeight: size.height.isFinite ? size.height * 0.40 : double.infinity)).height;
       positionChild(pinned, Offset.zero);
       if (hasChild(list)) used += _gap;
     }
@@ -1741,7 +1743,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // Nothing here is measured from the rail, the composer or the open card
           // any more, so navigating cannot snap the layout into a different
           // full-width arrangement. Nothing touches an edge.
-          if (!_settingsOpen && !_browserOpen && !(isMobile && _isMobileSideNavOpen) && !const {'premium', 'themes', 'apps', 'smartgen', 'market', 'files', 'consensus'}.contains(_activeDrawer))
+          if (!_settingsOpen && !_browserOpen && !(isMobile && _isMobileSideNavOpen) && !const {'premium', 'themes', 'apps', 'smartgen', 'market', 'files', 'consensus', 'history', 'music', 'account'}.contains(_activeDrawer))
           Positioned.fill(
             bottom: 74,
             child: SafeArea(
@@ -2084,11 +2086,13 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // reserves its height; see PremiumThemeMarketView.bottomBarReserve).
           // Hidden on phone widths while consensus is open: the scene has its own back control.
           // v8.3.1: Settings opens over the current screen (no reset), blurred behind.
-          if (_settingsOpen)
-            Positioned.fill(
-              // v8.7: a submenu opened from Settings sits on its own plane in
+          // v9.1: Settings materializes in and dissolves out (spring).
+          Positioned.fill(
+            child: MaterializeSwitch(
+              show: _settingsOpen,
+              builder: (_) =>               // v8.7: a submenu opened from Settings sits on its own plane in
               // front; Settings steps back (smaller, softer) behind it.
-              child: AnimatedScale(
+AnimatedScale(
                 scale: _activeDrawer == 'account' ? 0.94 : 1,
                 duration: VMotion.base,
                 child: ImageFiltered(
@@ -2105,8 +2109,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                 ),
               ),
             ),
-          if (_settingsOpen && _activeDrawer == 'account')
-            Positioned.fill(child: AccountSheet(tier: ModelTier.free, onClose: () => setState(() => _activeDrawer = null))),
+          ),
+          Positioned.fill(child: MaterializeSwitch(show: _settingsOpen && _activeDrawer == 'account', builder: (_) => AccountSheet(tier: ModelTier.free, onClose: () => setState(() => _activeDrawer = null)))),
 
           Positioned(
             left: 0,

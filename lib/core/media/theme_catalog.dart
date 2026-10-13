@@ -196,8 +196,31 @@ class ThemeCatalog extends ChangeNotifier {
   List<WallpaperTheme> _fromList(List list) {
     final maps = [for (final o in list.whereType<Map>()) if ((o['url'] as String?)?.isNotEmpty == true) o];
     final songs = [for (final o in maps) if (_kind(o) == 'audio') o];
-    return [for (final o in maps) if (_kind(o) != 'audio') _r2Theme(o, songs)];
+    final themes = [for (final o in maps) if (_kind(o) != 'audio') _r2Theme(o, songs)];
+    // v9.1: every R2 song is in the music library, with the art of the
+    // wallpaper it shares the most tags with.
+    _r2Songs = [
+      for (final o in songs)
+        () {
+          final mine = _content(_tagsOf(o));
+          WallpaperTheme? best;
+          var n = 0;
+          for (final t in themes) {
+            final k = _content(t.tags).intersection(mine).length;
+            if (k > n) { n = k; best = t; }
+          }
+          return CatalogAmbientTrack(
+              title: niceName('${o['name']}').replaceAll(RegExp(r'\s+song$'), ''),
+              audioUrl: o['url'] as String,
+              artUrl: best?.assetPath ?? '');
+        }(),
+    ];
+    return themes;
   }
+
+  List<CatalogAmbientTrack> _r2Songs = const [];
+  /// v9.1: all songs in the R2 bucket.
+  List<CatalogAmbientTrack> get r2Songs => _r2Songs;
 
   /// v8.7: a flat bucket of videos (live wallpapers), images (wallpapers)
   /// and audio (songs), each with tags. Songs attach to a live wallpaper

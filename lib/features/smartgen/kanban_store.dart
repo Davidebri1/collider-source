@@ -138,4 +138,27 @@ class KanbanStore extends ChangeNotifier {
     notifyListeners();
     await _save();
   }
+
+  List<KanbanCard> get allCards => List.unmodifiable(_cards);
+
+  /// v9.1 bulk: delete several cards at once.
+  Future<void> removeMany(Iterable<String> ids) async {
+    final set = ids.toSet();
+    _cards.removeWhere((x) => set.contains(x.id));
+    notifyListeners();
+    await _save();
+  }
+
+  /// v9.1 bulk: move and/or recolor several cards at once.
+  Future<void> modifyMany(Iterable<String> ids, {int? column, int? color}) async {
+    final set = ids.toSet();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    for (final c in _cards.where((x) => set.contains(x.id))) {
+      if (column != null) c.column = column;
+      if (color != null) c.color = color;
+      c.updatedMs = now;
+    }
+    notifyListeners();
+    await _save();
+  }
 }

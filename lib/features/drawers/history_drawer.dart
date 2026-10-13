@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../models/ticker_item.dart';
 import '../../../core/vision/vision_kit.dart';
+import '../../../core/vision/selection.dart';
 
 /// REQ-13 Global History Drawer — notes-list window (Vision OS Design System
 /// 417:8104 "All iCloud"): large title, recessed search capsule, rows with
@@ -24,17 +25,33 @@ class HistoryDrawer extends StatefulWidget {
 class _HistoryDrawerState extends State<HistoryDrawer> {
   final TextEditingController _searchCtrl = TextEditingController();
   String _query = '';
+  final Selection<String> _sel = Selection<String>();
+
+  @override
+  void initState() {
+    super.initState();
+    HistoryEdits.instance.load();
+    HistoryEdits.instance.addListener(_r);
+    _sel.addListener(_r);
+  }
+
+  void _r() { if (mounted) setState(() {}); }
 
   @override
   void dispose() {
     _searchCtrl.dispose();
+    HistoryEdits.instance.removeListener(_r);
+    _sel.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final q = _query.toLowerCase();
+    final ed = HistoryEdits.instance;
     final sessions = widget.sessions
+        .where((s) => !ed.hidden.contains(s.id))
+        .map((s) => ed.titles[s.id] == null ? s : ConversationHistorySession(id: s.id, title: ed.titles[s.id]!, targetModelId: s.targetModelId, relativeTime: s.relativeTime, timestamp: s.timestamp, summary: s.summary, modelIds: s.modelIds, messages: s.messages))
         .where((s) => q.isEmpty || s.title.toLowerCase().contains(q) || s.summary.toLowerCase().contains(q))
         .toList();
 
@@ -55,11 +72,37 @@ class _HistoryDrawerState extends State<HistoryDrawer> {
                 sessions: sessions,
                 searchController: _searchCtrl,
                 onQuery: (v) => setState(() => _query = v.trim()),
-                onSelect: widget.onSelectSession,
+                onSelect: (x) => _sel.active ? _sel.toggle(x.id) : widget.onSelectSession(x),
+                selected: _sel.ids,
+                onLongPress: (x) => _sel.toggle(x.id),
               ),
             ),
           ),
         ),
+        if (_sel.active)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 96,
+            child: Center(
+              child: SelectionBar(
+                count: _sel.count,
+                onSelectAll: () => _sel.all(sessions.map((x) => x.id)),
+                onDone: _sel.clear,
+                actions: [
+                  SelectionAction(Icons.edit_rounded, 'Rename', () async {
+                    final t = await askName(context, title: 'Rename ${_sel.count} chats');
+                    if (t != null && t.trim().isNotEmpty) await ed.rename(_sel.ids, t.trim());
+                    _sel.clear();
+                  }),
+                  SelectionAction(Icons.delete_outline_rounded, 'Delete', () async {
+                    await ed.hide(_sel.ids);
+                    _sel.clear();
+                  }, destructive: true),
+                ],
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -72,8 +115,13 @@ class HistorySessionList extends StatelessWidget {
   final ValueChanged<String> onQuery;
   final ValueChanged<ConversationHistorySession> onSelect;
   final String searchHint;
+  /// v9.1 multi-select (optional).
+  final Set<String> selected;
+  final ValueChanged<ConversationHistorySession>? onLongPress;
 
   const HistorySessionList({
+    this.selected = const {},
+    this.onLongPress,
     super.key,
     required this.sessions,
     required this.searchController,
@@ -104,12 +152,16 @@ class HistorySessionList extends StatelessWidget {
                     separatorBuilder: (_, __) => const SizedBox(height: VSpace.xxs),
                     itemBuilder: (_, i) {
                       final s = sessions[i];
-                      return VPress(
+                      final on = selected.contains(s.id);
+                      return GestureDetector(
+                        onLongPress: onLongPress == null ? null : () => onLongPress!(s),
+                        child: VPress(
                         onTap: () => onSelect(s),
-                        child: Container(
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
                           padding: const EdgeInsets.symmetric(horizontal: VSpace.sm, vertical: 10),
                           decoration: BoxDecoration(
-                            color: VColors.fillCell,
+                            color: on ? const Color(0x40FFFFFF) : VColors.fillCell,
                             borderRadius: BorderRadius.circular(VRadius.md),
                           ),
                           child: Column(
@@ -132,7 +184,7 @@ class HistorySessionList extends StatelessWidget {
                             ],
                           ),
                         ),
-                      );
+                      ));
                     },
                   ),
                 ),

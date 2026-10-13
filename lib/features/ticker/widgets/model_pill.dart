@@ -247,25 +247,31 @@ class _ModelPillState extends State<ModelPill> {
           VPress(
             onTap: widget.onToggleExpand,
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-// v9: the collapsed row led with the model name (D44). The name is the one
-                // thing that was never asked for, and it displaced what should
-                // be there: what the model actually said. The row now carries
-                // only the time.
-                //
-                // No dot is added back. Bug 6 banned the coloured breathing dot
-                // and the E2E pass removed it; the shimmer below already carries
-                // "working", so a second indicator here would be noise.
-                if (!waiting && item.relativeTime.isNotEmpty)
-                  Text(
-                    item.relativeTime,
-                    style: VType.caption(color: VColors.textTertiary, weight: FontWeight.w500),
-                  ),
+                // v9.1 (David): a narrow model-name column; the one-line
+                // summary gets the width. Opening the card shows it in full.
+                SizedBox(
+                  width: 74,
+                  child: Text(item.modelDef.label, maxLines: 2, overflow: TextOverflow.ellipsis,
+                      style: VType.caption(color: VColors.textPrimary, weight: FontWeight.w600).copyWith(height: 1.15)),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: waiting
+                      ? _SkeletonLines(key: const ValueKey('wait'), color: c)
+                      : Text(item.summary.split('\n').first, maxLines: 1, overflow: TextOverflow.ellipsis,
+                          style: VType.footnote(color: VColors.textPrimary, weight: FontWeight.w400).copyWith(height: 1.3)),
+                ),
+                if (!waiting && item.relativeTime.isNotEmpty) ...[
+                  const SizedBox(width: 6),
+                  Text(item.relativeTime, style: VType.caption(color: VColors.textTertiary, weight: FontWeight.w500)),
+                ],
               ],
             ),
           ),
-          const SizedBox(height: 6),
-          VPress(
+          if (widget.isExpanded) const SizedBox(height: 6),
+          if (widget.isExpanded) VPress(
             onTap: widget.onToggleExpand,
             child: AnimatedSwitcher(
               duration: VMotion.base,

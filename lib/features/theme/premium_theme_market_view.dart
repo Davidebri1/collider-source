@@ -12,6 +12,7 @@ import '../../core/audio/music_player.dart';
 import '../../core/media/theme_catalog.dart';
 import '../../core/theme/specular_border.dart';
 import '../../core/vision/vision_kit.dart';
+import '../../core/vision/materialize.dart';
 import '../../models/theme_def.dart';
 import '../music/song_wheel.dart';
 import 'premium_market_ambient.dart';
@@ -575,7 +576,8 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
                     child: SizedBox(
                       width: math.min(contentWidth, _kStageMaxWidth),
                       height: _kStageHeight,
-                      child: _CoverFlow(
+                      // v9.1: covers never paint under the side nav.
+                      child: ClipRect(child: _CoverFlow(
                         themes: _themes,
                         currentIndex: _currentIndex,
                         isMobile: isMobile,
@@ -593,7 +595,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
                           }
                         },
                         onApplyCover: _applyAt,
-                      ),
+                      )),
                     ),
                   ),
                 ),
@@ -619,12 +621,12 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
                   right: _kSearchPad,
                   top: _kHeaderHeight + _kSearchPad,
                   height: _kSearchHeight,
-                  child: Center(child: SizedBox(width: searchWidth, height: _kSearchHeight, child: _buildSearchBar())),
+                  child: Materialize(origin: Alignment.topCenter, child: Center(child: SizedBox(width: searchWidth, height: _kSearchHeight, child: _buildSearchBar()))),
                 ),
               ],
 
               if (_exploded && _selected != null)
-                Positioned.fill(child: _explodedView(_selected!, w, h)),
+                Positioned.fill(child: Materialize(child: _explodedView(_selected!, w, h))),
 
               // Header (z 500): the export's empty p-4 strip keeps its 32px in
               // the layout (mainTop) but paints nothing. Its bg-black/20 +

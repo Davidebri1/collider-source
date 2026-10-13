@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../core/api/media_gen.dart';
 import '../../../core/vision/vision_kit.dart';
 import '../kanban_store.dart';
+import '../../../core/vision/selection.dart';
 
 /// Parses the Smart Gen agent's reply into the derived need, how the cards
 /// serve it, and the proposed cards. Kept out of the widget so it can be
@@ -44,6 +45,8 @@ class SmartGenScreen extends StatefulWidget {
 
 class _SmartGenScreenState extends State<SmartGenScreen> {
   final KanbanStore _store = KanbanStore.instance;
+  final Selection<String> _sel = Selection<String>();
+  void _tapCard(KanbanCard c) => _sel.active ? _sel.toggle(c.id) : _openDetail(c);
   final ScrollController _strip = ScrollController();
   int _col = 0;
   bool _generating = false;
@@ -191,6 +194,7 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
               type: MaterialType.transparency,
               child: GlassMenu(width: w, rows: [
                 GlassMenuRow(icon: Icons.edit_outlined, label: 'Edit', onTap: () => Navigator.of(ctx).pop('edit')),
+                GlassMenuRow(icon: Icons.check_circle_outline_rounded, label: 'Select', onTap: () => Navigator.of(ctx).pop('select')),
                 for (var i = 0; i < KanbanStore.columns.length; i++)
                   if (i != c.column)
                     GlassMenuRow(icon: colIcons[i], label: 'Move to ${KanbanStore.columns[i]}', onTap: () => Navigator.of(ctx).pop('move$i')),
@@ -203,7 +207,9 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
       },
     );
     if (!mounted || choice == null) return;
-    if (choice == 'edit') {
+    if (choice == 'select') {
+      _sel.toggle(c.id);
+    } else if (choice == 'edit') {
       await _openDetail(c, editing: true);
     } else if (choice.startsWith('move')) {
       await _store.move(c, int.parse(choice.substring(4)));
@@ -231,7 +237,40 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
           radius: VRadius.xl,
           child: Stack(
             children: [
-              Positioned.fill(child: _board()),
+              Positioned.fill(child: ListenableBuilder(listenable: _sel, builder: (_, __) => _board())),
+              ListenableBuilder(
+                listenable: _sel,
+                builder: (context, _) => !_sel.active
+                    ? const SizedBox.shrink()
+                    : Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: _stripH + VSpace.lg,
+                        child: Center(
+                          child: SelectionBar(
+                            count: _sel.count,
+                            onSelectAll: () => _sel.all(_store.allCards.map((c) => c.id)),
+                            onDone: _sel.clear,
+                            actions: [
+                              SelectionAction(Icons.drive_file_move_outline, 'Move', () async {
+                                final ids = _sel.ids;
+                                final col = (_store.allCards.firstWhere((c) => ids.contains(c.id)).column + 1) % KanbanStore.columns.length;
+                                await _store.modifyMany(ids, column: col);
+                              }),
+                              SelectionAction(Icons.palette_outlined, 'Colour', () async {
+                                final ids = _sel.ids;
+                                final col = (_store.allCards.firstWhere((c) => ids.contains(c.id)).color + 1) % palette.length;
+                                await _store.modifyMany(ids, color: col);
+                              }),
+                              SelectionAction(Icons.delete_outline_rounded, 'Delete', () async {
+                                await _store.removeMany(_sel.ids);
+                                _sel.clear();
+                              }, destructive: true),
+                            ],
+                          ),
+                        ),
+                      ),
+              ),
               Positioned(
                 left: VSpace.sm,
                 top: VSpace.sm,
@@ -320,7 +359,7 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
         child: SizedBox(width: 240, height: 300, child: _HeroView(card: c, accent: accent, onOpen: () => _openDetail(c), dragging: true)),
       ),
       childWhenDragging: Opacity(opacity: 0.4, child: _HeroView(card: c, accent: accent, onOpen: () => _openDetail(c))),
-      child: _HeroView(card: c, accent: accent, onOpen: () => _openDetail(c), controls: controls),
+      child: _HeroView(card: c, accent: accent, onOpen: () => _tapCard(c), controls: controls),
     );
   }
 
@@ -436,7 +475,8 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
             return _CardFace(
               card: c,
               accent: accents[c.color % accents.length],
-              onOpen: () => _openDetail(c),
+              onOpen: () => _tapCard(c),
+              selected: _sel.has(c.id),
               onMenu: _menu,
             );
           },
@@ -457,7 +497,9 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
 /// its foot, and a ⋯ over its corner. Long-press it and drop it on a column in
 /// the rail to move it.
 class _CardFace extends StatelessWidget {
-  const _CardFace({required this.card, required this.accent, required this.onOpen, required this.onMenu});
+  const _CardFace({required this.card, required this.accent, required this.onOpen, required this.onMenu, this.selected = false});
+
+  final bool selected;
 
   final KanbanCard card;
   final Color accent;
@@ -489,6 +531,8 @@ class _CardFace extends StatelessWidget {
             accent: accent,
             overlay: Stack(
               children: [
+                if (selected)
+                  const Positioned(left: 6, top: 6, child: Icon(Icons.check_circle_rounded, color: Color(0xFF0A84FF), size: 22)),
                 if (card.title.isEmpty)
                   const Center(child: Icon(Icons.image_outlined, size: 22, color: VColors.textTertiary)),
                 Positioned(

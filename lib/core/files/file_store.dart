@@ -173,6 +173,35 @@ class FileStore extends ChangeNotifier {
   /// The stored contents, or null (not found).
   Future<Uint8List?> bytesOf(String id) => FileBlobs.get(id);
 
+  /// v9.1 bulk delete.
+  Future<void> removeMany(Iterable<String> ids) async {
+    final set = ids.toSet();
+    _files.removeWhere((f) => set.contains(f.id));
+    notifyListeners();
+    await _save();
+    for (final id in set) {
+      await FileBlobs.delete(id);
+    }
+  }
+
+  /// v9.1 bulk edit: rename (a shared base name; extensions kept, numbered).
+  Future<void> renameMany(List<String> ids, String base) async {
+    base = base.trim();
+    if (base.isEmpty) return;
+    var n = 0;
+    for (var i = 0; i < _files.length; i++) {
+      final f = _files[i];
+      if (!ids.contains(f.id)) continue;
+      n++;
+      final dot = f.name.lastIndexOf('.');
+      final ext = dot > 0 ? f.name.substring(dot) : '';
+      final name = ids.length == 1 ? '$base$ext' : '$base $n$ext';
+      _files[i] = StoredFile(id: f.id, name: name, sizeBytes: f.sizeBytes, type: f.type, addedAtMs: f.addedAtMs, source: f.source);
+    }
+    notifyListeners();
+    await _save();
+  }
+
   Future<void> remove(String id) async {
     _files.removeWhere((f) => f.id == id);
     notifyListeners();

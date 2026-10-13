@@ -8,6 +8,7 @@ import '../../../core/audio/music_player.dart';
 import '../../../core/files/file_store.dart';
 import '../../../core/media/theme_catalog.dart';
 import '../../../core/vision/vision_kit.dart';
+import '../../../core/vision/selection.dart';
 import '../../../core/figma/figma_stage.dart';
 import '../../music/song_row_parts.dart';
 import '../../theme/theme_living_media.dart';
@@ -57,6 +58,29 @@ class _FilesScreenState extends State<FilesScreen> {
     super.dispose();
   }
 
+  final Selection<String> _sel = Selection<String>();
+  void _tapFile(StoredFile f) => _sel.active ? _sel.toggle(f.id) : _open(f);
+  Widget _check(StoredFile f) => _sel.has(f.id)
+      ? Positioned(right: 8, top: 8, child: Container(width: 30, height: 30, decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF0A84FF)), child: const Icon(Icons.check_rounded, color: Colors.white, size: 22)))
+      : const SizedBox.shrink();
+
+  Widget _selBar(List<StoredFile> files) => SelectionBar(
+        count: _sel.count,
+        onSelectAll: () => _sel.all(files.map((f) => f.id)),
+        onDone: _sel.clear,
+        actions: [
+          SelectionAction(Icons.edit_rounded, 'Rename', () async {
+            final t = await askName(context, title: 'Rename ${_sel.count} files');
+            if (t != null) await _store.renameMany(_sel.ids.toList(), t);
+            _sel.clear();
+          }),
+          SelectionAction(Icons.delete_outline_rounded, 'Delete', () async {
+            await _store.removeMany(_sel.ids);
+            _sel.clear();
+          }, destructive: true),
+        ],
+      );
+
   Future<void> _pickFile() async {
     try {
       final res = await FilePicker.platform.pickFiles(allowMultiple: true, withData: true);
@@ -90,7 +114,7 @@ class _FilesScreenState extends State<FilesScreen> {
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: Listenable.merge([_store, ThemeCatalog.instance, MusicPlayer.instance]),
+      animation: Listenable.merge([_store, ThemeCatalog.instance, MusicPlayer.instance, _sel]),
       builder: (context, _) {
         final cat = widget.category;
         final q = _q.toLowerCase();
@@ -105,7 +129,8 @@ class _FilesScreenState extends State<FilesScreen> {
                     (q.isEmpty || f.name.toLowerCase().contains(q)))
                 .toList();
         final title = cat == 'music' ? 'Music' : (_typeLabel[_type] ?? _type);
-        return FigmaStage(
+        return Stack(children: [
+          Positioned.fill(child: FigmaStage(
           frame: FilesScreen.frame,
           cropWidth: FilesScreen.cropWidth,
           center: FilesScreen.center,
@@ -147,7 +172,9 @@ class _FilesScreenState extends State<FilesScreen> {
               ]),
             ),
           ],
-        );
+        )),
+          if (_sel.active) Positioned(left: 0, right: 0, bottom: 40, child: Center(child: _selBar(files))),
+        ]);
       },
     );
   }
@@ -418,8 +445,8 @@ class _FilesScreenState extends State<FilesScreen> {
 
   Widget _photoTile(StoredFile f) => GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () => _open(f),
-        onLongPress: () => _confirmRemove(f),
+        onTap: () => _tapFile(f),
+        onLongPress: () => _sel.toggle(f.id),
         onSecondaryTap: () => _confirmRemove(f),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(16),
@@ -428,6 +455,7 @@ class _FilesScreenState extends State<FilesScreen> {
             const DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment(0, -0.2), colors: [Color(0x66000000), Color(0x00000000)]))),
             Positioned(left: 12, top: 10, right: 12, child: Text(f.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700))),
             if (f.type == 'Video') const Positioned(right: 10, bottom: 8, child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: 22)),
+            _check(f),
           ]),
         ),
       );
@@ -439,8 +467,8 @@ class _FilesScreenState extends State<FilesScreen> {
       label: f.name,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () => _open(f),
-        onLongPress: () => _confirmRemove(f),
+        onTap: () => _tapFile(f),
+        onLongPress: () => _sel.toggle(f.id),
         onSecondaryTap: () => _confirmRemove(f),
         child: Padding(
           padding: const EdgeInsets.all(9),
@@ -456,6 +484,7 @@ class _FilesScreenState extends State<FilesScreen> {
                     : Icon(_icon(f.type), size: 52, color: const Color(0xCCFFFFFF)),
               ),
             ),
+            if (_sel.has(f.id)) const Padding(padding: EdgeInsets.only(top: 2), child: Icon(Icons.check_circle_rounded, color: Color(0xFF0A84FF), size: 22)),
             const SizedBox(height: 3),
             FText(f.name, size: 22, weight: FontWeight.w500),
             FText(meta, size: 16, opacity: 0.6, weight: FontWeight.w500),

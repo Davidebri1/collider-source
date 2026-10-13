@@ -14,6 +14,7 @@ import '../../core/audio/music_player.dart';
 import '../../core/media/theme_catalog.dart';
 import '../theme/premium_market_ambient.dart' show AmbientGlass;
 import 'music_widget.dart';
+import '../../core/vision/materialize.dart';
 import 'music_zones.dart';
 
 class FloatingMusic extends StatefulWidget {
@@ -167,7 +168,7 @@ class _FloatingMusicState extends State<FloatingMusic> {
                   final o = _want ?? want;
                   _save(o);
                 },
-                child: Stack(
+                child: Materialize(child: Stack(
                   clipBehavior: Clip.none,
                   children: [
                     MusicWidget(
@@ -194,15 +195,14 @@ class _FloatingMusicState extends State<FloatingMusic> {
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: const Color(0xCC2A2A2E),
-                              border: Border.all(color: const Color(0x55FFFFFF), width: 0.8),
-                            ),
+                                                          ),
                             child: const Icon(Icons.close_rounded, size: 14, color: Colors.white),
                           ),
                         ),
                       ),
                     ),
                   ],
-                ),
+                )),
               ),
             ),
           ],

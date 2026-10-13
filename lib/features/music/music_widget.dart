@@ -178,7 +178,6 @@ class MusicWidget extends StatelessWidget {
                                   decoration: BoxDecoration(
                                     color: const Color(0x1AFFFFFF),
                                     borderRadius: BorderRadius.circular(100),
-                                    border: Border.all(color: VColors.borderLight, width: 0.5),
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
