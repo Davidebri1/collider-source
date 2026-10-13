@@ -1,7 +1,7 @@
 name: collider_flutter
 description: 'Collider - AAA Multi-Model AI Spatial Client with VisionOS Glass, 3D Consensus Galaxy, and Smart Gen Suite'
 publish_to: 'none'
-version: 9.1.2+93
+version: 9.1.3+94
 
 environment:
   sdk: '>=3.0.0 <4.0.0'

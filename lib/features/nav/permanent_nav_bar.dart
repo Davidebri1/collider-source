@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/vision/vision_kit.dart';
+import 'side_nav_rail.dart' show Recede;
 
 /// REQ-12 / G6 Permanent 3-icon bottom dock (Settings | Compose | Apps), shown on
 /// every screen including the Premium Theme Market — a compact glass capsule ornament
@@ -34,37 +35,37 @@ class PermanentNavBar extends StatelessWidget {
           onToggleComposer();
         }
       },
-      child: VOrnament(
+      child: Recede(child: VOrnament(
         padding: const EdgeInsets.all(VSpace.xs - 2),
-        child: Row(
+        child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             VCircleButton(
               icon: Icons.tune_rounded,
               tooltip: 'Settings',
-              size: 44,
+              size: 36,
               selected: activeDrawer == 'settings',
               onTap: onSettings,
             ),
-            const SizedBox(width: VSpace.sm),
+            const SizedBox(height: VSpace.xs),
             VCircleButton(
               icon: Icons.mode_comment_outlined, // S-N6 Compose glyph
               tooltip: 'Compose / Home',
-              size: 44,
+              size: 36,
               selected: activeDrawer == null || isComposerSummoned,
               onTap: onHome,
             ),
-            const SizedBox(width: VSpace.sm),
+            const SizedBox(height: VSpace.xs),
             VCircleButton(
               icon: Icons.apps_rounded,
               tooltip: 'Apps',
-              size: 44,
+              size: 36,
               selected: activeDrawer == 'apps',
               onTap: onApps,
             ),
           ],
         ),
-      ),
+      )),
     );
   }
 }

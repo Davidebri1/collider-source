@@ -90,7 +90,7 @@ class SideNavRail extends StatelessWidget {
   Widget build(BuildContext context) {
     final entries = sideRailEntries(surface);
     final active = entries.indexWhere((e) => e.key == activeKey);
-    return _Recede(child: AnimatedSize(
+    return Recede(child: AnimatedSize(
       duration: VMotion.base,
       curve: Curves.easeOutCubic,
       alignment: Alignment.topCenter,
@@ -188,14 +188,14 @@ class _RailButton extends StatelessWidget {
 
 /// v9.1.2: the rail recedes (smaller, faded) until touched, then comes
 /// forward for a few seconds.
-class _Recede extends StatefulWidget {
+class Recede extends StatefulWidget {
   final Widget child;
-  const _Recede({required this.child});
+  const Recede({super.key, required this.child});
   @override
-  State<_Recede> createState() => _RecedeState();
+  State<Recede> createState() => RecedeState();
 }
 
-class _RecedeState extends State<_Recede> {
+class RecedeState extends State<Recede> {
   bool _on = false;
   int _gen = 0;
   void _wake() {

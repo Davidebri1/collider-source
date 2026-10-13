@@ -735,7 +735,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   static const double _rowSlot = 92;
 
   /// The category strip that closes the window, with its gap.
-  static const double _chipStripHeight = 32;
+  static const double _chipStripHeight = 0;
 
   /// The composer needs more room than a ticker row, so it gets the full
   /// floatable width and keeps it in every state: summoning it must not
@@ -1095,52 +1095,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             itemBuilder: (_, i) => _tickerPage(_tickerOrder[i]),
           ),
         ),
-        const SizedBox(height: 6),
-        // Categories are named, not dotted. Anonymous dots gave the user no way
-        // to know which set of models a swipe was about to land on.
-        AnimatedBuilder(
-          animation: _catPager,
-          builder: (_, __) {
-            final page = _catPager.hasClients && _catPager.page != null ? _catPager.page! : idx.toDouble();
-            return EdgeFadeHorizontal(
-              child: SizedBox(
-                height: 26,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  controller: _catLabelCtl,
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  itemCount: _tickerOrder.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 4),
-                  itemBuilder: (_, i) {
-                    final t = (1 - (page - i).abs()).clamp(0.0, 1.0);
-                    final on = i == page.round();
-                    return VPress(
-                      onTap: () => _catPager.animateToPage(i, duration: VMotion.base, curve: Curves.easeOutCubic),
-                      child: AnimatedOpacity(
-                        duration: VMotion.fast,
-                        opacity: 0.42 + 0.58 * t,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(VRadius.full),
-                            color: on ? Colors.white.withValues(alpha: 0.16) : Colors.transparent,
-                          ),
-                          child: Text(
-                            _tickerOrder[i].label,
-                            style: VType.caption(
-                              color: on ? Colors.white : Colors.white70,
-                              weight: on ? FontWeight.w600 : FontWeight.w400,
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            );
-          },
-        ),
+        // v9.1.3: no chip strip; categories come from the composer's + menu
+        // (and a sideways swipe on the bubbles).
       ],
     );
   }
@@ -1157,7 +1113,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   /// old fixed 62%-of-the-screen block was). One width, one ceiling, every
   /// state, so opening a card or the composer cannot resize the room.
   Widget _buildTickerWindow() {
-    final showConsensus = !_activeCategory.isMedia && _tickerItems.isNotEmpty;
+    // v9.1.3: no consensus bubble until it has words.
+    final showConsensus = !_activeCategory.isMedia && _tickerItems.isNotEmpty && _consensusSummary.trim().isNotEmpty;
     // R09: the window shows one, two or three rows. A slot is sized for a model
     // name plus a wrapped one-line summary; anything longer scrolls behind the
     // edge fade and the chevron.
@@ -1814,7 +1771,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // full-width arrangement. Nothing touches an edge.
           if (!_settingsOpen && !_browserOpen && !(isMobile && _isMobileSideNavOpen) && !const {'premium', 'themes', 'apps', 'smartgen', 'market', 'files', 'consensus', 'history', 'music', 'account'}.contains(_activeDrawer))
           Positioned.fill(
-            bottom: 74,
+            bottom: 12,
             child: SafeArea(
               bottom: false,
               child: Align(
@@ -2093,7 +2050,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             if (_railVisible)
               Positioned(
                 left: 10,
-                bottom: 150, // v9.1.2: clear of the composer line
+                bottom: 230, // v9.1.3: above the nav column
                 child: _buildSideNav(isMobile: true),
               ),
           ] else ...[
@@ -2184,13 +2141,14 @@ AnimatedScale(
           ),
           Positioned.fill(child: MaterializeSwitch(show: _settingsOpen && _activeDrawer == 'account', builder: (_) => AccountSheet(tier: ModelTier.free, onClose: () => setState(() => _activeDrawer = null)))),
 
+          // v9.1.3: no bottom bar. Settings / Home / Apps live in a small
+          // receding column at the left edge, above the composer.
           Positioned(
-            left: 0,
-            right: 0,
-            bottom: 12,
+            left: 10,
+            bottom: 84,
             child: SafeArea(
               top: false,
-              child: Center(
+              child: Align(
                 child: SpecularSweep(radius: 40, child: PermanentNavBar(
                   isComposerSummoned: _isComposerSummoned,
                   onToggleComposer: () {
