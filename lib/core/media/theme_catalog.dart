@@ -219,7 +219,8 @@ class ThemeCatalog extends ChangeNotifier {
           return CatalogAmbientTrack(
               title: niceName('${o['name']}').replaceAll(RegExp(r'\s+song$'), ''),
               audioUrl: o['url'] as String,
-              artUrl: best?.assetPath ?? '');
+              // No shared tag: borrow a stable wallpaper so no row is a blank tile.
+              artUrl: best?.assetPath ?? (themes.isEmpty ? '' : themes['${o['name']}'.hashCode.abs() % themes.length].assetPath));
         }(),
     ];
     return themes;
