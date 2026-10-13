@@ -223,6 +223,15 @@ class ThemeCatalog extends ChangeNotifier {
               artUrl: () {
                 bool img(String u) => RegExp(r'\.(png|jpe?g|webp|avif)(\?|$)', caseSensitive: false).hasMatch(u);
                 if (best != null && img(best.assetPath)) return best.assetPath;
+                // v9.1.1: else the best-matching still (most shared tags).
+                WallpaperTheme? still;
+                var m = 0;
+                for (final t in themes) {
+                  if (!img(t.assetPath)) continue;
+                  final k = _content(t.tags).intersection(mine).length;
+                  if (k > m) { m = k; still = t; }
+                }
+                if (still != null) return still.assetPath;
                 final pics = [for (final t in themes) if (img(t.assetPath)) t.assetPath];
                 return pics.isEmpty ? (best?.assetPath ?? '') : pics['${o['name']}'.hashCode.abs() % pics.length];
               }());

@@ -218,7 +218,17 @@ class ColliderApi {
   ///
   /// Returns null when the proxy is not there (static hosting) or refused the
   /// target, so the browser can say so instead of showing a broken page.
+  /// v9.1.1: the Worker's /page route (raw HTML, framing headers stripped).
+  static const String pageProxy = 'https://collider-themes.ebridavid.workers.dev/page?url=';
+
   Future<String?> pageHtml(String url) async {
+    try {
+      final r = await Dio().get<String>('$pageProxy${Uri.encodeComponent(url)}', options: Options(responseType: ResponseType.plain));
+      final html = r.data;
+      final head = (html ?? '').trimLeft();
+      // Until the Worker's /page route is deployed it answers with the theme JSON.
+      if (head.isNotEmpty && !head.startsWith('[') && !head.startsWith('{')) return html;
+    } catch (_) {}
     try {
       final r = await _dio.get('$_base/api/page', queryParameters: {'url': url});
       final html = (r.data as Map)['html'];

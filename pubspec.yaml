@@ -1,7 +1,7 @@
 name: collider_flutter
 description: 'Collider - AAA Multi-Model AI Spatial Client with VisionOS Glass, 3D Consensus Galaxy, and Smart Gen Suite'
 publish_to: 'none'
-version: 9.1.0+91
+version: 9.1.1+92
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -47,13 +47,13 @@ flutter:
 
   # v9: the type family is bundled, not fetched (one family, on disk, always).
   fonts:
-    - family: InstrumentSans
+    - family: GoogleSansFlex
       fonts:
-        - asset: assets/fonts/InstrumentSans-Regular.ttf
+        - asset: assets/fonts/GoogleSansFlex-400.ttf
           weight: 400
-        - asset: assets/fonts/InstrumentSans-Medium.ttf
+        - asset: assets/fonts/GoogleSansFlex-500.ttf
           weight: 500
-        - asset: assets/fonts/InstrumentSans-SemiBold.ttf
+        - asset: assets/fonts/GoogleSansFlex-600.ttf
           weight: 600
-        - asset: assets/fonts/InstrumentSans-Bold.ttf
+        - asset: assets/fonts/GoogleSansFlex-700.ttf
           weight: 700

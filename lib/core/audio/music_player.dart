@@ -53,7 +53,15 @@ class MusicPlayer extends ChangeNotifier {
       // own theme name; printing it twice reads as a rendering bug.
       var sub = _clean(t.name);
       if (sub.toLowerCase() == title.toLowerCase()) sub = '';
-      final m = MusicTrack(title, t.posterUrl, s.audioUrl ?? '', subtitle: sub, themeId: t.id);
+      // v9.1.1: a live (video) theme has no still; use the song's matched
+      // wallpaper still instead so no row is a blank tile.
+      var art = t.posterUrl;
+      if (!RegExp(r'\.(png|jpe?g|webp|avif)(\?|$)', caseSensitive: false).hasMatch(art)) {
+        for (final r in ThemeCatalog.instance.r2Songs) {
+          if (r.audioUrl == s.audioUrl && r.artUrl.isNotEmpty) { art = r.artUrl; break; }
+        }
+      }
+      final m = MusicTrack(title, art, s.audioUrl ?? '', subtitle: sub, themeId: t.id);
       if (seen.add(m.key)) out.add(m);
     }
     return out;

@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'materialize.dart';
+import 'vision_kit.dart' show VFrost;
 
 /// v9.1 multi-select: long-press an item to start selecting, tap to add or
 /// remove, then act on all of them from the floating bar.
@@ -63,10 +64,10 @@ class SelectionBar extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(28),
         child: BackdropFilter(
-          filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          filter: ui.ImageFilter.blur(sigmaX: VFrost.blur, sigmaY: VFrost.blur),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            color: const Color(0x592A2A30),
+            color: VFrost.tint,
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               Text('$count selected', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
               const SizedBox(width: 6),
@@ -94,11 +95,11 @@ Future<String?> askName(BuildContext context, {String title = 'Rename', String i
           child: ClipRRect(
             borderRadius: BorderRadius.circular(24),
             child: BackdropFilter(
-              filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+              filter: ui.ImageFilter.blur(sigmaX: VFrost.blur, sigmaY: VFrost.blur),
               child: Container(
                 width: 280,
                 padding: const EdgeInsets.all(16),
-                color: const Color(0x662A2A30),
+                color: VFrost.tint,
                 child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                   Text(title, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 10),

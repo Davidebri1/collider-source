@@ -1,3 +1,4 @@
+import '../../core/theme/app_font.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -270,9 +271,9 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(28),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+            filter: ImageFilter.blur(sigmaX: VFrost.blur, sigmaY: VFrost.blur),
             child: ColoredBox(
-              color: const Color(0x14FFFFFF),
+              color: VFrost.tint,
               child: item(Icons.search_rounded, 'Search', _searchOpen || _searchQuery.isNotEmpty,
                   () => _openSearch(true)),
             ),
@@ -1253,26 +1254,6 @@ class _CoverFlowState extends State<_CoverFlow> {
             },
             child: strip,
           ),
-          // Chevrons. Present at both edges, working, and disabled only when
-          // the strip is already at that end (drag cannot go past it).
-          Positioned(
-            left: 0,
-            child: _StripChevron(
-              icon: Icons.chevron_left_rounded,
-              enabled: !atStart,
-              tooltip: 'Previous theme',
-              onTap: () => _step(-1),
-            ),
-          ),
-          Positioned(
-            right: 0,
-            child: _StripChevron(
-              icon: Icons.chevron_right_rounded,
-              enabled: !atEnd,
-              tooltip: 'Next theme',
-              onTap: () => _step(1),
-            ),
-          ),
         ],
       ),
     );
@@ -1401,25 +1382,6 @@ class _CoverCard extends StatelessWidget {
                         : _CoverPoster(theme: theme, inner: size - 2),
                   ),
                 ),
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(_kRadius),
-                    border: Border.all(color: _kCoverBorder, width: 1),
-                  ),
-                ),
-                // Bug 3: the one control that belongs on the theme preview.
-                // Small, on the artwork, and only on the cover you are
-                // looking at. Applies the theme when it is owned; opens the
-                // purchase path when it is not.
-                if (isCurrent)
-                  Positioned(
-                    right: 10,
-                    bottom: 10,
-                    child: _CoverApplyButton(
-                      owned: owned,
-                      onTap: onApply,
-                    ),
-                  ),
               ],
             ),
           ),
@@ -1930,9 +1892,7 @@ class _GlassCapsule extends StatelessWidget {
     );
     body = ClipRRect(
       borderRadius: r,
-      child: kIsWeb
-          ? body
-          : BackdropFilter(
+      child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: material.blur, sigmaY: material.blur),
               child: body,
             ),
@@ -2017,7 +1977,7 @@ LinearGradient _cssLinearGradient(
 /// Inter was never bundled, so this helper pulled a second family off the CDN
 /// at runtime and the Theme Gallery / Settings surfaces rendered in a different
 /// face from everything around them. It now uses the one bundled family.
-TextStyle _inter(TextStyle s) => GoogleFonts.instrumentSans(textStyle: s);
+TextStyle _inter(TextStyle s) => appFont(textStyle: s);
 
 /// CSS drop-shadow(x y blur color): sigma = blur / 2.
 Shadow _cssDropShadow(double x, double y, double blur, Color color) {

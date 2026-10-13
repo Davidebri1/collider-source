@@ -154,10 +154,6 @@ class _RailButton extends StatelessWidget {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: selected ? Colors.white : Colors.white.withValues(alpha: 0.10),
-                  border: Border.all(
-                    color: selected ? Colors.white : Colors.white.withValues(alpha: 0.14),
-                    width: 0.6,
-                  ),
                 ),
                 child: Icon(
                   entry.icon,
@@ -174,7 +170,7 @@ class _RailButton extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontFamily: 'InstrumentSans',
+                  fontFamily: 'GoogleSansFlex',
                   fontSize: 8.5,
                   height: 1.1,
                   letterSpacing: -0.05,

@@ -96,9 +96,9 @@ class _VisionSettings extends StatelessWidget {
     return SuspendedFrost(edge: 0.04, child: ClipRRect(
       borderRadius: BorderRadius.circular(46),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
+        filter: ImageFilter.blur(sigmaX: VFrost.blur, sigmaY: VFrost.blur),
         child: Container(
-          color: const Color(0x33808080),
+          color: VFrost.tint,
           child: Row(children: [
             // Sidebar 375 px: search, account card, setting rows.
             Container(

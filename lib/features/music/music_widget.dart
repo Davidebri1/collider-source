@@ -126,7 +126,6 @@ class MusicWidget extends StatelessWidget {
             // Current Track (4461:2203): 142 tall, padding 17, gap 15, white 6 % lift.
             Container(
               height: 142,
-              color: const Color(0x0FFFFFFF),
               padding: const EdgeInsets.all(17),
               child: Row(
                 children: [

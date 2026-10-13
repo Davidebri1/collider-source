@@ -1,3 +1,4 @@
+import '../theme/app_font.dart';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -207,7 +208,7 @@ class FText extends StatelessWidget {
       softWrap: maxLines != 1,
       overflow: ellipsis ? TextOverflow.ellipsis : TextOverflow.clip,
       textAlign: align,
-      style: GoogleFonts.instrumentSans(
+      style: appFont(
         fontSize: size,
         height: height == null ? null : height! / size,
         fontWeight: weight,
@@ -257,7 +258,7 @@ class FigmaViewport extends StatelessWidget {
 /// The [FText] style as a TextStyle (for TextFields): Inter, Figma px.
 class FTextStyle {
   static TextStyle of({double size = 16, FontWeight weight = FontWeight.w400, Color color = Colors.white, double? height, double? letterSpacing}) =>
-      GoogleFonts.instrumentSans(
+      appFont(
         fontSize: size,
         height: height == null ? null : height / size,
         fontWeight: weight,

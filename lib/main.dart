@@ -1,3 +1,4 @@
+import 'core/theme/app_font.dart';
 import 'features/smartgen/kanban_store.dart';
 import 'core/files/file_store.dart';
 import 'dart:typed_data';
@@ -865,7 +866,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         child: Text(
           'Nothing here yet',
           style: TextStyle(
-            fontFamily: 'InstrumentSans',
+            fontFamily: 'GoogleSansFlex',
             fontSize: 11,
             height: 1.3,
             fontWeight: FontWeight.w500,

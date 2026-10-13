@@ -1,3 +1,4 @@
+import '../theme/app_font.dart';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -13,31 +14,20 @@ export 'md_text.dart';
 /// Glass material levels, mapped to the Collider depth planes.
 enum VMaterial { prompt, resting, elevated, modal, work }
 
+/// v9.1.1: THE glass recipe, used by every floating panel. Strong backdrop
+/// blur, a ~10 % white frost, no outline, no painted gradient, a soft shadow
+/// so the edge fades into the wallpaper.
+class VFrost {
+  static const double blur = 34;
+  static const Color tint = Color(0x1AFFFFFF);
+  static const List<BoxShadow> shadow = [BoxShadow(color: Color(0x29000000), blurRadius: 40, spreadRadius: -8, offset: Offset(0, 10))];
+}
+
 extension VMaterialX on VMaterial {
-  Color get fill => switch (this) {
-        VMaterial.prompt => VColors.glassPrompt,
-        VMaterial.resting => VColors.glassResting,
-        VMaterial.elevated => VColors.glassElevated,
-        VMaterial.modal => VColors.glassModal,
-        VMaterial.work => VColors.glassWork,
-      };
-  double get blur => switch (this) {
-        VMaterial.prompt => 16,
-        VMaterial.resting => 24,
-        VMaterial.elevated => 28,
-        VMaterial.modal => 32,
-        VMaterial.work => 36,
-      };
-  Color get rim => switch (this) {
-        VMaterial.prompt || VMaterial.resting => const Color(0x2EFFFFFF),
-        VMaterial.elevated => const Color(0x3DFFFFFF),
-        VMaterial.modal => const Color(0x47FFFFFF),
-        VMaterial.work => const Color(0x52FFFFFF),
-      };
-  List<BoxShadow> get shadow => switch (this) {
-        VMaterial.prompt || VMaterial.resting => VShadow.medium,
-        _ => VShadow.heavy,
-      };
+  Color get fill => VFrost.tint;
+  double get blur => VFrost.blur;
+  Color get rim => const Color(0x00000000);
+  List<BoxShadow> get shadow => VFrost.shadow;
 }
 
 /// One-pass glass surface: blur + material fill + hairline + specular rim.
@@ -69,17 +59,10 @@ class VGlass extends StatelessWidget {
         borderRadius: r,
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: material.blur, sigmaY: material.blur),
-          child: CustomPaint(
-            foregroundPainter: SpecularRimPainter(borderRadius: radius, strokeWidth: 0.6),
-            child: Container(
-              padding: padding,
-              decoration: BoxDecoration(
-                color: fill ?? material.fill,
-                borderRadius: r,
-                border: Border.all(color: material.rim, width: 0.5),
-              ),
-              child: child,
-            ),
+          child: Container(
+            padding: padding,
+            decoration: BoxDecoration(color: fill ?? material.fill, borderRadius: r),
+            child: child,
           ),
         ),
       ),
@@ -872,12 +855,11 @@ class VAlert extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(32),
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
+          filter: ImageFilter.blur(sigmaX: VFrost.blur, sigmaY: VFrost.blur),
           child: Container(
             decoration: BoxDecoration(
-              color: const Color(0xA6787878),
+              color: const Color(0x26FFFFFF),
               borderRadius: BorderRadius.circular(32),
-              border: Border.all(color: const Color(0x2EFFFFFF), width: 1),
             ),
             padding: const EdgeInsets.only(top: 24, bottom: 8),
             child: Column(
@@ -1062,12 +1044,12 @@ class GlassMenu extends StatelessWidget {
           child: SuspendedFrost(child: ClipRRect(
             borderRadius: BorderRadius.circular(24),
             child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 20 * k, sigmaY: 20 * k),
+              filter: ImageFilter.blur(sigmaX: VFrost.blur * k, sigmaY: VFrost.blur * k),
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(24),
-                  color: const Color(0xB3232327), // v9.1: flat frost (opaque enough to read over anything), no painted gradient
+                  color: VFrost.tint, // v9.1.1: the one glass recipe
                 ),
                 // The stroke and its shadow live in the foreground. Inside
                 // `decoration` the border was painted under the very ClipRRect
@@ -1077,7 +1059,7 @@ class GlassMenu extends StatelessWidget {
                   borderRadius: BorderRadius.circular(24),
                   // v9.1: no outline (suspended frost).
                   boxShadow: [
-                    BoxShadow(color: Colors.black.withValues(alpha: 0.45), blurRadius: 30, spreadRadius: -6, offset: const Offset(0, 8)),
+                    ...VFrost.shadow,
                   ],
                 ),
                 child: Column(
@@ -1133,7 +1115,7 @@ class GlassMenu extends StatelessWidget {
                   r.label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.instrumentSans(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.white.withValues(alpha: op)),
+                  style: appFont(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.white.withValues(alpha: op)),
                 ),
               ),
             ],
@@ -1153,17 +1135,9 @@ class SuspendedFrost extends StatelessWidget {
   const SuspendedFrost({super.key, required this.child, this.edge = 0.06});
   @override
   Widget build(BuildContext context) {
-    Shader fade(Rect r, bool vertical) => LinearGradient(
-          begin: vertical ? Alignment.topCenter : Alignment.centerLeft,
-          end: vertical ? Alignment.bottomCenter : Alignment.centerRight,
-          colors: const [Color(0x00FFFFFF), Color(0xFFFFFFFF), Color(0xFFFFFFFF), Color(0x00FFFFFF)],
-          stops: [0, edge, 1 - edge, 1],
-        ).createShader(r);
-    return ShaderMask(
-      blendMode: BlendMode.dstIn,
-      shaderCallback: (r) => fade(r, true),
-      child: ShaderMask(blendMode: BlendMode.dstIn, shaderCallback: (r) => fade(r, false), child: child),
-    );
+    // v9.1.1: a ShaderMask over a BackdropFilter kills the blur on web, so
+    // the edge now fades through the soft VFrost shadow instead.
+    return child;
   }
 }
 
@@ -1206,11 +1180,11 @@ class _GhostMenuState extends State<GhostMenu> {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          filter: ImageFilter.blur(sigmaX: VFrost.blur, sigmaY: VFrost.blur),
           child: Container(
             width: widget.width,
             height: h,
-            color: const Color(0x14FFFFFF),
+            color: VFrost.tint,
             child: ListWheelScrollView.useDelegate(
               controller: _c,
               itemExtent: widget.itemExtent,

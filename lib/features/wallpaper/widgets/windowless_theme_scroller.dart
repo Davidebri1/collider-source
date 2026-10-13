@@ -151,6 +151,38 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                             onSet: () => widget.onConfirmTheme(_previewed),
                           ),
                         ),
+                        // v9.1.1: controls sit below the media, never on it.
+                        const SizedBox(height: VSpace.sm),
+                        SizedBox(width: winW, child: Builder(builder: (context) {
+                          final widget = (onBack: this.widget.onCancel, onSet: () => this.widget.onConfirmTheme(_previewed));
+                          return Row(
+              children: [
+                VCircleButton(icon: Icons.chevron_left_rounded, size: 32, floating: true, tooltip: 'Back', onTap: widget.onBack),
+                const Spacer(),
+                // Expand View is gone: it opened a full-bleed preview, and
+                // nothing in this app goes edge to edge. The two window exits
+                // are Back and Set Wallpaper (R37).
+                // v9.1 (David): an obvious, labelled Set control.
+                Semantics(
+                  button: true,
+                  label: 'Set as wallpaper',
+                  child: GestureDetector(
+                    onTap: widget.onSet,
+                    child: Container(
+                      height: 34,
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      decoration: BoxDecoration(color: const Color(0xE6FFFFFF), borderRadius: BorderRadius.circular(17)),
+                      child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(Icons.wallpaper_rounded, size: 17, color: Color(0xFF111111)),
+                        SizedBox(width: 6),
+                        Text('Set', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF111111))),
+                      ]),
+                    ),
+                  ),
+                ),
+              ],
+            );
+                        })),
                         const SizedBox(height: VSpace.sm),
                         SizedBox(
                           width: winW,
@@ -254,38 +286,6 @@ class _PreviewWindowState extends State<_PreviewWindow> {
               clipBehavior: Clip.hardEdge,
               child: SizedBox(width: c.value.size.width, height: c.value.size.height, child: VideoPlayer(c)),
             ),
-          Positioned(
-            left: 12,
-            right: 12,
-            top: 12,
-            child: Row(
-              children: [
-                VCircleButton(icon: Icons.chevron_left_rounded, size: 32, floating: true, tooltip: 'Back', onTap: widget.onBack),
-                const Spacer(),
-                // Expand View is gone: it opened a full-bleed preview, and
-                // nothing in this app goes edge to edge. The two window exits
-                // are Back and Set Wallpaper (R37).
-                // v9.1 (David): an obvious, labelled Set control.
-                Semantics(
-                  button: true,
-                  label: 'Set as wallpaper',
-                  child: GestureDetector(
-                    onTap: widget.onSet,
-                    child: Container(
-                      height: 34,
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      decoration: BoxDecoration(color: const Color(0xE6FFFFFF), borderRadius: BorderRadius.circular(17)),
-                      child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(Icons.wallpaper_rounded, size: 17, color: Color(0xFF111111)),
-                        SizedBox(width: 6),
-                        Text('Set', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF111111))),
-                      ]),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );

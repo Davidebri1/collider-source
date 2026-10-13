@@ -1,3 +1,4 @@
+import '../theme/app_font.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -115,7 +116,7 @@ class VType {
   static const double relaxed = 1.45;
 
   static TextStyle _t(double size, FontWeight w, Color c, double h) =>
-      GoogleFonts.instrumentSans(fontSize: size, fontWeight: w, color: c, height: h, letterSpacing: -0.1);
+      appFont(fontSize: size, fontWeight: w, color: c, height: h, letterSpacing: -0.1);
 
   static TextStyle display({Color color = VColors.textPrimary}) => _t(displaySm, FontWeight.w700, color, tight);
   static TextStyle title({Color color = VColors.textPrimary}) => _t(xxl, FontWeight.w700, color, tight);

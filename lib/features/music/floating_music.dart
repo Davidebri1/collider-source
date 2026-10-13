@@ -194,7 +194,7 @@ class _FloatingMusicState extends State<FloatingMusic> {
                             height: 22,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: const Color(0xCC2A2A2E),
+                              color: const Color(0x33FFFFFF),
                                                           ),
                             child: const Icon(Icons.close_rounded, size: 14, color: Colors.white),
                           ),
