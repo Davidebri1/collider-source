@@ -144,7 +144,11 @@ class _SongWheelState extends State<SongWheel> {
                   }
                   return false;
                 },
-                child: ScrollConfiguration(
+                // v9.1: cinematic edges, rows fade out top and bottom (mask, no scrollbar).
+                child: ShaderMask(
+                  blendMode: BlendMode.dstIn,
+                  shaderCallback: (b) => const LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0x00000000), Color(0xFF000000), Color(0xFF000000), Color(0x00000000)], stops: [0, 0.3, 0.7, 1]).createShader(b),
+                  child: ScrollConfiguration(
                   behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false, overscroll: false),
                   child: ListView.builder(
                     controller: _ctrl,
@@ -154,7 +158,7 @@ class _SongWheelState extends State<SongWheel> {
                     itemCount: n,
                     itemBuilder: (_, i) => _row(i, col),
                   ),
-                ),
+                )),
               ),
             ),
             // Skip: the start column at the carousel's centre (fixed spot).

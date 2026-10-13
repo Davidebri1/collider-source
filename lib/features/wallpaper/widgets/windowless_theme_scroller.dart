@@ -265,7 +265,24 @@ class _PreviewWindowState extends State<_PreviewWindow> {
                 // Expand View is gone: it opened a full-bleed preview, and
                 // nothing in this app goes edge to edge. The two window exits
                 // are Back and Set Wallpaper (R37).
-                VCircleButton(icon: Icons.check_rounded, size: 32, floating: true, tooltip: 'Set Wallpaper', onTap: widget.onSet),
+                // v9.1 (David): an obvious, labelled Set control.
+                Semantics(
+                  button: true,
+                  label: 'Set as wallpaper',
+                  child: GestureDetector(
+                    onTap: widget.onSet,
+                    child: Container(
+                      height: 34,
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      decoration: BoxDecoration(color: const Color(0xE6FFFFFF), borderRadius: BorderRadius.circular(17)),
+                      child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(Icons.wallpaper_rounded, size: 17, color: Color(0xFF111111)),
+                        SizedBox(width: 6),
+                        Text('Set', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF111111))),
+                      ]),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),

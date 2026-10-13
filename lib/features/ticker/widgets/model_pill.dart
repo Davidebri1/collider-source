@@ -251,6 +251,8 @@ class _ModelPillState extends State<ModelPill> {
               children: [
                 // v9.1 (David): a narrow model-name column; the one-line
                 // summary gets the width. Opening the card shows it in full.
+                // v9.1 ambient: a living pulse only while the model is answering.
+                if (waiting) ...[_PulseDot(color: c), const SizedBox(width: 6)],
                 SizedBox(
                   width: 74,
                   child: Text(item.modelDef.label, maxLines: 2, overflow: TextOverflow.ellipsis,
@@ -526,4 +528,26 @@ class _SkeletonLinesState extends State<_SkeletonLines> with SingleTickerProvide
       },
     );
   }
+}
+
+
+class _PulseDot extends StatefulWidget {
+  final Color color;
+  const _PulseDot({required this.color});
+  @override
+  State<_PulseDot> createState() => _PulseDotState();
+}
+
+class _PulseDotState extends State<_PulseDot> with SingleTickerProviderStateMixin {
+  late final AnimationController _a = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat(reverse: true);
+  @override
+  void dispose() {
+    _a.dispose();
+    super.dispose();
+  }
+  @override
+  Widget build(BuildContext context) => FadeTransition(
+        opacity: Tween(begin: 0.35, end: 1.0).animate(CurvedAnimation(parent: _a, curve: Curves.easeInOut)),
+        child: Container(width: 6, height: 6, decoration: BoxDecoration(shape: BoxShape.circle, color: widget.color)),
+      );
 }

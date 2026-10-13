@@ -190,7 +190,14 @@ class ThemeCatalog extends ChangeNotifier {
     final base = file.split('/').last;
     final dot = base.lastIndexOf('.');
     final b = (dot > 0 ? base.substring(0, dot) : base).replaceAll(RegExp(r'[_\-]+'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
-    return b.isEmpty ? base : b;
+    // v9.1: drop stock-site ids and resolution/fps tags ("4572947 Coastline
+    // Ocean 1280x720" -> "Coastline Ocean").
+    final c = b
+        .replaceAll(RegExp(r'^\d+\s+'), '')
+        .replaceAll(RegExp(r'\b\d{3,4}\s*x\s*\d{3,4}\b|\b(4k|8k|hd|uhd|\d+fps|\d{3,4}p)\b', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    return c.isEmpty ? (b.isEmpty ? base : b) : c;
   }
 
   List<WallpaperTheme> _fromList(List list) {

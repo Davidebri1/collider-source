@@ -576,8 +576,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
                     child: SizedBox(
                       width: math.min(contentWidth, _kStageMaxWidth),
                       height: _kStageHeight,
-                      // v9.1: covers never paint under the side nav.
-                      child: ClipRect(child: _CoverFlow(
+                      child: _CoverFlow(
                         themes: _themes,
                         currentIndex: _currentIndex,
                         isMobile: isMobile,
@@ -595,7 +594,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
                           }
                         },
                         onApplyCover: _applyAt,
-                      )),
+                      ),
                     ),
                   ),
                 ),
@@ -731,7 +730,8 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
     if (_owned(t)) {
       return _GlassCapsule(
         key: _capsuleKey,
-        label: 'Apply',
+        label: 'Set as wallpaper',
+        icon: Icons.wallpaper_rounded,
         onTap: () => widget.onApplyTheme(t),
       );
     }
@@ -1894,7 +1894,8 @@ TextStyle _actionTextStyle(Color color, FontWeight weight) => _inter(TextStyle(
 class _GlassCapsule extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
-  const _GlassCapsule({super.key, required this.label, required this.onTap});
+  final IconData? icon;
+  const _GlassCapsule({super.key, required this.label, required this.onTap, this.icon});
 
   @override
   Widget build(BuildContext context) {
@@ -1914,13 +1915,16 @@ class _GlassCapsule extends StatelessWidget {
         // widthFactor 1: the capsule hugs its label instead of filling the row.
         child: Align(
           widthFactor: 1,
-          child: Text(
-            label,
-            maxLines: 1,
-            style: _actionTextStyle(
-                const Color(0xFFFFFFFF), FontWeight.w500)
-                .copyWith(fontSize: 14),
-          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            if (icon != null) ...[Icon(icon, size: 17, color: Colors.white), const SizedBox(width: 6)],
+            Text(
+              label,
+              maxLines: 1,
+              style: _actionTextStyle(
+                  const Color(0xFFFFFFFF), FontWeight.w600)
+                  .copyWith(fontSize: 14),
+            ),
+          ]),
         ),
       ),
     );

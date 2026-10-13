@@ -80,7 +80,13 @@ class MusicCollectionDrawer extends StatelessWidget {
         ),
         Expanded(
           // Opened only when the catalog has songs (v8.3, D46).
-          child: ListView(
+          // v9.1: cinematic edges (rows fade out top and bottom), no scrollbar.
+          child: ShaderMask(
+            blendMode: BlendMode.dstIn,
+            shaderCallback: (b) => const LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0x00000000), Color(0xFF000000), Color(0xFF000000), Color(0x00000000)], stops: [0, 0.08, 0.88, 1]).createShader(b),
+            child: ScrollConfiguration(
+              behavior: const ScrollBehavior().copyWith(scrollbars: false),
+              child: ListView(
                   padding: const EdgeInsets.fromLTRB(17 * s, 0, 4, 8),
                   children: [
                     LibrarySongRow(
@@ -103,7 +109,8 @@ class MusicCollectionDrawer extends StatelessWidget {
                       LibrarySongRow(
                         art: ThemeImage(lib[i].art, fit: BoxFit.cover),
                         title: lib[i].title,
-                        subtitle: lib[i].subtitle,
+                        // v9.1: hide raw file ids (hex hashes) as subtitles.
+                        subtitle: RegExp(r'^[0-9a-f]{6,}\b', caseSensitive: false).hasMatch(lib[i].subtitle ?? '') ? null : lib[i].subtitle,
                         current: cur != null && cur.key == lib[i].key && cur.themeId == lib[i].themeId,
                         playing: libActive && p.index == i && p.playing,
                         onPlay: lib[i].playable
@@ -111,7 +118,7 @@ class MusicCollectionDrawer extends StatelessWidget {
                             : null,
                       ),
                   ],
-                ),
+                ))),
         ),
         if (cur != null) _miniPlayer(p, cur),
       ],

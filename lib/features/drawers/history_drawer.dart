@@ -161,7 +161,7 @@ class HistorySessionList extends StatelessWidget {
                           duration: const Duration(milliseconds: 180),
                           padding: const EdgeInsets.symmetric(horizontal: VSpace.sm, vertical: 10),
                           decoration: BoxDecoration(
-                            color: on ? const Color(0x40FFFFFF) : VColors.fillCell,
+                            color: on ? const Color(0x660A84FF) : VColors.fillCell,
                             borderRadius: BorderRadius.circular(VRadius.md),
                           ),
                           child: Column(

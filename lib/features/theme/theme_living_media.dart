@@ -261,7 +261,11 @@ class _ThemeLivingBackdropState extends State<ThemeLivingBackdrop> {
     final media = Stack(
       fit: StackFit.expand,
       children: [
-        ThemePosterImage(theme: widget.theme, fullBleed: true, filterQuality: FilterQuality.high),
+        // v9.1 ambient: a still wallpaper drifts very slowly (Ken Burns, ~4%
+        // over 40 s, eased back and forth). Videos already move, so no drift.
+        (c == null && !widget.builderAmbient)
+            ? _StillDrift(child: ThemePosterImage(theme: widget.theme, fullBleed: true, filterQuality: FilterQuality.high))
+            : ThemePosterImage(theme: widget.theme, fullBleed: true, filterQuality: FilterQuality.high),
         if (c != null)
           AnimatedOpacity(
             opacity: showVideo ? 1 : 0,
@@ -309,5 +313,34 @@ class ThemeCoverMedia extends StatelessWidget {
       );
     }
     return ThemePosterImage(theme: theme);
+  }
+}
+
+
+class _StillDrift extends StatefulWidget {
+  final Widget child;
+  const _StillDrift({required this.child});
+  @override
+  State<_StillDrift> createState() => _StillDriftState();
+}
+
+class _StillDriftState extends State<_StillDrift> with SingleTickerProviderStateMixin {
+  late final AnimationController _a = AnimationController(vsync: this, duration: const Duration(seconds: 40))..repeat(reverse: true);
+  @override
+  void dispose() {
+    _a.dispose();
+    super.dispose();
+  }
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) return widget.child;
+    return AnimatedBuilder(
+      animation: _a,
+      child: RepaintBoundary(child: widget.child),
+      builder: (_, child) {
+        final t = Curves.easeInOutSine.transform(_a.value);
+        return Transform.scale(scale: 1.0 + 0.045 * t, alignment: Alignment(-0.3 + 0.6 * t, 0.2), child: child);
+      },
+    );
   }
 }

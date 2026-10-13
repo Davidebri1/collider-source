@@ -1,3 +1,7 @@
+import 'features/smartgen/kanban_store.dart';
+import 'core/files/file_store.dart';
+import 'dart:typed_data';
+import 'dart:convert';
 import 'dart:ui' as ui;
 import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'dart:async';
@@ -41,6 +45,8 @@ import 'features/theme/theme_living_media.dart';
 import 'core/media/theme_catalog.dart';
 import 'core/vision/keyboard_dof.dart';
 import 'core/vision/materialize.dart';
+import 'core/nav/back_guard.dart';
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'core/media/theme_media_bundle.dart';
 import 'core/api/media_gen.dart';
 import 'models/media_specs.dart';
@@ -345,6 +351,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   @override
   void initState() {
     super.initState();
+    installBackGuard(_escape);
+    if (Uri.base.queryParameters['seed'] == '1') _seedSamples();
     ThemeCatalog.instance.addListener(_onCatalogChanged);
     KeyboardDof.install();
     if (Uri.base.queryParameters['drawer'] == 'premium') {
@@ -453,7 +461,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       for (final j in hist) {
         _jobsById[j.id] = j;
       }
-      _globalHistorySessions = [for (final j in hist) _sessionFromJob(j)];
+      _globalHistorySessions = [..._seedHist, for (final j in hist) _sessionFromJob(j)];
       final local = <String, List<ConversationHistorySession>>{};
       for (final j in hist) {
         j.results.forEach((mid, r) {
@@ -543,6 +551,35 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     _consensusSummary = c.summary;
   }
 
+  /// Test-only (?seed=1): sample Files, Smart Gen cards and History so the
+  /// multi-select screens can be screenshotted. Never runs otherwise.
+  List<ConversationHistorySession> _seedHist = const [];
+  Future<void> _seedSamples() async {
+    final fs = FileStore.instance;
+    await fs.init();
+    if (fs.files.isEmpty) {
+      for (final n in ['Trip notes.txt', 'Budget 2026.csv', 'Pitch outline.md', 'Contract.pdf', 'Moodboard.json', 'Reading list.txt']) {
+        await fs.addBytes(n, Uint8List.fromList(utf8.encode('Sample: $n')), 'files');
+      }
+    }
+    final ks = KanbanStore.instance;
+    await ks.init();
+    if (ks.allCards.isEmpty) {
+      for (final (t, n) in [('Draft launch post', 'Two lines, one image'), ('Book venue', 'Call Friday'), ('Pick font', 'Instrument Sans vs Satoshi'), ('Shoot b-roll', 'Golden hour'), ('Fix invoice', 'Send by Monday')]) {
+        await ks.edit(ks.add(0), title: t, notes: n);
+      }
+    }
+    if (!mounted) return;
+    final now = DateTime.now();
+    setState(() {
+      _seedHist = [
+        for (final (i, t) in ['Weekend trip plan', 'Compare phone plans', 'Rewrite my bio', 'Explain R2 pricing', 'Name ideas for the app', 'Fix my CSS grid'].indexed)
+          ConversationHistorySession(id: 'seed$i', title: t, relativeTime: '${i + 1}h ago', timestamp: now.subtract(Duration(hours: i + 1)), summary: 'Sample conversation about ${t.toLowerCase()}.', messages: const []),
+      ];
+      _globalHistorySessions = [..._seedHist, ..._globalHistorySessions];
+    });
+  }
+
   void _initializeHistorySessions() {
     _globalHistorySessions = [];
     _localHistorySessions = {};
@@ -553,6 +590,32 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     _browserTabs = [
       BrowserTab(id: 'user_default', title: 'Google', url: browserStartUrl(), isUserControlling: true),
     ];
+  }
+
+  /// v9.1 escape audit: one rule for back, Esc and edge-swipe. Closes the
+  /// top-most view only.
+  bool get _anythingOpen => _browserOpen || _settingsOpen || _zoomedMessage != null || _localHistoryModel != null || _activeDrawer != null || _isMobileSideNavOpen || _genOptionsOpen;
+  void _escape() {
+    if (!mounted) return;
+    setState(() {
+      if (_browserOpen) {
+        _browserOpen = false;
+      } else if (_settingsOpen && _activeDrawer == 'account') {
+        _activeDrawer = null;
+      } else if (_settingsOpen) {
+        _settingsOpen = false;
+      } else if (_genOptionsOpen) {
+        _genOptionsOpen = false;
+      } else if (_zoomedMessage != null || _localHistoryModel != null) {
+        _zoomedMessage = null;
+        _zoomedModelDef = null;
+        _localHistoryModel = null;
+      } else if (_activeDrawer != null || _isMobileSideNavOpen) {
+        _closeAllPanes();
+      } else if (_isComposerSummoned) {
+        _isComposerSummoned = false;
+      }
+    });
   }
 
   void _closeAllPanes() {
@@ -1654,7 +1717,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
     final isMobile = MediaQuery.of(context).size.width < 768;
 
-    return Scaffold(
+    return CallbackShortcuts(
+      bindings: {const SingleActivator(LogicalKeyboardKey.escape): _escape},
+      child: Focus(autofocus: true, child: Scaffold(
       body: Stack(
         fit: StackFit.expand,
         children: [
@@ -2148,9 +2213,18 @@ AnimatedScale(
             ),
           ),
 
+          // v9.1 escape: swipe in from the left edge closes the top view.
+          if (_anythingOpen)
+            Positioned(
+              left: 0, top: 0, bottom: 0, width: 16,
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onHorizontalDragEnd: (d) { if ((d.primaryVelocity ?? 0) > 250) _escape(); },
+              ),
+            ),
         ],
       ),
-    );
+    )));
   }
 }
 
