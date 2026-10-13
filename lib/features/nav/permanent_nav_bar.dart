@@ -48,14 +48,7 @@ class PermanentNavBar extends StatelessWidget {
               onTap: onSettings,
             ),
             const SizedBox(height: VSpace.xs),
-            VCircleButton(
-              icon: Icons.mode_comment_outlined, // S-N6 Compose glyph
-              tooltip: 'Compose / Home',
-              size: 36,
-              selected: activeDrawer == null || isComposerSummoned,
-              onTap: onHome,
-            ),
-            const SizedBox(height: VSpace.xs),
+            // v9.1.3: no chat button; the composer is always docked.
             VCircleButton(
               icon: Icons.apps_rounded,
               tooltip: 'Apps',

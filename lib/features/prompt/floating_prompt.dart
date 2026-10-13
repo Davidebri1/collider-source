@@ -66,7 +66,7 @@ class FloatingPrompt extends StatefulWidget {
 
 class _FloatingPromptState extends State<FloatingPrompt> {
   final TextEditingController _ctrl = TextEditingController();
-  final FocusNode _focus = FocusNode();
+  late final FocusNode _focus = FocusNode()..addListener(() { if (mounted) setState(() {}); });
   final List<String> _files = [];
 
   @override
@@ -124,6 +124,8 @@ class _FloatingPromptState extends State<FloatingPrompt> {
     _ctrl.clear();
     setState(() => _files.clear());
     widget.onSubmitPrompt(text, files);
+    // v9.1.3: the keyboard stays open after a send.
+    _focus.requestFocus();
   }
 
   Future<void> _attach() async {
@@ -235,6 +237,40 @@ class _FloatingPromptState extends State<FloatingPrompt> {
     );
   }
 
+  Widget _optionsRow() {
+    Widget chip(IconData i, String l, bool on, VoidCallback t) => GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            t();
+            setState(() {});
+            _focus.requestFocus();
+          },
+          child: Container(
+            margin: const EdgeInsets.only(right: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+            decoration: BoxDecoration(color: on ? const Color(0xE6FFFFFF) : const Color(0x26FFFFFF), borderRadius: BorderRadius.circular(28)),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(i, size: 24, color: on ? const Color(0xFF111111) : Colors.white),
+              const SizedBox(width: 8),
+              Text(l, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: on ? const Color(0xFF111111) : Colors.white)),
+            ]),
+          ),
+        );
+    final m = widget.mode;
+    final cat = widget.category;
+    return SizedBox(
+      height: 48,
+      child: ListView(scrollDirection: Axis.horizontal, children: [
+        chip(Icons.attach_file_rounded, 'Attach', false, _attach),
+        chip(Icons.language_rounded, 'Web', m == AskMode.internet, () => widget.onMode(m == AskMode.internet ? AskMode.chat : AskMode.internet)),
+        chip(Icons.travel_explore_rounded, 'Research', m == AskMode.research, () => widget.onMode(m == AskMode.research ? AskMode.chat : AskMode.research)),
+        chip(Icons.visibility_off_outlined, 'Private', widget.private, () => widget.onPrivate(!widget.private)),
+        chip(Icons.image_outlined, 'Image', cat == ModelCategory.image, () => widget.onCategory?.call(cat == ModelCategory.image ? ModelCategory.general : ModelCategory.image)),
+        chip(Icons.movie_outlined, 'Video', cat == ModelCategory.video, () => widget.onCategory?.call(cat == ModelCategory.video ? ModelCategory.general : ModelCategory.video)),
+      ]),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // v8.4: Figma 1-240 (760 x 116) built at its own size and scaled as one
@@ -242,7 +278,7 @@ class _FloatingPromptState extends State<FloatingPrompt> {
     // 40, attach circle 60 (white 30 %), gap 16, field pill 60 high
     // (black 30 %, radius 32, 1 px white-50 % lip, inset shade), action
     // button 48 (white 30 %). Text 24. No placeholder (D43).
-    return GestureDetector(
+    return TextFieldTapRegion(child: GestureDetector(
       onVerticalDragEnd: (d) {
         final v = d.primaryVelocity ?? 0;
         if (v > 200 && widget.summoned) widget.onTuck();
@@ -259,6 +295,13 @@ class _FloatingPromptState extends State<FloatingPrompt> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // v9.1.3: compact options row right above the input while
+                // writing. Inside the field's tap region, so a tap here never
+                // closes the keyboard.
+                if (widget.summoned || _focus.hasFocus) ...[
+                  _optionsRow(),
+                  const SizedBox(height: 14),
+                ],
                 // Attached files: the file names are the only way to tell them apart.
                 if (_files.isNotEmpty) ...[
                   Wrap(spacing: 12, runSpacing: 12, children: [
@@ -326,6 +369,7 @@ class _FloatingPromptState extends State<FloatingPrompt> {
                                     contentPadding: EdgeInsets.zero,
                                   ),
                                   onSubmitted: (_) => _submit(),
+                                  onEditingComplete: () {}, // keep focus on Send
                                 ),
                               ),
                             ),
@@ -342,7 +386,7 @@ class _FloatingPromptState extends State<FloatingPrompt> {
           ),
         ),
       ),
-    );
+    ));
   }
 }
 

@@ -18,15 +18,17 @@ enum VMaterial { prompt, resting, elevated, modal, work }
 /// blur, a ~10 % white frost, no outline, no painted gradient, a soft shadow
 /// so the edge fades into the wallpaper.
 class VFrost {
-  static const double blur = 34;
-  static const Color tint = Color(0x1AFFFFFF);
+  // v9.1.3: solid, physically present glass: a clear dark tint (~48 %), a
+  // slight frost and a slight blur. Reads as an object, never a hologram.
+  static const double blur = 14;
+  static const Color tint = Color(0x7A18181E);
   static const List<BoxShadow> shadow = [BoxShadow(color: Color(0x29000000), blurRadius: 40, spreadRadius: -8, offset: Offset(0, 10))];
 }
 
 extension VMaterialX on VMaterial {
   // v9.1.2: full frost only on temporary surfaces (modal); persistent
   // chrome (prompt / resting / elevated / work) gets a light blur, no tint.
-  bool get frosted => this == VMaterial.modal;
+  bool get frosted => true; // v9.1.3: one material on every floating surface
   Color get fill => frosted ? VFrost.tint : const Color(0x00000000);
   double get blur => frosted ? VFrost.blur : 10;
   Color get rim => const Color(0x00000000);

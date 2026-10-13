@@ -1359,7 +1359,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     final before = {for (final id in models) id: hist(id)};
     setState(() {
       _busy = true;
-      _isComposerSummoned = false;
+      // v9.1.3: sending keeps the composer (and the keyboard) up.
       _closeAllPanes();
       _expandedModelIds.clear();
       _currentPrompt = prompt;
@@ -1710,6 +1710,11 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // the theme gallery keeps a light tint.
           if (_activeDrawer == 'themes')
             Positioned.fill(child: BackdropFilter(filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24), child: const SizedBox.expand())),
+          // v9.1.3 depth rule: a work surface over the main view blurs (takes
+          // away the background's capability) and dims (cinematic focus) what
+          // is behind it. Nothing sits flat over the main view.
+          if (_browserOpen || const {'files', 'smartgen', 'history', 'music', 'apps', 'consensus', 'market'}.contains(_activeDrawer))
+            Positioned.fill(child: IgnorePointer(child: BackdropFilter(filter: ui.ImageFilter.blur(sigmaX: 16, sigmaY: 16), child: const ColoredBox(color: Color(0x47000000))))),
 
           // Depth of field for the summoned composer: the world falls out of
           // focus behind the writing surface. Previously summoning only

@@ -37,7 +37,7 @@ class SettingsDrawer extends StatelessWidget {
       children: [
         // Figma 1:2 has no dimming behind the menu: a clear tap-to-close layer.
         // v9.1 one dim convention: overlays get VOverlay.scrim, unblurred.
-        Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: onClose, child: const ColoredBox(color: VOverlay.scrim))),
+        Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: onClose, child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8), child: const ColoredBox(color: VOverlay.scrim)))),
         // v8.6: Figma 10:2193 (visionOS Settings, 1179 x 877) built at its
         // own size and scaled as one unit to 30 % (David: 25-33 %).
         Center(

@@ -216,7 +216,7 @@ class _ModelPillState extends State<ModelPill> {
       decoration: BoxDecoration(
         // v9.1.2: a soft translucent chat bubble straight on the wallpaper,
         // no outline.
-        color: Color.alphaBlend(c.withValues(alpha: 0.06 + 0.08 * e), const Color(0x52101016)),
+        color: Color.alphaBlend(c.withValues(alpha: 0.06 + 0.08 * e), const Color(0x7A18181E)),
         borderRadius: BorderRadius.circular(18),
         boxShadow: const [BoxShadow(color: Color(0x1F000000), blurRadius: 20, offset: Offset(0, 6))],
       ),
