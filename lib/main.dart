@@ -1820,9 +1820,12 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               child: Align(
                 alignment: Alignment.bottomCenter,
                 child: Column(
-                  mainAxisSize: MainAxisSize.min,
+                  // v9.1.2: bubbles at the top like the reference photo,
+                  // composer at the bottom, open wallpaper between.
+                  mainAxisSize: _mediaShowing ? MainAxisSize.min : MainAxisSize.max,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
+                    if (!_mediaShowing) const SizedBox(height: 12),
                     // Map row 13: a generation gets the room to show its media
                     // and its panel, so the media board keeps this plane to
                     // itself and only the composer floats in the floatable width.
@@ -1841,7 +1844,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                         builder: (_, on, child) => ImageFiltered(enabled: on, imageFilter: ui.ImageFilter.blur(sigmaX: 4, sigmaY: 4), child: child!),
                         child: _buildTickerWindow(),
                       ),
-                      const SizedBox(height: _windowGap),
+                      const Spacer(),
                       // Bug 7: the composer has its own slot now, so it cannot
                       // land on the category chips.
                       _buildComposer(),
