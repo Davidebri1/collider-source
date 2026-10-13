@@ -608,11 +608,7 @@ class _Plate extends StatelessWidget {
         // Reads as depth rather than as a star field: a broad falloff only.
         const DecoratedBox(
           decoration: BoxDecoration(
-            gradient: RadialGradient(
-              radius: 1.05,
-              colors: [Color(0x00000000), Color(0x40000000)],
-              stops: [0.45, 1],
-            ),
+            color: const Color(0x00000000), // v9.1: flat frost, no painted gradient
           ),
         ),
         if (center != null) Center(child: center!),

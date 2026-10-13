@@ -1067,12 +1067,7 @@ class GlassMenu extends StatelessWidget {
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(24),
-                  gradient: const LinearGradient(
-                    begin: Alignment(-0.8, -1),
-                    end: Alignment(0.8, 1),
-                    colors: [Color(0x4D232327), Color(0x4D232327), Color(0x66FFFFFF), Color(0x4D232327)],
-                    stops: [0.017, 0.0175, 0.33, 0.97],
-                  ),
+                  color: const Color(0x4D232327), // v9.1: flat frost, no painted gradient
                 ),
                 // The stroke and its shadow live in the foreground. Inside
                 // `decoration` the border was painted under the very ClipRRect

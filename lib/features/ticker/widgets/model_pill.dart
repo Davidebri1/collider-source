@@ -124,11 +124,7 @@ class _ModelPillState extends State<ModelPill> {
     final surface = Color.alphaBlend(c.withValues(alpha: 0.16), const Color(0xFF171722));
     return DecoratedBox(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color.lerp(surface, c.withValues(alpha: 0.22), 0.5)!, Color.lerp(surface, Colors.black, 0.20)!],
-        ),
+        color: surface, // v9.1: flat frost, no painted gradient
         borderRadius: BorderRadius.circular(VRadius.lg - 4),
         border: Border.all(color: c.withValues(alpha: 0.42), width: 0.8),
         boxShadow: [
@@ -218,7 +214,7 @@ class _ModelPillState extends State<ModelPill> {
       curve: Curves.easeOutCubic,
       padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
       decoration: BoxDecoration(
-        gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [top, bottom]),
+        color: top, // v9.1: flat frost, no painted gradient
         borderRadius: BorderRadius.circular(VRadius.lg - 4),
         border: Border.all(color: c.withValues(alpha: 0.18 + 0.14 * e), width: 0.6),
         boxShadow: [

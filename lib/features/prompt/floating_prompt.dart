@@ -304,11 +304,7 @@ class _FloatingPromptState extends State<FloatingPrompt> {
                         ),
                         foregroundDecoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(32),
-                          gradient: const LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment(0.2, 0.6),
-                            colors: [Color(0x26000000), Color(0x00000000)],
-                          ),
+                          color: const Color(0x00000000), // v9.1: flat frost, no painted gradient
                         ),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.end,
