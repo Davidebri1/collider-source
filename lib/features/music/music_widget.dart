@@ -118,7 +118,7 @@ class MusicWidget extends StatelessWidget {
       key: const ValueKey('expanded'),
       size: expandedSize,
       child: VGlass(
-        material: VMaterial.elevated,
+        material: VMaterial.modal,
         radius: expandedRadius,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,

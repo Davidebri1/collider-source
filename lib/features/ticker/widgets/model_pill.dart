@@ -214,31 +214,15 @@ class _ModelPillState extends State<ModelPill> {
       curve: Curves.easeOutCubic,
       padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
       decoration: BoxDecoration(
-        color: top, // v9.1: flat frost, no painted gradient
-        borderRadius: BorderRadius.circular(VRadius.lg - 4),
-        border: Border.all(color: c.withValues(alpha: 0.18 + 0.14 * e), width: 0.6),
-        boxShadow: [
-          // Two shadows: a tight contact shadow that grounds the card on the
-          // surface below, and a wide soft one that lifts it off. One shadow
-          // alone cannot do both, and over a bright wallpaper the old single
-          // 10% shadow was invisible.
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.30 + 0.22 * e),
-            blurRadius: 6 + 10 * e,
-            offset: Offset(0, 1 + 3 * e),
-          ),
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.20 + 0.24 * e),
-            blurRadius: 18 + 26 * e,
-            spreadRadius: -4,
-            offset: Offset(0, 6 + 12 * e),
-          ),
-          BoxShadow(
-            color: c.withValues(alpha: 0.18 + 0.16 * e),
-            blurRadius: 20 + 18 * e,
-            spreadRadius: -12,
-            offset: Offset(0, 2 + 4 * e),
-          ),
+        // v9.1.2: a soft translucent chat bubble straight on the wallpaper,
+        // no outline.
+        color: Color.alphaBlend(c.withValues(alpha: 0.06 + 0.08 * e), const Color(0x52101016)),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: const [BoxShadow(color: Color(0x1F000000), blurRadius: 20, offset: Offset(0, 6))],
+      ),
+      foregroundDecoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: const [
         ],
       ),
       child: Column(

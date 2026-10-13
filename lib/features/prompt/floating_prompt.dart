@@ -295,12 +295,12 @@ class _FloatingPromptState extends State<FloatingPrompt> {
                     const SizedBox(width: 16),
                     Expanded(
                       child: Container(
-                        constraints: const BoxConstraints(minHeight: 60),
-                        padding: const EdgeInsets.fromLTRB(24, 6, 6, 6),
+                        // v9.1.2: one thin glass line, as in the reference.
+                        constraints: const BoxConstraints(minHeight: 44),
+                        padding: const EdgeInsets.fromLTRB(20, 2, 4, 2),
                         decoration: BoxDecoration(
-                          color: const Color(0x4D000000),
-                          borderRadius: BorderRadius.circular(32),
-                          boxShadow: const [BoxShadow(color: Color(0x80FFFFFF), offset: Offset(0, 1), blurRadius: 1)],
+                          color: const Color(0x1AFFFFFF),
+                          borderRadius: BorderRadius.circular(24),
                         ),
                         foregroundDecoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(32),

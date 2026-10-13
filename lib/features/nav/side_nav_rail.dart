@@ -90,7 +90,7 @@ class SideNavRail extends StatelessWidget {
   Widget build(BuildContext context) {
     final entries = sideRailEntries(surface);
     final active = entries.indexWhere((e) => e.key == activeKey);
-    return AnimatedSize(
+    return _Recede(child: AnimatedSize(
       duration: VMotion.base,
       curve: Curves.easeOutCubic,
       alignment: Alignment.topCenter,
@@ -115,7 +115,7 @@ class SideNavRail extends StatelessWidget {
           ),
         ),
       ),
-    );
+    ));
   }
 }
 
@@ -184,4 +184,40 @@ class _RailButton extends StatelessWidget {
       ),
     );
   }
+}
+
+/// v9.1.2: the rail recedes (smaller, faded) until touched, then comes
+/// forward for a few seconds.
+class _Recede extends StatefulWidget {
+  final Widget child;
+  const _Recede({required this.child});
+  @override
+  State<_Recede> createState() => _RecedeState();
+}
+
+class _RecedeState extends State<_Recede> {
+  bool _on = false;
+  int _gen = 0;
+  void _wake() {
+    final g = ++_gen;
+    setState(() => _on = true);
+    Future.delayed(const Duration(seconds: 4), () {
+      if (mounted && g == _gen) setState(() => _on = false);
+    });
+  }
+  @override
+  Widget build(BuildContext context) => Listener(
+        onPointerDown: (_) => _wake(),
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 260),
+          opacity: _on ? 1 : 0.38,
+          child: AnimatedScale(
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutCubic,
+            scale: _on ? 1 : 0.82,
+            alignment: Alignment.centerLeft,
+            child: widget.child,
+          ),
+        ),
+      );
 }

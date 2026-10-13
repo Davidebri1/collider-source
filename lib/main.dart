@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'core/theme/app_font.dart';
 import 'features/smartgen/kanban_store.dart';
 import 'core/files/file_store.dart';
@@ -589,7 +590,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   void _initializeBrowserTabs() {
     // One user tab; research sources are added as tabs when a question uses the web.
     _browserTabs = [
-      BrowserTab(id: 'user_default', title: 'Google', url: browserStartUrl(), isUserControlling: true),
+      BrowserTab(id: 'user_default', title: 'Bing', url: browserStartUrl(), isUserControlling: true),
     ];
   }
 
@@ -770,14 +771,14 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     required Widget child,
     double radius = VRadius.card,
     EdgeInsetsGeometry padding = EdgeInsets.zero,
+    bool bare = false,
   }) =>
-      DecoratedBox(
+      bare ? Padding(padding: padding, child: child) : DecoratedBox(
         decoration: BoxDecoration(borderRadius: BorderRadius.circular(radius), boxShadow: _windowShadow),
         child: VGlass(
           radius: radius,
-          material: VMaterial.resting,
+          material: VMaterial.modal,
           shadow: false, // the real shadow is the DecoratedBox above
-          fill: const Color(0xD914141C),
           padding: padding,
           child: child,
         ),
@@ -1123,10 +1124,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(VRadius.full),
                             color: on ? Colors.white.withValues(alpha: 0.16) : Colors.transparent,
-                            border: Border.all(
-                              color: on ? Colors.white.withValues(alpha: 0.30) : Colors.white.withValues(alpha: 0.10),
-                              width: 0.5,
-                            ),
                           ),
                           child: Text(
                             _tickerOrder[i].label,
@@ -1164,12 +1161,17 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     // R09: the window shows one, two or three rows. A slot is sized for a model
     // name plus a wrapped one-line summary; anything longer scrolls behind the
     // edge fade and the chevron.
-    final visible = _tickerRows(_activeCategory).length.clamp(1, _maxTickerRows);
+    final rowCount = _tickerRows(_activeCategory).length;
+    // v9.1.2: nothing asked yet -> nothing drawn, just the wallpaper.
+    if (rowCount == 0 && !showConsensus) return const SizedBox.shrink();
+    final visible = rowCount.clamp(1, _maxTickerRows);
     final window = SizedBox(
-      width: _dockWidth,
+      // v9.1.2: chat bubbles span the screen like the reference.
+      width: math.min(MediaQuery.sizeOf(context).width - 100, 520),
       child: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: _tickerHeight),
         child: _windowSurface(
+          bare: true,
           padding: const EdgeInsets.fromLTRB(VSpace.xs - 2, VSpace.xs - 2, VSpace.xs - 2, VSpace.xs - 2),
           child: CustomMultiChildLayout(
             // Only the card list is elastic. The pinned row keeps its natural
@@ -1243,6 +1245,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   Widget _buildComposer() => SizedBox(
         width: _composerWidth,
         child: _windowSurface(
+          bare: true,
           padding: const EdgeInsets.symmetric(vertical: VSpace.xs - 2),
           child: FloatingPrompt(
             summoned: _isComposerSummoned,
@@ -2087,7 +2090,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             if (_railVisible)
               Positioned(
                 left: 10,
-                bottom: 84,
+                bottom: 150, // v9.1.2: clear of the composer line
                 child: _buildSideNav(isMobile: true),
               ),
           ] else ...[

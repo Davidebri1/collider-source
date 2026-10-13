@@ -42,14 +42,10 @@ class ConsensusRow extends StatelessWidget {
           // so it gets a defined surface instead of another translucent white
           // wash over the window, and keeps the contact + ambient + bounce
           // shadow trio that separates it from what sits below it.
-          color: const Color(0xFF272736), // v9.1: flat frost, no painted gradient
-          borderRadius: BorderRadius.circular(VRadius.lg - 2),
-          border: Border.all(color: const Color(0x4DFFFFFF), width: 0.7),
-          boxShadow: const [
-            BoxShadow(color: Color(0x59000000), blurRadius: 28, offset: Offset(0, 14)),
-            BoxShadow(color: Color(0x33000000), blurRadius: 6, offset: Offset(0, 2)),
-            BoxShadow(color: Color(0x1FFFFFFF), blurRadius: 10, spreadRadius: -4),
-          ],
+          // v9.1.2: a soft translucent bubble, no outline.
+          color: const Color(0x66101016),
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: const [BoxShadow(color: Color(0x1F000000), blurRadius: 20, offset: Offset(0, 6))],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

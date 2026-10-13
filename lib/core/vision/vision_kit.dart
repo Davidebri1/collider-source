@@ -24,10 +24,13 @@ class VFrost {
 }
 
 extension VMaterialX on VMaterial {
-  Color get fill => VFrost.tint;
-  double get blur => VFrost.blur;
+  // v9.1.2: full frost only on temporary surfaces (modal); persistent
+  // chrome (prompt / resting / elevated / work) gets a light blur, no tint.
+  bool get frosted => this == VMaterial.modal;
+  Color get fill => frosted ? VFrost.tint : const Color(0x00000000);
+  double get blur => frosted ? VFrost.blur : 10;
   Color get rim => const Color(0x00000000);
-  List<BoxShadow> get shadow => VFrost.shadow;
+  List<BoxShadow> get shadow => frosted ? VFrost.shadow : const [];
 }
 
 /// One-pass glass surface: blur + material fill + hairline + specular rim.
