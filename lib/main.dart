@@ -1200,7 +1200,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     return AnimatedOpacity(
       duration: VMotion.base,
       curve: Curves.easeOutCubic,
-      opacity: _isComposerSummoned ? 0.9 : 1,
+      opacity: _isComposerSummoned ? 1.0 : 1,
       child: IgnorePointer(ignoring: _isComposerSummoned, child: window),
     );
   }
@@ -1410,6 +1410,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       _tickerItems = [
         for (final id in models)
           TickerItem(modelDef: ModelRoster.byId(id)!, relativeTime: '', summary: '', isStreaming: true, conversation: [...before[id]!, TickerMessage(id: 'u$id${now.microsecondsSinceEpoch}', sender: 'user', text: prompt, timestamp: now)]),
+        // Models not asked this turn keep their conversation (never wiped).
+        for (final t in _tickerItems)
+          if (!models.contains(t.modelDef.id)) t,
       ];
     });
     await Future.wait([
@@ -1422,7 +1425,26 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         ]).then((text) => _answer(id, text, false), onError: (e) => _answer(id, e is MediaGenError ? e.reason : friendlyErrorMessage(e), true)),
     ]);
     if (!mounted) return;
-    setState(() => _busy = false);
+    setState(() {
+      _busy = false;
+      // The full conversation is saved to History (unless Incognito / off).
+      if (_autosave && !_incognito) {
+        final done = DateTime.now();
+        final sid = 'local_${now.microsecondsSinceEpoch}';
+        _globalHistorySessions = [
+          ConversationHistorySession(id: sid, title: prompt, relativeTime: 'just now', timestamp: done, summary: prompt, modelIds: models,
+              messages: [for (final t in _tickerItems) if (models.contains(t.modelDef.id)) ...t.conversation]),
+          ..._globalHistorySessions,
+        ];
+        for (final t in _tickerItems) {
+          if (!models.contains(t.modelDef.id)) continue;
+          _localHistorySessions[t.modelDef.id] = [
+            ConversationHistorySession(id: '${sid}_${t.modelDef.id}', title: prompt, targetModelId: t.modelDef.id, relativeTime: 'just now', timestamp: done, summary: t.summary, modelIds: [t.modelDef.id], messages: t.conversation),
+            ...?_localHistorySessions[t.modelDef.id],
+          ];
+        }
+      }
+    });
     await _directConsensus(prompt);
   }
 
@@ -1713,6 +1735,19 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     _prevDrawer = _activeDrawer;
   }
 
+  bool get _otherSurfaceFocused => _settingsOpen || _browserOpen || (_activeDrawer != null) || _zoomedMessage != null || _localHistoryModel != null;
+  Widget _tickerGate(Widget child) {
+    final off = _otherSurfaceFocused;
+    return IgnorePointer(
+      ignoring: off,
+      child: ImageFiltered(
+        enabled: off,
+        imageFilter: ui.ImageFilter.blur(sigmaX: VDepth.blur / 2, sigmaY: VDepth.blur / 2),
+        child: child,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     _guardPreview();
@@ -1837,10 +1872,11 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // v9.1.4 (playtest #6): a tap outside the opened answer closes it.
           if (_expandedModelIds.isNotEmpty && _activeDrawer == null && !_settingsOpen && !_browserOpen)
             Positioned.fill(child: VScrim(onTap: () => setState(_expandedModelIds.clear))),
-          if (!_settingsOpen && !_browserOpen && !(isMobile && _isMobileSideNavOpen) && !const {'premium', 'themes', 'apps', 'smartgen', 'market', 'files', 'consensus', 'history', 'music', 'account'}.contains(_activeDrawer))
+          // The ticker is the core experience: ALWAYS present. When another
+          // surface has focus it stays, blurred and non-interactive.
           Positioned.fill(
-            bottom: 12,
-            child: SafeArea(
+            bottom: 12 + 56 + 4, // docked on the bottom bar: one layer
+            child: _tickerGate(SafeArea(
               bottom: false,
               child: Align(
                 alignment: Alignment.bottomCenter,
@@ -1878,7 +1914,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                   ],
                 ),
               ),
-            ),
+            )),
           ),
 
 
@@ -2194,11 +2230,12 @@ AnimatedScale(
           ),
           Positioned.fill(child: MaterializeSwitch(show: _settingsOpen && _activeDrawer == 'account', builder: (_) => AccountSheet(tier: ModelTier.free, onClose: () => setState(() => _activeDrawer = null)))),
 
-          // v9.1.3: no bottom bar. Settings / Home / Apps live in a small
-          // receding column at the left edge, above the composer.
+          // Home bottom bar restored (Settings / Apps); only the redundant
+          // chat button was removed. The composer docks directly above it.
           Positioned(
-            left: 10,
-            bottom: 84,
+            left: 0,
+            right: 0,
+            bottom: 12,
             child: SafeArea(
               top: false,
               child: Align(

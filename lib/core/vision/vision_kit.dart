@@ -21,7 +21,7 @@ class VFrost {
   // v9.1.3: solid, physically present glass: a clear dark tint (~48 %), a
   // slight frost and a slight blur. Reads as an object, never a hologram.
   static const double blur = 14;
-  static const Color tint = Color(0x7A18181E);
+  static const Color tint = Color(0xD018181E);
   static const List<BoxShadow> shadow = [BoxShadow(color: Color(0x29000000), blurRadius: 40, spreadRadius: -8, offset: Offset(0, 10))];
 }
 
@@ -268,7 +268,7 @@ class VCategoryRow extends StatelessWidget {
               margin: const EdgeInsets.only(right: 8, top: 4, bottom: 4),
               padding: const EdgeInsets.symmetric(horizontal: 14),
               alignment: Alignment.center,
-              decoration: BoxDecoration(color: c == selected ? const Color(0xE6FFFFFF) : const Color(0x7A18181E), borderRadius: BorderRadius.circular(18)),
+              decoration: BoxDecoration(color: c == selected ? const Color(0xE6FFFFFF) : const Color(0xD018181E), borderRadius: BorderRadius.circular(18)),
               child: Text(plain(c), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: c == selected ? const Color(0xFF111111) : Colors.white)),
             ),
           ),
@@ -299,7 +299,7 @@ class VCloseButton extends StatelessWidget {
                   child: Container(
                     width: 36,
                     height: 36,
-                    color: const Color(0x7A18181E),
+                    color: const Color(0xD018181E),
                     alignment: Alignment.center,
                     child: const Icon(Icons.close_rounded, size: 20, color: Colors.white),
                   ),
@@ -1269,9 +1269,9 @@ class _GhostMenuState extends State<GhostMenu> {
                       behavior: HitTestBehavior.opaque,
                       onTap: () => _c.animateToItem(i, duration: VMotion.base, curve: Curves.easeOutCubic),
                       child: Opacity(
-                        opacity: (1 - d * 0.18).clamp(0.6, 1.0), // v9.1.4 (playtest #15): crisp, never smeared
+                        opacity: (1 - d * 0.32).clamp(0.08, 1.0),
                         child: ImageFiltered(
-                          enabled: false,
+                          enabled: sigma > 0.05,
                           imageFilter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
                           child: Center(
                             child: Row(mainAxisSize: MainAxisSize.min, children: [

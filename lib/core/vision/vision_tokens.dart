@@ -14,8 +14,8 @@ class VColors {
 
   // Text (kit dark theme)
   static const Color textPrimary = Color(0xFFFFFFFF);
-  static const Color textSecondary = Color(0xB3FFFFFF); // rgba(255,255,255,0.70)
-  static const Color textTertiary = Color(0x73FFFFFF); // rgba(255,255,255,0.45)
+  static const Color textSecondary = Color(0xF2FFFFFF); // dense glass: near-full white // rgba(255,255,255,0.70)
+  static const Color textTertiary = Color(0xD9FFFFFF); // rgba(255,255,255,0.45)
 
   // Borders (kit dark theme)
   static const Color borderLight = Color(0x1FFFFFFF); // 0.12

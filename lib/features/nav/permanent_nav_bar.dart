@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../core/vision/vision_kit.dart';
-import 'side_nav_rail.dart' show Recede;
 
 /// REQ-12 / G6 Permanent 3-icon bottom dock (Settings | Compose | Apps), shown on
 /// every screen including the Premium Theme Market — a compact glass capsule ornament
@@ -35,30 +34,30 @@ class PermanentNavBar extends StatelessWidget {
           onToggleComposer();
         }
       },
-      child: Recede(child: VOrnament(
+      child: VOrnament(
         padding: const EdgeInsets.all(VSpace.xs - 2),
-        child: Column(
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             VCircleButton(
               icon: Icons.tune_rounded,
               tooltip: 'Settings',
-              size: 36,
+              size: 44,
               selected: activeDrawer == 'settings',
               onTap: onSettings,
             ),
-            const SizedBox(height: VSpace.xs),
-            // v9.1.3: no chat button; the composer is always docked.
+            // The redundant Compose / Home button is gone (user ask); the bar stays.
+            const SizedBox(width: VSpace.sm),
             VCircleButton(
               icon: Icons.apps_rounded,
               tooltip: 'Apps',
-              size: 36,
+              size: 44,
               selected: activeDrawer == 'apps',
               onTap: onApps,
             ),
           ],
         ),
-      )),
+      ),
     );
   }
 }

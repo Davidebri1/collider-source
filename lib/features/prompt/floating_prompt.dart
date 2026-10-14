@@ -248,7 +248,7 @@ class _FloatingPromptState extends State<FloatingPrompt> {
           child: Container(
             margin: const EdgeInsets.only(right: 10),
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-            decoration: BoxDecoration(color: on ? const Color(0xE6FFFFFF) : const Color(0x26FFFFFF), borderRadius: BorderRadius.circular(28)),
+            decoration: BoxDecoration(color: on ? const Color(0xE6FFFFFF) : const Color(0xD018181E), borderRadius: BorderRadius.circular(28)),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               Icon(i, size: 24, color: on ? const Color(0xFF111111) : Colors.white),
               const SizedBox(width: 8),
@@ -340,7 +340,7 @@ class _FloatingPromptState extends State<FloatingPrompt> {
                         constraints: const BoxConstraints(minHeight: 44),
                         padding: const EdgeInsets.fromLTRB(20, 2, 4, 2),
                         decoration: BoxDecoration(
-                          color: const Color(0x1AFFFFFF),
+                          color: const Color(0xE618181E), // solid input bar (user reference)
                           borderRadius: BorderRadius.circular(24),
                         ),
                         foregroundDecoration: BoxDecoration(
