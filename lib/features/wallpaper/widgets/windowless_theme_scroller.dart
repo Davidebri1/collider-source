@@ -82,8 +82,12 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final pad = MediaQuery.of(context).padding;
-    final winW = (size.width - 120).clamp(200.0, 440.0); // v9.1.6: dead centre; the nav floats over it
-    final winH = (winW * 1.3).clamp(240.0, size.height - pad.top - 84 - 112 - 90);
+    // David: previews are phone-shaped (device portrait aspect), centred;
+    // narrowed to fit rather than shifted.
+    final aspect = (size.height / size.width).clamp(1.78, 2.17);
+    final maxH = (size.height - pad.top - 84 - 112 - 90 - 52).clamp(240.0, 900.0);
+    final winW = math.min((size.width - 120).clamp(160.0, 440.0), maxH / aspect);
+    final winH = winW * aspect;
     return ListenableBuilder(
       listenable: ThemePackStore.instance,
       builder: (context, _) {
@@ -92,6 +96,7 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
           behavior: HitTestBehavior.translucent,
           onVerticalDragEnd: (d) {
             if ((d.primaryVelocity ?? 0) < -300) widget.onUpgradeTier();
+            if ((d.primaryVelocity ?? 0) > 300) widget.onCancel(); // swipe down closes
           },
           child: Stack(
             fit: StackFit.expand,
@@ -107,25 +112,14 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                             onTap: () => setState(() => _expanded = false),
                             child: ThemePosterImage(theme: _previewed, fit: BoxFit.cover, fullBleed: true),
                           )
-                        : ImageFiltered(
-                            imageFilter: ImageFilter.blur(sigmaX: 28, sigmaY: 28, tileMode: TileMode.clamp),
-                            child: ColorFiltered(
-                              colorFilter: const ColorFilter.mode(Color(0x55000000), BlendMode.darken),
-                              // v8.3.1: the room stays the current wallpaper while browsing.
-                              child: ThemePosterImage(theme: widget.currentTheme, fit: BoxFit.cover, fullBleed: true),
-                            ),
-                          ),
+                        // David: no blur, dim or change to the wallpaper until one is set;
+                        // the real wallpaper behind shows through untouched.
+                        : const SizedBox.expand(),
                   ),
                 ),
               ),
               if (_expanded && _previewed.isLive)
                 Positioned.fill(child: IgnorePointer(child: _LoopVideo(key: ValueKey('full-${_previewed.id}'), url: _previewed.videoUrl!))),
-              if (_expanded)
-                Positioned(
-                  left: VSpace.md,
-                  top: pad.top + VSpace.sm,
-                  child: VCircleButton(icon: Icons.fullscreen_exit_rounded, floating: true, tooltip: 'Back', onTap: () => setState(() => _expanded = false)),
-                ),
               if (!_expanded)
                 Positioned(
                   left: 0,
@@ -148,10 +142,30 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                           ),
                         ),
                         const SizedBox(height: VSpace.sm),
+                        // One control below the image: the name and Set.
+                        SizedBox(
+                          width: winW,
+                          child: Row(children: [
+                            Expanded(child: Text(_previewed.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: VType.headline(color: Colors.white))),
+                            VPress(
+                              key: const ValueKey('gallery-set'),
+                              onTap: () => widget.onConfirmTheme(_previewed),
+                              tooltip: 'Set wallpaper',
+                              child: Container(
+                                height: 36,
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(999)),
+                                child: Text('Set wallpaper', style: VType.footnote(color: Colors.black, weight: FontWeight.w600)),
+                              ),
+                            ),
+                          ]),
+                        ),
+                        const SizedBox(height: VSpace.sm),
                         SizedBox(
                           width: winW,
                           height: 60,
-                          child: EdgeFadeHorizontal(
+                          child: ClipRect( // David: no carousel edge blur
                             child: ListView.separated(
                               scrollDirection: Axis.horizontal,
                               physics: const BouncingScrollPhysics(),
@@ -173,9 +187,6 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                                       borderRadius: BorderRadius.circular(6),
                                                       child: Stack(fit: StackFit.expand, children: [
                                         ThemePosterImage(theme: t, fit: BoxFit.cover, filterQuality: FilterQuality.high),
-                                        // Small live marker (stills and loops are mixed).
-                                        if (t.isLive)
-                                          const Positioned(right: 3, bottom: 3, child: Icon(Icons.play_arrow_rounded, size: 12, color: Colors.white, shadows: _shadow)),
                                       ]),
                                     ),
                                   ),
@@ -301,78 +312,12 @@ class _PreviewWindowState extends State<_PreviewWindow> {
               clipBehavior: Clip.hardEdge,
               child: SizedBox(width: c.value.size.width, height: c.value.size.height, child: VideoPlayer(c)),
             ),
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0x33000000), Color(0x00000000), Color(0x00000000), Color(0x99000000)],
-                stops: [0, 0.2, 0.6, 1],
-              ),
-            ),
-          ),
-          Positioned(
-            left: 12,
-            right: 12,
-            top: 12,
-            child: Row(
-              children: [
-                VCircleButton(icon: Icons.chevron_left_rounded, size: 32, floating: true, tooltip: 'Back', onTap: widget.onBack),
-                const Spacer(),
-                VPress(
-                  onTap: widget.onExpand,
-                  tooltip: 'Expand View',
-                  child: _capsule(Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.open_in_full_rounded, size: 14, color: Colors.white),
-                    const SizedBox(width: 6),
-                    Text('Expand View', style: VType.footnote(color: Colors.white, weight: FontWeight.w600)),
-                  ])),
-                ),
-                const Spacer(),
-                VCircleButton(icon: Icons.check_rounded, size: 32, floating: true, tooltip: 'Set Wallpaper', onTap: widget.onSet),
-              ],
-            ),
-          ),
-          Positioned(
-            left: 18,
-            right: 14,
-            bottom: ready ? 8 : 18,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(t.name, maxLines: 2, style: VType.title2(color: Colors.white).copyWith(shadows: _WindowlessThemeScrollerState._shadow)),
-                if (ready)
-                  Row(children: [
-                    VPress(
-                      onTap: () => c.value.isPlaying ? c.pause() : c.play(),
-                      tooltip: c.value.isPlaying ? 'Pause' : 'Play',
-                      child: SizedBox(width: 32, height: 40, child: Icon(c.value.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, color: Colors.white, size: 24)),
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: SliderTheme(
-                        data: SliderThemeData(
-                          trackHeight: 4,
-                          activeTrackColor: Colors.white.withValues(alpha: 0.9),
-                          inactiveTrackColor: Colors.white.withValues(alpha: 0.3),
-                          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 0, elevation: 0, pressedElevation: 0),
-                          overlayShape: SliderComponentShape.noOverlay,
-                        ),
-                        child: Slider(
-                          value: frac.clamp(0.0, 1.0),
-                          onChanged: (v) => setState(() => _scrub = v),
-                          onChangeEnd: (v) {
-                            c.seekTo(Duration(milliseconds: (dur * v).round()));
-                            setState(() => _scrub = null);
-                          },
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                  ]),
-              ],
-            ),
-          ),
+          // David (repeatedly): nothing sits on top of a theme image or video.
+          // The back / Expand View / Set / title / scrubber overlays came back
+          // from the v9-final import and the v8.7 restore (50a61a7); they are
+          // gone here and media_check.py fails if any widget overlaps the image.
+          // Tap the image to view it full screen; Set lives below.
+          Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: widget.onExpand)),
         ],
       ),
     );

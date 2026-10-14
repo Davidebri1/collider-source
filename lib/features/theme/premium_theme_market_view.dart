@@ -79,8 +79,10 @@ class PremiumThemeMarketView extends StatefulWidget {
 
 // hooks/useResponsive.ts
 const double _kMobileBreakpoint = 768; // width < 768
-const double _kCoverSizeMobile = 170;
-const double _kCoverSizeDesktop = 200;
+const double _kCoverSizeMobile = 128;
+/// Device portrait aspect (height / width), set from the screen each build.
+double kPhoneAspect = 19.5 / 9;
+const double _kCoverSizeDesktop = 150;
 
 // CoverFlow.tsx getTransform()
 const double _kSpacingMobile = 120;
@@ -283,7 +285,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
 
   /// Exploded asset view: the cover lifted forward, a context menu under it.
   Widget _explodedView(WallpaperTheme t, double w, double h) {
-    final cw = math.min(w * 0.62, 300.0);
+    final cw = math.min(math.min(w * 0.62, 300.0), h * 0.6 / kPhoneAspect);
     final owned = _owned(t);
     // v9.1.6 (Visual Playtest / CONVENTIONS): one action, one centred
     // button: the price to buy, "Set as wallpaper" once owned. Tap outside
@@ -320,7 +322,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
               borderRadius: BorderRadius.circular(22),
               child: SizedBox(
                 width: cw,
-                height: cw * 16 / 9,
+                height: cw * kPhoneAspect, // phone-shaped
                 child: ThemeImage(t.assetPath, fit: BoxFit.cover, filterQuality: FilterQuality.high),
               ),
             ),
@@ -1262,7 +1264,11 @@ class _CoverFlowState extends State<_CoverFlow> {
 
   @override
   Widget build(BuildContext context) {
-    final coverSize = widget.isMobile ? _kCoverSizeMobile : _kCoverSizeDesktop;
+    final ms = MediaQuery.sizeOf(context);
+    kPhoneAspect = (ms.height / ms.width).clamp(1.78, 2.17);
+    // Phone-shaped cover sized to the stage height so it never overlaps the
+    // category bar or the title.
+    final coverSize = math.min(widget.isMobile ? _kCoverSizeMobile : _kCoverSizeDesktop, 250 / kPhoneAspect);
     final themes = widget.themes;
     // Paint order = CSS z-index (getZIndex + 1000), ties in DOM order.
     final visible = <int>[
@@ -1284,7 +1290,7 @@ class _CoverFlowState extends State<_CoverFlow> {
       onHorizontalDragCancel: _dragEnd,
       child: LayoutBuilder(builder: (context, c) {
         final left = (c.maxWidth - coverSize) / 2;
-        final top = (c.maxHeight - coverSize) / 2;
+        final top = (c.maxHeight - coverSize * kPhoneAspect) / 2;
         return ListenableBuilder(
           listenable: _drag,
           builder: (context, _) => MouseRegion(
@@ -1300,7 +1306,7 @@ class _CoverFlowState extends State<_CoverFlow> {
                     left: left,
                     top: top,
                     width: coverSize,
-                    height: coverSize * 2, // cover + ReflectionComponent (top-full, h-full)
+                    height: coverSize * kPhoneAspect * 2, // cover + ReflectionComponent (top-full, h-full)
                     child: TweenAnimationBuilder<_CardPose>(
                       tween: _CardPoseTween(end: _poseFor(i)),
                       duration: _drag.dragging ? Duration.zero : _kCardTransition,
@@ -1356,12 +1362,14 @@ class _CoverCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // David: covers are phone-shaped (device portrait aspect), never square.
+    final h = size * kPhoneAspect;
     // ReflectionComponent opacity: index === currentIndex ? 0.9 : 0.75
     final reflectionOpacity =
         isCurrent ? _kReflectionOpacityCenter : _kReflectionOpacitySide;
     return SizedBox(
       width: size,
-      height: size * 2,
+      height: h * 2,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -1370,13 +1378,13 @@ class _CoverCard extends StatelessWidget {
             left: -_shadowPad,
             top: -_shadowPad,
             width: size + _shadowPad * 2,
-            height: size + _shadowPad * 2,
+            height: h + _shadowPad * 2,
             child: _CachedPaint(
-              cacheKey: 'cover-shadow|$size',
-              size: Size(size + _shadowPad * 2, size + _shadowPad * 2),
+              cacheKey: 'cover-shadow|$size|$h',
+              size: Size(size + _shadowPad * 2, h + _shadowPad * 2),
               painter: _OffsetPainter(
                 const Offset(_shadowPad, _shadowPad),
-                Size(size, size),
+                Size(size, h),
                 const _CssShadowPainter(_kCoverShadowsBlurred, _kRadius),
               ),
             ),
@@ -1385,7 +1393,7 @@ class _CoverCard extends StatelessWidget {
             left: 0,
             top: 0,
             width: size,
-            height: size,
+            height: h,
             child: CustomPaint(painter: _RingPainter(_kRadius, 1, _kCoverShadows[2].color)),
           ),
           // <img> object-cover rounded-lg border border-gray-800/30
@@ -1393,7 +1401,7 @@ class _CoverCard extends StatelessWidget {
             left: 0,
             top: 0,
             width: size,
-            height: size,
+            height: h,
             child: Stack(
               fit: StackFit.expand,
               children: [
@@ -1424,13 +1432,13 @@ class _CoverCard extends StatelessWidget {
             left: 0,
             top: 0,
             width: size,
-            height: size,
+            height: h,
             child: DecoratedBox(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(_kRadius),
                 gradient: _cssLinearGradient(
                   135,
-                  Size(size, size),
+                  Size(size, h),
                   const [
                     Color.fromRGBO(255, 255, 255, 0.12),
                     Color.fromRGBO(255, 255, 255, 0.04),
@@ -1449,7 +1457,7 @@ class _CoverCard extends StatelessWidget {
             left: 0,
             top: 0,
             width: size,
-            height: size,
+            height: h,
             child: TweenAnimationBuilder<double>(
               tween: Tween<double>(end: dimmed ? _kUnownedCardDim : 0),
               duration: Duration.zero, // v8.6: no per-item animation
@@ -1469,9 +1477,9 @@ class _CoverCard extends StatelessWidget {
           // to-top, filter blur(0.5px) brightness(0.6) contrast(1.3) — cached image.
           Positioned(
             left: 0,
-            top: size,
+            top: h,
             width: size,
-            height: size,
+            height: h,
             child: _Reflection(
               theme: theme,
               size: size,
@@ -1483,7 +1491,7 @@ class _CoverCard extends StatelessWidget {
           // linear-gradient(to bottom, rgba(255,255,255,0.06) 0%, 0.12 40%, transparent 100%)
           Positioned(
             left: 0,
-            top: size + _kFloorOffset,
+            top: h + _kFloorOffset,
             width: size,
             height: _kFloorHeight,
             child: TweenAnimationBuilder<double>(
@@ -1499,13 +1507,13 @@ class _CoverCard extends StatelessWidget {
               left: -_shadowPad,
               top: -_shadowPad,
               width: size + _shadowPad * 2,
-              height: size + _shadowPad * 2,
+              height: h + _shadowPad * 2,
               child: _CachedPaint(
                 cacheKey: 'center-shadow|$size',
-                size: Size(size + _shadowPad * 2, size + _shadowPad * 2),
+                size: Size(size + _shadowPad * 2, h + _shadowPad * 2),
                 painter: _OffsetPainter(
                   const Offset(_shadowPad, _shadowPad),
-                  Size(size, size),
+                  Size(size, h),
                   const _CssShadowPainter(_kShadow2xl, _kRadius),
                 ),
               ),
@@ -1514,7 +1522,7 @@ class _CoverCard extends StatelessWidget {
               left: 0,
               top: 0,
               width: size,
-              height: size,
+              height: h,
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(_kRadius),

@@ -54,6 +54,11 @@ class _AmbientMediaState extends State<AmbientMedia> {
   JSObject? _renderer;
 
   static String _url(String path) {
+    // v9.1.6c ROOT CAUSE of the missing reflection: live themes carry an
+    // in-app 'frame:<video>' poster key, which was handed to the browser as a
+    // URL and failed (CorsDisabledScheme). No poster then; the shader samples
+    // the (CORS-enabled) video itself.
+    if (path.startsWith('frame:')) return '';
     if (path.startsWith('http://') || path.startsWith('https://')) return path;
     return ui_web.assetManager.getAssetUrl(path);
   }
@@ -224,7 +229,7 @@ const String _kAmbientJs = r'''
       var s = el.style;
       s.position = 'absolute'; s.left = '0'; s.top = '0'; s.width = '100%'; s.height = '100%';
       s.objectFit = 'contain'; s.border = 'none'; s.outline = 'none'; s.pointerEvents = 'none';
-      if (url) el.src = url;
+      if (url) el.src = url + (url.indexOf('?') < 0 ? '?cors=1' : '&cors=1'); // separate cache entry from non-CORS <video> loads (tainted canvas)
       return el;
     }
 
@@ -481,7 +486,7 @@ const String _kAmbientJs = r'''
     if (live() && o.poster) {
       posterImg = new Image(); posterImg.crossOrigin = 'anonymous';
       posterImg.onload = function () { if (c2) { draw2d(); return; } if (!dead && gl && !(v.readyState >= 2)) { try { upload(posterImg, posterImg.naturalWidth, posterImg.naturalHeight); draw(); } catch (e) {} } };
-      posterImg.src = o.poster;
+      posterImg.src = o.poster + (o.poster.indexOf('?') < 0 ? '?cors=1' : '&cors=1');
     }
     if (o.video) { var pr = v.play(); if (pr && pr.catch) pr.catch(function () {}); }
     // Autoplay can be refused before the first gesture; retry on the first one.
@@ -543,7 +548,7 @@ const String _kAmbientJs = r'''
           posterImg = new Image(); posterImg.crossOrigin = 'anonymous';
           posterImg.onload = function () { if (!begun && gen === swapGen) beginSwap(); };
           posterImg.onerror = function () { if (!begun && gen === swapGen) beginSwap(); };
-          posterImg.src = n.poster;
+          posterImg.src = n.poster + (n.poster.indexOf('?') < 0 ? '?cors=1' : '&cors=1');
           return true;
         }
 

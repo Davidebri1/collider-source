@@ -42,7 +42,7 @@ Future<Uint8List?> captureFirstFrame(String url) async {
   }).toJS);
   v.addEventListener('seeked', ((web.Event _) { if (seeking) grab(); }).toJS);
   v.addEventListener('error', ((web.Event _) { if (!done.isCompleted) done.complete(null); }).toJS);
-  v.src = url;
+  v.src = url + (url.contains('?') ? '&cors=1' : '?cors=1'); // own CORS cache entry
   v.load();
   final r = await done.future.timeout(const Duration(seconds: 20), onTimeout: () => null);
   v.removeAttribute('src');

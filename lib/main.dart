@@ -369,6 +369,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     HardwareKeyboard.instance.addHandler(_onKey);
     if (Uri.base.queryParameters['seed'] == '1') _seedSamples();
     ThemeCatalog.instance.addListener(_onCatalogChanged);
+    paneHiddenTick.addListener(_nudgeTicker);
     KeyboardDof.install();
     if (Uri.base.queryParameters['drawer'] == 'premium') {
       _activeDrawer = 'premium';
@@ -630,6 +631,21 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         _closeAllPanes();
       } else if (_isComposerSummoned) {
         _isComposerSummoned = false;
+      }
+    });
+  }
+
+  /// v9.1.6c (grey slab, proved on web): after a frosted pane closes over the
+  /// ticker, the list keeps a stale frosted raster until it scrolls; a rebuild
+  /// does not clear it, a scroll does. So every pane close nudges the scroll.
+  void _nudgeTicker() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      for (final c in _tickerScroll.values) {
+        if (!c.hasClients) continue;
+        final o = c.offset;
+        final max = c.position.maxScrollExtent;
+        c.jumpTo((o + 1).clamp(0.0, max + 1));
+        WidgetsBinding.instance.addPostFrameCallback((_) { if (c.hasClients) c.jumpTo(o.clamp(0.0, max)); });
       }
     });
   }
@@ -1826,7 +1842,10 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   }
 
   @override
+  String _lastSurfaceSig = '';
   Widget build(BuildContext context) {
+    final surfaceSig = '$_activeDrawer|${_expandedModelIds.join(',')}|$_settingsOpen|$_browserOpen|$_zoomedMessage|$_localHistoryModel';
+    if (surfaceSig != _lastSurfaceSig) { _lastSurfaceSig = surfaceSig; _nudgeTicker(); }
     _guardPreview();
     // Max 9 active model rows filtered by active category with fallback
     var categoryPills = _tickerItems
@@ -1881,12 +1900,12 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // (kit overlay 0.35 + medium blur) so the wallpaper stays visible;
           // the theme gallery keeps a light tint.
           // v9.1.4 (playtest #14): dissolves out instead of a hard cut.
-            Positioned.fill(child: MaterializeSwitch(show: _activeDrawer == 'themes', builder: (_) => VScrim(onTap: () => setState(_closeAllPanes)))),
+            Positioned.fill(child: MaterializeSwitch(show: _activeDrawer == 'themes', builder: (_) => GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => setState(_closeAllPanes), child: const SizedBox.expand()))), // David: Gallery never dims or blurs the wallpaper
           // v9.1.3 depth rule: a work surface over the main view blurs (takes
           // away the background's capability) and dims (cinematic focus) what
           // is behind it. Nothing sits flat over the main view.
           // v9.1.4 (playtest #14): dissolves out instead of a hard cut.
-            Positioned.fill(child: MaterializeSwitch(show: _browserOpen || const {'files', 'smartgen', 'history', 'music', 'apps', 'consensus', 'market'}.contains(_activeDrawer), builder: (_) => VScrim(onTap: () => setState(() { _browserOpen = false; _closeAllPanes(); })))),
+            Positioned.fill(child: MaterializeSwitch(show: _browserOpen || const {'files', 'smartgen', 'history', 'music', 'apps', 'consensus', 'market'}.contains(_activeDrawer), builder: (_) => GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => setState(() { _browserOpen = false; _closeAllPanes(); }), child: const SizedBox.expand()))),
 
           // Depth of field for the summoned composer: the world falls out of
           // focus behind the writing surface. Previously summoning only
@@ -1948,7 +1967,11 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // full-width arrangement. Nothing touches an edge.
           // v9.1.4 (playtest #6): a tap outside the opened answer closes it.
           if (_expandedModelIds.isNotEmpty && _activeDrawer == null && !_settingsOpen && !_browserOpen)
-            Positioned.fill(child: VScrim(onTap: () => setState(_expandedModelIds.clear))),
+            // v9.1.6c ROOT CAUSE of the grey slab: a blurring scrim painted beneath
+            // the ticker turns the rows into a flat grey block on web (bisected
+            // with ?dbg: removing only this scrim cleared it). Tap-outside layers
+            // under the ticker only catch taps and dim; they never blur.
+            Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => setState(_expandedModelIds.clear), child: const SizedBox.expand())),
           // The ticker is the core experience: ALWAYS present. When another
           // surface has focus it stays, blurred and non-interactive.
           Positioned.fill(

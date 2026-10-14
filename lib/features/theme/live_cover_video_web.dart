@@ -46,7 +46,7 @@ class _LiveCoverVideoState extends State<LiveCoverVideo> {
     s.opacity = '0';
     s.pointerEvents = 'none';
     s.zIndex = '-1';
-    v.src = widget.url;
+    v.src = widget.url + (widget.url.contains('?') ? '&cors=1' : '?cors=1'); // own CORS cache entry
     web.document.body?.append(v);
     v.play().toDart.catchError((_) => null);
     _v = v;

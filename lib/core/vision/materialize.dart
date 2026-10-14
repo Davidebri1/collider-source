@@ -89,6 +89,12 @@ class _MaterializeState extends State<Materialize> with SingleTickerProviderStat
 }
 
 /// Keeps [child] mounted while it dissolves out after [show] turns false.
+/// v9.1.6c ROOT CAUSE of the grey slab: on web, when a frosted pane dissolves
+/// out over the ticker, the ticker's cached layer is not repainted and keeps
+/// the pane's frost (proved: one wheel tick or resize clears it). Every pane
+/// that finishes hiding bumps this so the ticker rebuilds its layer.
+final ValueNotifier<int> paneHiddenTick = ValueNotifier<int>(0);
+
 class MaterializeSwitch extends StatefulWidget {
   final bool show;
   final WidgetBuilder builder;
@@ -110,7 +116,10 @@ class _MaterializeSwitchState extends State<MaterializeSwitch> {
     return Materialize(
       visible: widget.show,
       onHidden: () {
-        if (mounted && !widget.show) setState(() => _mounted = false);
+        if (mounted && !widget.show) {
+          setState(() => _mounted = false);
+          WidgetsBinding.instance.addPostFrameCallback((_) => paneHiddenTick.value++);
+        }
       },
       child: _last!,
     );
