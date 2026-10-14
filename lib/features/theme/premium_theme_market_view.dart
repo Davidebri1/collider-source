@@ -1,4 +1,3 @@
-import '../../core/theme/app_font.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -13,7 +12,6 @@ import '../../core/audio/music_player.dart';
 import '../../core/media/theme_catalog.dart';
 import '../../core/theme/specular_border.dart';
 import '../../core/vision/vision_kit.dart';
-import '../../core/vision/materialize.dart';
 import '../../models/theme_def.dart';
 import '../music/song_wheel.dart';
 import 'premium_market_ambient.dart';
@@ -80,34 +78,29 @@ const double _kMobileBreakpoint = 768; // width < 768
 const double _kCoverSizeMobile = 170;
 const double _kCoverSizeDesktop = 200;
 
-// The Premium carousel.
-//
-// The carousel is the animated object. The whole strip slides as one rigid
-// body and every cover rides along inside it, upright and un-rotated. Nothing
-// rotates, nothing tilts, no cover is individually scaled or clipped, and no
-// cover animates on its own timer.
-//
-// Figma reference proportions (map row 1, "CoverFlow photo carousel", node
-// 1-3). A page is one slot: cover + gap, not the full stage. That is the whole
-// difference between a strip and one card in a void. On the phone that
-// matters — 430x932 — the stage is 398 wide, the centre cover is 170 (43% of
-// the stage, the reference's share) and 54px of each neighbour (32% of a cover)
-// is on screen at either side, so 1.37 pages are visible at rest.
+// CoverFlow.tsx getTransform()
 const double _kSpacingMobile = 120;
 const double _kSpacingDesktop = 160;
-
-// The stage box the carousel is laid out in. The label form below is
-// positioned off the stage height, so these stay.
+const double _kRotationDeg = 55;
+const double _kCenterTranslateZ = 300;
+const double _kCenterScale = 1.3;
+const double _kSideZPerStep = -80;
+const double _kSideScaleBase = 1.15;
+const double _kSideScaleStep = 0.04;
+const double _kSideScaleMin = 0.8;
+const double _kCenterEpsilon = 0.1;
+// CoverFlow.tsx container: h-96, perspective 1500px, max-w-7xl
 const double _kStageHeight = 384;
 const double _kStageMaxWidth = 1280;
-
-// Chevrons at the two ends of the strip. No scrollbar (the owner's constraint):
-// the edge fades say "more this way", the chevrons move it.
-const double _kChevronSize = 34;
-
-// transition: 400ms cubic-bezier(0.23, 1, 0.32, 1)
+const double _kPerspective = 1500;
+// transition: all 400ms cubic-bezier(0.23, 1, 0.32, 1)
 const Duration _kCardTransition = Duration(milliseconds: 400);
 const Cubic _kCardEase = Cubic(0.23, 1, 0.32, 1);
+// Drag: offset / 100; threshold 50; velocity 0.5 / 2.0 px per ms
+const double _kDragDivisor = 100;
+const double _kDragThreshold = 50;
+const double _kVelocityThreshold = 0.5;
+const double _kHighVelocityThreshold = 2.0;
 
 // Card chrome: rounded-lg = --radius .625rem
 const double _kRadius = 10;
@@ -187,10 +180,9 @@ const double _kCapsuleHeight = 34;
 const double _kLabelsBlockHeight =
     8 + 28 + 8 + _kSongsBlockHeight + 16 + _kActionHeight + 8;
 
-// The not-owned dim over a cover (DEVIATIONS.md D5) is gone with the rest of
-// the overlays (bug 2): a black 45% sheet over the face is exactly the "dimming
-// scrim" the owner keeps asking to be removed, and the apply control on the
-// cover now says owned or not without hiding the artwork behind it.
+// Not-owned dim on covers (DEVIATIONS.md D5): black 45% over the face, the
+// reflection multiplied by the same 0.55.
+const double _kUnownedCardDim = 0.45;
 
 class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
   // App.tsx state
@@ -224,8 +216,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
         ...(() {
           final n = <String, int>{};
           for (final t in [...WallpaperCatalog.premiumThemes, ...WallpaperCatalog.freeThemes]) {
-            // v9.1.4 (playtest #15): file formats aren't categories.
-            for (final g in t.tags) { // NEXT-v87 #9: every tag, incl. file type, is a filter
+            for (final g in t.tags) {
               n[g] = (n[g] ?? 0) + 1;
             }
           }
@@ -272,9 +263,9 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(28),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: VFrost.blur, sigmaY: VFrost.blur),
+            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
             child: ColoredBox(
-              color: VFrost.tint,
+              color: const Color(0x14FFFFFF),
               child: item(Icons.search_rounded, 'Search', _searchOpen || _searchQuery.isNotEmpty,
                   () => _openSearch(true)),
             ),
@@ -568,8 +559,9 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
                 ),
                 // CoverFlow wrapper
                 Positioned(
-                  // Approved v9 geometry: the stage is centred on the screen.
-                  left: _kMainPadX,
+                  // v8.7: leave room for the side nav (covers can be HTML
+                  // video layers, which paint above the canvas).
+                  left: _kMainPadX + 76,
                   right: _kMainPadX,
                   top: stageTop,
                   height: _kStageHeight,
@@ -594,7 +586,6 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
                             _select(i);
                           }
                         },
-                        onApplyCover: _applyAt,
                       ),
                     ),
                   ),
@@ -602,8 +593,11 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
               ],
 
               // v8.7 side nav (categories + search), left edge.
-              // Side nav with categories + search (user ask, v8.7).
-              Positioned(left: 8, top: mainTop, child: _sideNav()),
+              Positioned(
+                left: 8,
+                top: mainTop,
+                child: _sideNav(),
+              ),
 
               // Search popup (was the always-on SearchBar): DOF blur behind.
               if (_searchOpen) ...[
@@ -622,12 +616,18 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
                   right: _kSearchPad,
                   top: _kHeaderHeight + _kSearchPad,
                   height: _kSearchHeight,
-                  child: Materialize(origin: Alignment.topCenter, child: Center(child: SizedBox(width: searchWidth, height: _kSearchHeight, child: _buildSearchBar()))),
+                  child: Center(
+                    child: SizedBox(
+                      width: searchWidth,
+                      height: _kSearchHeight,
+                      child: _buildSearchBar(),
+                    ),
+                  ),
                 ),
               ],
 
-              if (_exploded && _selected != null)
-                Positioned.fill(child: Materialize(child: _explodedView(_selected!, w, h))),
+              if (_exploded && selected != null)
+                Positioned.fill(child: _explodedView(selected, w, h)),
 
               // Header (z 500): the export's empty p-4 strip keeps its 32px in
               // the layout (mainTop) but paints nothing. Its bg-black/20 +
@@ -666,7 +666,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
             SizedBox(
               height: 28,
               child: Text(
-                _displayName(t),
+                '${t.isLive ? '\u25B6\uFE0E ' : ''}${_displayName(t)}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
@@ -732,8 +732,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
     if (_owned(t)) {
       return _GlassCapsule(
         key: _capsuleKey,
-        label: 'Set as wallpaper',
-        icon: Icons.wallpaper_rounded,
+        label: 'Apply',
         onTap: () => widget.onApplyTheme(t),
       );
     }
@@ -743,18 +742,6 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
       label: 'Buy · $price',
       onTap: () => _confirmBuy(t, price),
     );
-  }
-
-  /// The apply control on a cover (bug 3) runs the same two paths as the
-  /// capsule, so the button and the word below it never disagree.
-  void _applyAt(int index) {
-    if (_themes.isEmpty) return;
-    final t = _themes[index.clamp(0, _themes.length - 1)];
-    if (_owned(t)) {
-      widget.onApplyTheme(t);
-      return;
-    }
-    _confirmBuy(t, _store.priceLabelFor(t.id, catalogPrice: t.priceLabel));
   }
 
   // Map row 22: purchases go through the centred alert. There is no store
@@ -833,15 +820,27 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
       return Stack(
         fit: StackFit.expand,
         children: [
+          // Search icon: absolute inset-y-0 left-0 pl-3, h-4 w-4 text-gray-400.
+          // Painted before the input, so the input's backdrop-blur-sm covers it
+          // (as in the export). On web the backdrop element now sits in the
+          // ambient below Flutter, so the glyph carries the same 8px blur itself.
+          Positioned(
+            left: 12,
+            top: 0,
+            bottom: 0,
+            child: Center(
+              child: kIsWeb
+                  ? ImageFiltered(
+                      imageFilter: ImageFilter.blur(
+                          sigmaX: 8, sigmaY: 8, tileMode: TileMode.decal),
+                      child: glyph,
+                    )
+                  : glyph,
+            ),
+          ),
           // input: rounded-full border border-gray-700 (focus: border-gray-500)
-          // backdrop-blur-sm (8px), background linear-gradient(145deg, rgba(0,0,0,0.4), rgba(255,255,255,0.02))
-          //
-          // Bug 6: this capsule used to carry four sheets at once — a backdrop
-          // blur, an inset 0 2px 6px black shadow, a black-to-white gradient
-          // and a rim. The inset shadow is a second darkening layer painted
-          // over a fill that already starts at 40% black, and it is what made
-          // the field look grey and heavy. The gradient does that job. What is
-          // left is one blur + one fill + one rim, which is still glass.
+          // backdrop-blur-sm (8px), background linear-gradient(145deg, rgba(0,0,0,0.4), rgba(255,255,255,0.02)),
+          // boxShadow inset 0 2px 6px rgba(0,0,0,0.7), 0 1px 2px rgba(255,255,255,0.05)
           CustomPaint(
             painter: _CssShadowPainter(const [
               _CssShadow(0, 1, 2, 0, Color.fromRGBO(255, 255, 255, 0.05)),
@@ -850,63 +849,58 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
               borderRadius: BorderRadius.circular(9999),
               child: _maybeBackdrop(
                 sigma: 8,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(9999),
-                    gradient: _cssLinearGradient(
-                      145,
-                      size,
-                      const [
-                        Color.fromRGBO(0, 0, 0, 0.34),
-                        Color.fromRGBO(255, 255, 255, 0.04),
-                      ],
-                      const [0.0, 1.0],
-                    ),
-                    border: Border.all(
-                      color: focused ? _kGray500 : _kGray700,
-                      width: 1,
-                    ),
+                child: CustomPaint(
+                  foregroundPainter: _InsetShadowPainter(
+                    offset: const Offset(0, 2),
+                    blur: 6,
+                    color: const Color.fromRGBO(0, 0, 0, 0.7),
+                    radius: size.height / 2,
                   ),
-                  child: Padding(
-                    // pl-10 pr-10 py-3
-                    padding: const EdgeInsets.fromLTRB(40, 0, 40, 0),
-                    child: Center(
-                      child: TextField(
-                        controller: _searchController,
-                        focusNode: _searchFocus,
-                        style: lightText,
-                        cursorColor: const Color(0xFFFFFFFF),
-                        textInputAction: TextInputAction.search,
-                        decoration: InputDecoration(
-                          isCollapsed: true,
-                          border: InputBorder.none,
-                          hintText: 'Search',
-                          hintStyle: lightText.copyWith(color: _kGray500),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(9999),
+                      gradient: _cssLinearGradient(
+                        145,
+                        size,
+                        const [
+                          Color.fromRGBO(0, 0, 0, 0.4),
+                          Color.fromRGBO(255, 255, 255, 0.02),
+                        ],
+                        const [0.0, 1.0],
+                      ),
+                      border: Border.all(
+                        color: focused ? _kGray500 : _kGray700,
+                        width: 1,
+                      ),
+                    ),
+                    child: Padding(
+                      // pl-10 pr-10 py-3
+                      padding: const EdgeInsets.fromLTRB(40, 0, 40, 0),
+                      child: Center(
+                        child: TextField(
+                          controller: _searchController,
+                          focusNode: _searchFocus,
+                          style: lightText,
+                          cursorColor: const Color(0xFFFFFFFF),
+                          textInputAction: TextInputAction.search,
+                          decoration: InputDecoration(
+                            isCollapsed: true,
+                            border: InputBorder.none,
+                            hintText: 'Search',
+                            hintStyle: lightText.copyWith(color: _kGray500),
+                          ),
+                          onChanged: _onSearchChanged,
+                          onSubmitted: (v) {
+                            _searchTimer?.cancel();
+                            _fetchThemes(v);
+                          },
                         ),
-                        onChanged: _onSearchChanged,
-                        onSubmitted: (v) {
-                          _searchTimer?.cancel();
-                          _fetchThemes(v);
-                        },
                       ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-          // Search icon: absolute inset-y-0 left-0 pl-3, h-4 w-4 text-gray-400.
-          //
-          // Painted on top of the field and left sharp. It used to be painted
-          // underneath and then blurred by 8px on web to fake the field's
-          // backdrop-filter, which turned a 16px glyph into a grey smear
-          // (bug 5). An icon should never be blurred by a decoration that is
-          // not behind it.
-          const Positioned(
-            left: 12,
-            top: 0,
-            bottom: 0,
-            child: Center(child: glyph),
           ),
           // Clear button: absolute inset-y-0 right-0 pr-3, h-4 w-4 text-gray-400
           if (_searchController.text.isNotEmpty)
@@ -991,10 +985,6 @@ class _CoverFlow extends StatefulWidget {
   final ValueChanged<int> onSelect;
   final ValueChanged<int> onTapCover;
 
-  /// Bug 3: the apply / set control on the centred cover. Buys through the
-  /// same path the capsule uses when the theme is not owned yet.
-  final void Function(int index) onApplyCover;
-
   const _CoverFlow({
     required this.themes,
     required this.currentIndex,
@@ -1003,7 +993,6 @@ class _CoverFlow extends StatefulWidget {
     required this.ownedIds,
     required this.onSelect,
     required this.onTapCover,
-    required this.onApplyCover,
   });
 
   @override
@@ -1029,46 +1018,11 @@ class _CoverFlowState extends State<_CoverFlow> {
     if (!identical(old.themes, widget.themes) || old.isMobile != widget.isMobile) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _prewarm());
     }
-    // Selection can change from outside (search, tap, arrows, a chevron).
-    // Follow it, but never fight a drag the user is in the middle of.
-    if (old.currentIndex != widget.currentIndex && !_drag.dragging && _pager.hasClients) {
-      final target = widget.currentIndex.clamp(0, widget.themes.length - 1);
-      if ((_pager.page ?? target.toDouble()).round() != target) _goTo(target);
-    }
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // One page is one slot (cover + gap). Sizing the page to the slot rather
-    // than to the viewport is what puts the neighbours on screen beside the
-    // centre cover; full-width pages hide them off-stage, which is what made
-    // this a single card floating in a void.
-    final f = (_slotWidth / _stageWidth(context)).clamp(0.12, 1.0);
-    if (_fraction == f) return;
-    _fraction = f;
-    final current = _pager.hasClients
-        ? (_pager.page ?? widget.currentIndex.toDouble()).round()
-        : widget.currentIndex;
-    final page = current.clamp(0, widget.themes.length - 1);
-    if (!_pager.hasClients && _pager.initialPage == page) {
-      // First build: the controller already has the right page, only the
-      // viewport fraction is wrong, so it has to be replaced.
-      _pager.dispose();
-      _pager = PageController(initialPage: page, viewportFraction: f);
-      return;
-    }
-    // Already scrolled: replace it after the frame, once the PageView that
-    // still holds the old controller has been torn down.
-    final old = _pager;
-    _pager = PageController(initialPage: page, viewportFraction: f);
-    WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
   }
 
   @override
   void initState() {
     super.initState();
-    _pager = PageController(initialPage: widget.currentIndex, viewportFraction: 1.0);
     WidgetsBinding.instance.addPostFrameCallback((_) => _prewarm());
   }
 
@@ -1076,51 +1030,10 @@ class _CoverFlowState extends State<_CoverFlow> {
   void dispose() {
     _prewarmGen++;
     _drag.dispose();
-    _pager.dispose();
     super.dispose();
   }
 
   int _prewarmGen = 0;
-
-  /// Real paging controller: drag, fling and snap for free, including with a
-  /// mouse, because PageView takes the platform's drag devices.
-  late PageController _pager;
-
-  /// The slot fraction the current [_pager] was built with.
-  double _fraction = -1;
-
-  double get _slotWidth {
-    final cover = widget.isMobile ? _kCoverSizeMobile : _kCoverSizeDesktop;
-    final gap = widget.isMobile ? _kSpacingMobile : _kSpacingDesktop;
-    return cover + gap;
-  }
-
-  /// The width the strip is laid out in: the same box the PageView gets, so
-  /// the fraction is the page size over the viewport size.
-  double _stageWidth(BuildContext context) {
-    final w = MediaQuery.sizeOf(context).width;
-    return math.min(w - _kMainPadX * 2, _kStageMaxWidth);
-  }
-
-  /// Animate to [index] on the strip. The single way the carousel moves,
-  /// whichever input asked for it (chevron, tap, keyboard, external selection).
-  void _goTo(int index) {
-    if (widget.themes.isEmpty) return;
-    final target = index.clamp(0, widget.themes.length - 1);
-    if (!_pager.hasClients) {
-      widget.onSelect(target);
-      return;
-    }
-    _pager.animateToPage(target, duration: _kCardTransition, curve: _kCardEase);
-  }
-
-  /// Chevrons wrap (map row 4: no stop at the first or last theme). Drag
-  /// stops at the ends, which the chevrons make obvious by disabling.
-  void _step(int delta) {
-    final n = widget.themes.length;
-    if (n == 0) return;
-    _goTo(((widget.currentIndex + delta) % n + n) % n);
-  }
 
   /// Rasterises every card's cover + reflection one at a time between frames
   /// (nearest to the current card first), so the work is done before the
@@ -1151,8 +1064,34 @@ class _CoverFlowState extends State<_CoverFlow> {
     }
   }
 
-  /// Position relative to the centre cover on the loop: -n/2 .. n/2. Still
-  /// used to decide which covers play their live wallpaper near the centre.
+  void _dragEnd() {
+    final d = _drag;
+    if (!d.dragging) return;
+    var targetIndex = widget.currentIndex;
+    final dragDistance = d.offset.abs();
+    final dragVelocity = d.velocity.abs();
+    if (dragDistance > _kDragThreshold || dragVelocity > _kVelocityThreshold) {
+      var jumpCount = 1;
+      if (dragVelocity > _kHighVelocityThreshold) {
+        jumpCount = math.min(2, (dragVelocity / 1.5).ceil());
+      }
+      if (dragDistance > _kDragThreshold * 2) {
+        jumpCount =
+            math.max(jumpCount, (dragDistance / (_kDragThreshold * 1.5)).floor());
+      }
+      // Loops (map row 4): no stop at the first or last theme.
+      final n = widget.themes.length;
+      if (d.offset < 0 || d.velocity < -_kVelocityThreshold) {
+        targetIndex = (widget.currentIndex + jumpCount) % n;
+      } else if (d.offset > 0 || d.velocity > _kVelocityThreshold) {
+        targetIndex = ((widget.currentIndex - jumpCount) % n + n) % n;
+      }
+    }
+    d.reset();
+    widget.onSelect(targetIndex);
+  }
+
+  /// Position relative to the centre cover on the loop: -n/2 .. n/2.
   int _rel(int index) {
     final n = widget.themes.length;
     if (n == 0) return 0;
@@ -1162,16 +1101,83 @@ class _CoverFlowState extends State<_CoverFlow> {
     return d;
   }
 
+  // getTransform / getOpacity
+  _CardPose _poseFor(int index) {
+    final baseOffset = _rel(index).toDouble();
+    final offset =
+        baseOffset + (_drag.dragging ? _drag.offset / _kDragDivisor : 0.0);
+    final spacing = widget.isMobile ? _kSpacingMobile : _kSpacingDesktop;
+    double tx, tz, ry, s;
+    if (offset.abs() < _kCenterEpsilon) {
+      tx = 0;
+      tz = _kCenterTranslateZ;
+      ry = 0;
+      s = _kCenterScale;
+    } else {
+      final distance = offset.abs();
+      tx = (offset < 0 ? -spacing : spacing) * distance;
+      tz = _kSideZPerStep * distance;
+      ry = offset < 0 ? _kRotationDeg : -_kRotationDeg;
+      s = math.max(_kSideScaleMin, _kSideScaleBase - (distance * _kSideScaleStep));
+    }
+    return _CardPose(tx, tz, ry, s, _opacityFor(offset.abs()));
+  }
+
+  double _opacityFor(double offset) {
+    if (offset < 0.1) return 1;
+    if (offset <= 1) return 1;
+    if (offset <= 2) return 1;
+    if (offset <= 3) return 0.95;
+    if (offset <= 4) return 0.9;
+    return math.max(0.8, 0.9 - ((offset - 4) * 0.05));
+  }
+
+  int _zIndexFor(int index) {
+    final offset = _rel(index).abs();
+    if (offset == 0) return 1000;
+    if (offset == 1) return 100;
+    if (offset == 2) return 50;
+    if (offset == 3) return 25;
+    if (offset == 4) return 15;
+    return math.max(1, 10 - offset);
+  }
+
+  /// Whether any of the card's paint (cover, reflection, shadow spill) lands
+  /// inside the viewport for [pose]. Off-screen cards are not painted at all
+  /// (they were fully outside the screen before as well).
+  bool _onScreen(_CardPose pose, double size, double originX) {
+    final o = size / 2; // transform-origin: centre of the cover box
+    final m = Matrix4.translationValues(o, o, 0)
+      ..multiply(pose.matrix())
+      ..multiply(Matrix4.translationValues(-o, -o, 0));
+    final st = m.storage;
+    const pad = 110.0;
+    var minX = double.infinity, maxX = double.negativeInfinity;
+    for (final x in const [-pad, 1.0]) {
+      for (final y in const [-pad, 1.0]) {
+        final px = x == 1.0 ? size + pad : x;
+        final py = y == 1.0 ? size * 2 + pad : y;
+        final w = st[3] * px + st[7] * py + st[15];
+        if (w <= 0.01) return true;
+        final sx = originX + (st[0] * px + st[4] * py + st[12]) / w;
+        minX = math.min(minX, sx);
+        maxX = math.max(maxX, sx);
+      }
+    }
+    return maxX > 0 && minX < widget.viewportWidth;
+  }
+
   Widget _card(int i, double size) {
     final t = widget.themes[i];
     final isCurrent = i == widget.currentIndex;
-    final owned = widget.ownedIds.contains(t.id);
+    // Not-owned dim only behind kOwnedBrighterState (D5, off): covers are
+    // fully lit (map row 4).
+    final dimmed = kOwnedBrighterState && !widget.ownedIds.contains(t.id);
     // The centre cover and its two neighbours play their live wallpaper;
     // the rest show the poster until they come near the centre.
-    // v9.1: no per-thumbnail motion; only the centred cover plays live.
-    final live = t.isLive && _rel(i).abs() < 0.5;
+    final live = t.isLive && _rel(i).abs() <= 1;
     return _cards.putIfAbsent(
-      '${t.id}|$isCurrent|$owned|$size|$live',
+      '${t.id}|$isCurrent|$dimmed|$size|$live',
       () => RepaintBoundary(
         child: GestureDetector(
           onTap: () {
@@ -1180,10 +1186,9 @@ class _CoverFlowState extends State<_CoverFlow> {
           child: _CoverCard(
             theme: t,
             isCurrent: isCurrent,
-            owned: owned,
-            onApply: () => widget.onApplyCover(i),
-            size: size,
+            dimmed: dimmed,
             live: live,
+            size: size,
           ),
         ),
       ),
@@ -1194,104 +1199,69 @@ class _CoverFlowState extends State<_CoverFlow> {
   Widget build(BuildContext context) {
     final coverSize = widget.isMobile ? _kCoverSizeMobile : _kCoverSizeDesktop;
     final themes = widget.themes;
-    final spacing = widget.isMobile ? _kSpacingMobile : _kSpacingDesktop;
-    if (themes.isEmpty) return const SizedBox.shrink();
-    final n = themes.length;
-    final atStart = widget.currentIndex <= 0;
-    final atEnd = widget.currentIndex >= n - 1;
+    // Paint order = CSS z-index (getZIndex + 1000), ties in DOM order.
+    final visible = <int>[
+      for (int i = 0; i < themes.length; i++)
+        if (_rel(i).abs() <= 6) i,
+    ]..sort((a, b) {
+        final za = _zIndexFor(a), zb = _zIndexFor(b);
+        if (za != zb) return za.compareTo(zb);
+        return a.compareTo(b);
+      });
+    // Cards are flex-centred in the stage, the stage in the viewport.
+    final originX = (widget.viewportWidth - coverSize) / 2;
 
-    final strip = MouseRegion(
-      cursor: _drag.dragging ? SystemMouseCursors.grabbing : SystemMouseCursors.grab,
-      child: PageView(
-        controller: _pager,
-        // Real scroll physics: drag, fling and snap, with a mouse as well as
-        // a finger. A hand-rolled tween cannot fling, and a tween fed a value
-        // that is always 0 does not move at all — which is what this replaced.
-        physics: const ClampingScrollPhysics(),
-        // padEnds: true gives the first and last slot a matching half-gap at
-        // each end, so whichever cover is centred sits on the frame's centre
-        // line. With padEnds: false page 0 sits flush to the leading edge and
-        // the centre cover is a half-slot left of centre.
-        padEnds: true,
-        onPageChanged: (i) {
-          if (!_drag.dragging) widget.onSelect(i);
-        },
-        // Tapping a neighbour selects it. Hit testing works because each page
-        // is the full slot, so the peeking strip is a real tap target.
-        children: [
-          for (var i = 0; i < themes.length; i++)
-            _cards.putIfAbsent(
-              'page|$i|${themes[i].id}',
-              () => Padding(
-                // Half the gap either side of the cover inside its own slot.
-                padding: EdgeInsets.symmetric(horizontal: spacing / 2),
-                child: Center(child: _card(i, coverSize)),
-              ),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onHorizontalDragStart: (d) => _drag.begin(d.globalPosition.dx),
+      onHorizontalDragUpdate: (d) => _drag.move(d.globalPosition.dx),
+      onHorizontalDragEnd: (_) => _dragEnd(),
+      onHorizontalDragCancel: _dragEnd,
+      child: LayoutBuilder(builder: (context, c) {
+        final left = (c.maxWidth - coverSize) / 2;
+        final top = (c.maxHeight - coverSize) / 2;
+        return ListenableBuilder(
+          listenable: _drag,
+          builder: (context, _) => MouseRegion(
+            cursor: _drag.dragging
+                ? SystemMouseCursors.grabbing
+                : SystemMouseCursors.grab,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                for (final i in visible)
+                  Positioned(
+                    key: ValueKey('card-${themes[i].id}'),
+                    left: left,
+                    top: top,
+                    width: coverSize,
+                    height: coverSize * 2, // cover + ReflectionComponent (top-full, h-full)
+                    child: TweenAnimationBuilder<_CardPose>(
+                      tween: _CardPoseTween(end: _poseFor(i)),
+                      duration: _drag.dragging ? Duration.zero : _kCardTransition,
+                      curve: _kCardEase,
+                      builder: (context, pose, child) {
+                        if (!_onScreen(pose, coverSize, originX)) {
+                          return const SizedBox.shrink();
+                        }
+                        return Opacity(
+                          opacity: pose.opacity.clamp(0.0, 1.0),
+                          child: Transform(
+                            // transform-origin: centre of the cover box
+                            alignment: const Alignment(0, -0.5),
+                            transform: pose.matrix(),
+                            child: child,
+                          ),
+                        );
+                      },
+                      child: _card(i, coverSize),
+                    ),
+                  ),
+              ],
             ),
-        ],
-      ),
-    );
-
-    // No scrollbar (the owner's constraint): the edge fades say there is more,
-    // the chevrons move it. scrollbars: false is set here rather than relying
-    // on the app-wide behaviour, so the rule holds wherever this is mounted.
-    return ScrollConfiguration(
-      behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // No extra inset here: the strip takes the stage box exactly, because
-          // [_fraction] is computed from that same width. An inset would make
-          // the real page narrower than the slot the carousel was laid out for.
-          // The edge fade below is what softens the ends.
-          ShaderMask(
-            blendMode: BlendMode.dstIn,
-            shaderCallback: (r) {
-              final f = r.width <= 0 ? 0.1 : (14 / r.width).clamp(0.0, 0.28);
-              return LinearGradient(
-                colors: const [Color(0x00FFFFFF), Colors.white, Colors.white, Color(0x00FFFFFF)],
-                stops: [0, f, 1 - f, 1],
-              ).createShader(r);
-            },
-            child: strip,
           ),
-        ],
-      ),
-    );
-  }
-}
-
-/// The chevron at one end of the carousel. A single floating glass circle:
-/// one layer of tint and one rim, not a stack of translucent sheets (bug 6).
-class _StripChevron extends StatelessWidget {
-  final IconData icon;
-  final bool enabled;
-  final String tooltip;
-  final VoidCallback onTap;
-
-  const _StripChevron({
-    required this.icon,
-    required this.enabled,
-    required this.tooltip,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Opacity(
-      opacity: enabled ? 1 : 0.28,
-      child: Semantics(
-        button: true,
-        enabled: enabled,
-        label: tooltip,
-        child: VCircleButton(
-          icon: icon,
-          size: _kChevronSize,
-          floating: true,
-          tooltip: tooltip,
-          onTap: enabled ? onTap : null,
-        ),
-      ),
+        );
+      }),
     );
   }
 }
@@ -1301,28 +1271,19 @@ class _StripChevron extends StatelessWidget {
 /// reflection (blur / brightness / contrast / mask) and the top glow are
 /// rasterised once into images (_RasterCache) with the same geometry and
 /// filters, then drawn as plain images every frame.
-///
-/// Bug 2 (owner, repeated): nothing is laid over the artwork itself. The
-/// export's glass sheen gradient and the not-owned dim scrim are gone — a
-/// second translucent sheet on top of a picture the user is judging, on a
-/// stack that already carries three (bug 6). The ring, the centre lift and
-/// the reflection below the cover stay: those are edges and a separate plane,
-/// not a veil over the picture.
 class _CoverCard extends StatelessWidget {
   final WallpaperTheme theme;
   final bool isCurrent;
-  final bool owned;
-  final VoidCallback onApply;
+  final bool dimmed;
   final bool live;
   final double size;
 
   const _CoverCard({
     required this.theme,
     required this.isCurrent,
-    required this.owned,
-    required this.onApply,
-    required this.live,
+    required this.dimmed,
     required this.size,
+    this.live = false,
   });
 
   static const double _shadowPad = 100;
@@ -1383,12 +1344,64 @@ class _CoverCard extends StatelessWidget {
                         : _CoverPoster(theme: theme, inner: size - 2),
                   ),
                 ),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(_kRadius),
+                    border: Border.all(color: _kCoverBorder, width: 1),
+                  ),
+                ),
               ],
+            ),
+          ),
+          // Glass reflection: linear-gradient(135deg, rgba(255,255,255,0.12) 0%,
+          // rgba(255,255,255,0.04) 25%, transparent 50%, rgba(0,0,0,0.02) 75%, rgba(0,0,0,0.08) 100%)
+          Positioned(
+            left: 0,
+            top: 0,
+            width: size,
+            height: size,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(_kRadius),
+                gradient: _cssLinearGradient(
+                  135,
+                  Size(size, size),
+                  const [
+                    Color.fromRGBO(255, 255, 255, 0.12),
+                    Color.fromRGBO(255, 255, 255, 0.04),
+                    Color.fromRGBO(255, 255, 255, 0),
+                    Color.fromRGBO(0, 0, 0, 0),
+                    Color.fromRGBO(0, 0, 0, 0.02),
+                    Color.fromRGBO(0, 0, 0, 0.08),
+                  ],
+                  const [0.0, 0.25, 0.5, 0.5, 0.75, 1.0],
+                ),
+              ),
+            ),
+          ),
+          // Not-owned dim (DEVIATIONS.md D5)
+          Positioned(
+            left: 0,
+            top: 0,
+            width: size,
+            height: size,
+            child: TweenAnimationBuilder<double>(
+              tween: Tween<double>(end: dimmed ? _kUnownedCardDim : 0),
+              duration: Duration.zero, // v8.6: no per-item animation
+              curve: _kTwEase,
+              builder: (context, a, _) => a <= 0.001
+                  ? const SizedBox.shrink()
+                  : DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(_kRadius),
+                        color: Color.fromRGBO(0, 0, 0, a),
+                      ),
+                    ),
             ),
           ),
           // Builder ReflectionComponent: absolute top-full, w-full h-full, rounded-lg,
           // background cover, scaleY(-1), opacity 0.9/0.75 (duration-500), mask
-          // to-top, filter blur(0.5px) brightness(0.6) contrast(1.3) Ã¢â‚¬â€ cached image.
+          // to-top, filter blur(0.5px) brightness(0.6) contrast(1.3) — cached image.
           Positioned(
             left: 0,
             top: size,
@@ -1398,6 +1411,7 @@ class _CoverCard extends StatelessWidget {
               theme: theme,
               size: size,
               opacity: reflectionOpacity,
+              dim: dimmed ? _kUnownedCardDim : 0,
             ),
           ),
           // Floor highlight: top-full h-3 rounded-lg translateY(6px), opacity 0.6 / 0.35 (duration-1000)
@@ -1409,7 +1423,7 @@ class _CoverCard extends StatelessWidget {
             height: _kFloorHeight,
             child: TweenAnimationBuilder<double>(
               tween: Tween<double>(end: isCurrent ? 0.6 : 0.35),
-              duration: const Duration(milliseconds: 1000),
+              duration: Duration.zero, // v8.6: no per-item animation
               curve: _kTwEase,
               builder: (context, o, _) => CustomPaint(painter: _FloorPainter(o)),
             ),
@@ -1439,6 +1453,8 @@ class _CoverCard extends StatelessWidget {
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(_kRadius),
+                  border: Border.all(
+                      color: const Color.fromRGBO(255, 255, 255, 0.3), width: 1),
                 ),
               ),
             ),
@@ -1491,15 +1507,10 @@ class _RasterCache {
       _fromPoster(context, 'refl|${theme.posterUrl}|$size|$scale', theme,
           Size(size, size), scale, (c, img) => _paintReflection(c, img, size), onReady);
 
-  /// The cover's poster pixels (object-cover into the card's inner box),
-  /// rasterised once. On web the decoded <img> poster is a lazy texture that
-  /// CanvasKit re-uploads (720x1280) whenever a card re-enters the screen;
-  /// this pixel image is uploaded once and stays cached.
-  ///
-  /// Bug 5: the record canvas is already scaled to the device ratio by
-  /// [record], so `high` here is a proper downsample of a large poster into a
-  /// card-sized box. `medium` was the box filter that made the covers look
-  /// soft-edged.
+  /// The cover's poster pixels (object-cover into the card's inner box,
+  /// FilterQuality.medium), rasterised once. On web the decoded <img> poster
+  /// is a lazy texture that CanvasKit re-uploads (720x1280) whenever a card
+  /// re-enters the screen; this pixel image is uploaded once and stays cached.
   static ui.Image? cover(BuildContext context, WallpaperTheme theme,
           double inner, double scale, VoidCallback onReady) =>
       _fromPoster(context, 'cover|${theme.posterUrl}|$inner|$scale', theme,
@@ -1508,7 +1519,7 @@ class _RasterCache {
                 rect: Offset.zero & Size(inner, inner),
                 image: img,
                 fit: BoxFit.cover,
-                filterQuality: FilterQuality.high,
+                filterQuality: FilterQuality.medium,
               ), onReady);
 
   static ui.Image? _fromPoster(BuildContext context, String key, WallpaperTheme theme,
@@ -1572,7 +1583,7 @@ class _RasterCache {
       rect: rect,
       image: poster,
       fit: BoxFit.cover,
-      filterQuality: FilterQuality.high,
+      filterQuality: FilterQuality.medium,
     );
     canvas.restore();
     canvas.restore();
@@ -1592,27 +1603,10 @@ class _RasterCache {
   }
 }
 
-/// Bug 5: raster scale for the cached card paints.
-///
-/// The raster cache records a picture once and then blits it every frame, so
-/// the scale it records at is the resolution the UI is stuck with for the life
-/// of the cache. It used to clamp the device pixel ratio into [1, 3], which
-/// quietly downsampled on a 3x phone and made every edge and icon soft. There
-/// is no reason to cap below the real ratio: the cache is a handful of cards,
-/// each recorded once. Where the platform reports a ratio below 2 (a desktop
-/// browser at 1x, or CanvasKit reporting 1), floor it at 2 so the artwork is
-/// rasterised above the logical size and stays sharp when the window scales.
-double _rasterScale(BuildContext context) {
-  final dpr = MediaQuery.devicePixelRatioOf(context);
-  return (dpr < 2 ? 2.0 : dpr).clamp(2.0, 4.0);
-}
+double _rasterScale(BuildContext context) =>
+    MediaQuery.devicePixelRatioOf(context).clamp(1.0, 3.0);
 
-/// Draws [painter] once into a cached image at [_rasterScale].
-///
-/// The blit is [FilterQuality.none] because the image is recorded at exactly
-/// the device resolution of the box it fills: there is no resampling to do, and
-/// asking the sampler for a filtered result here is what was producing the
-/// visibly pixelated icons and cover edges.
+/// Draws [painter] once into a cached image at the device pixel ratio.
 class _CachedPaint extends StatelessWidget {
   final String cacheKey;
   final Size size;
@@ -1629,7 +1623,7 @@ class _CachedPaint extends StatelessWidget {
       width: size.width,
       height: size.height,
       fit: BoxFit.fill,
-      filterQuality: FilterQuality.none,
+      filterQuality: FilterQuality.medium,
     );
   }
 }
@@ -1656,17 +1650,15 @@ class _CoverPosterState extends State<_CoverPoster> {
       return ThemePosterImage(
         theme: widget.theme,
         fit: BoxFit.cover,
-        filterQuality: FilterQuality.high,
+        filterQuality: FilterQuality.medium,
       );
     }
-    // The cache image is recorded at exactly this box's device resolution, so
-    // the blit is 1:1 and must not be resampled (bug 5).
     return RawImage(
       image: img,
       width: widget.inner,
       height: widget.inner,
       fit: BoxFit.fill,
-      filterQuality: FilterQuality.none,
+      filterQuality: FilterQuality.medium,
     );
   }
 }
@@ -1675,7 +1667,8 @@ class _Reflection extends StatefulWidget {
   final WallpaperTheme theme;
   final double size;
   final double opacity;
-  const _Reflection({required this.theme, required this.size, required this.opacity});
+  final double dim;
+  const _Reflection({required this.theme, required this.size, required this.opacity, required this.dim});
 
   @override
   State<_Reflection> createState() => _ReflectionState();
@@ -1688,56 +1681,54 @@ class _ReflectionState extends State<_Reflection> {
         _rasterScale(context), () {
       if (mounted) setState(() {});
     });
-    if (img == null) return const SizedBox.shrink();
-    // v9.1: no per-thumbnail fade; the reflection follows the scroll directly.
-    return RawImage(
-      image: img,
-      width: widget.size,
-      height: widget.size,
-      fit: BoxFit.fill,
-      filterQuality: FilterQuality.none,
-      opacity: AlwaysStoppedAnimation<double>(widget.opacity),
-    );
-  }
-}
-
-/// Bug 3: the apply / set control for a theme preview. One small circular
-/// glass button, bottom-right of the centred cover: a check when the theme is
-/// already the one on the wall, a plus when it is not. Not an overlay on the
-/// picture's face — it sits in its own corner and takes a tap away from the
-/// cover only in that corner.
-class _CoverApplyButton extends StatelessWidget {
-  final bool owned;
-  final VoidCallback onTap;
-
-  const _CoverApplyButton({required this.owned, required this.onTap});
-
-  static const double _d = 30;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: owned ? 'Set Wallpaper' : 'Buy this theme',
-      child: VPress(
-        onTap: onTap,
-        child: Container(
-          width: _d,
-          height: _d,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            // One glass layer, not a stack: the artwork behind is already
-            // blurred ambient, so a tint plus a specular rim reads as glass
-            // without adding a second translucent sheet (bug 6).
-            color: const Color(0x4DFFFFFF),
-            border: Border.all(color: const Color(0x66FFFFFF), width: 0.5),
-          ),
-          child: Icon(
-            owned ? Icons.check_rounded : Icons.add_rounded,
-            size: 18,
-            color: Colors.white,
+    // The raster path can't read cross-origin / first-frame posters on web, so
+    // the reflection was empty. Fall back to the cover's own image widget,
+    // mirrored and faded (same look: flipped poster under a fading mask).
+    if (img == null) {
+      return IgnorePointer(
+        child: Opacity(
+          opacity: (widget.opacity * (1 - widget.dim)).clamp(0.0, 1.0),
+          child: ShaderMask(
+            blendMode: BlendMode.dstIn,
+            shaderCallback: (r) => const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0x66FFFFFF), Color(0x00FFFFFF)],
+              stops: [0.0, 0.6],
+            ).createShader(r),
+            child: Transform(
+              alignment: Alignment.center,
+              transform: Matrix4.diagonal3Values(1, -1, 1),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(_kRadius),
+                child: SizedBox(width: widget.size, height: widget.size, child: ThemePosterImage(theme: widget.theme, fit: BoxFit.cover)),
+              ),
+            ),
           ),
         ),
+      );
+    }
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(end: widget.opacity),
+      duration: Duration.zero, // v8.6: no per-item animation
+      curve: _kTwEase,
+      builder: (context, o, _) => TweenAnimationBuilder<double>(
+        tween: Tween<double>(end: widget.dim),
+        duration: Duration.zero, // v8.6: no per-item animation
+        curve: _kTwEase,
+        builder: (context, d, _) {
+          final k = (255 * (1 - d)).round();
+          return RawImage(
+            image: img,
+            width: widget.size,
+            height: widget.size,
+            fit: BoxFit.fill,
+            filterQuality: FilterQuality.medium,
+            opacity: AlwaysStoppedAnimation<double>(o),
+            color: d > 0 ? Color.fromARGB(255, k, k, k) : null,
+            colorBlendMode: d > 0 ? BlendMode.modulate : null,
+          );
+        },
       ),
     );
   }
@@ -1843,49 +1834,40 @@ TextStyle _actionTextStyle(Color color, FontWeight weight) => _inter(TextStyle(
     ));
 
 /// Tappable capsule in the app's glass (VMaterial.elevated, the bottom bar's
-/// VOrnament material): fill, rim, VPress physics. Native blurs with a
-/// BackdropFilter; web gets the blur from the ambient's CSS element at the same
-/// rect (the video is DOM content under Flutter).
-///
-/// Bug 6: the rim was painted twice — a 0.5px `Border.all` and a 0.6px
-/// [SpecularRimPainter] on top of it. Two half-pixel rims at two alphas read as
-/// a soft grey band rather than a crisp edge, which is the muddy look the
-/// stacked layers were causing. One rim does the job: the specular one, which
-/// carries the visionOS highlight (R36).
+/// VOrnament material): fill, 0.5px rim, specular rim, VPress physics. Native
+/// blurs with a BackdropFilter; web gets the blur from the ambient's CSS
+/// element at the same rect (the video is DOM content under Flutter).
 class _GlassCapsule extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
-  final IconData? icon;
-  const _GlassCapsule({super.key, required this.label, required this.onTap, this.icon});
+  final bool small;
+  const _GlassCapsule({super.key, required this.label, required this.onTap, this.small = false});
 
   @override
   Widget build(BuildContext context) {
-    const h = _kCapsuleHeight;
+    final h = small ? 28.0 : _kCapsuleHeight;
     final r = BorderRadius.circular(h / 2);
     const material = VMaterial.elevated;
     Widget body = CustomPaint(
-      foregroundPainter:
-          const SpecularRimPainter(borderRadius: _kCapsuleHeight / 2, strokeWidth: 0.6),
+      foregroundPainter: SpecularRimPainter(borderRadius: h / 2, strokeWidth: 0.6),
       child: Container(
         height: h,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
+        padding: EdgeInsets.symmetric(horizontal: small ? 12 : 20),
         decoration: BoxDecoration(
           color: material.fill,
           borderRadius: r,
+          border: Border.all(color: material.rim, width: 0.5),
         ),
         // widthFactor 1: the capsule hugs its label instead of filling the row.
         child: Align(
           widthFactor: 1,
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            if (icon != null) ...[Icon(icon, size: 17, color: Colors.white), const SizedBox(width: 6)],
-            Text(
-              label,
-              maxLines: 1,
-              style: _actionTextStyle(
-                  const Color(0xFFFFFFFF), FontWeight.w600)
-                  .copyWith(fontSize: 14),
-            ),
-          ]),
+          child: Text(
+            label,
+            maxLines: 1,
+            style: _actionTextStyle(
+                const Color(0xFFFFFFFF), small ? FontWeight.w400 : FontWeight.w500)
+                .copyWith(fontSize: small ? 13 : 14),
+          ),
         ),
       ),
     );
@@ -1916,9 +1898,49 @@ class _GlassCapsule extends StatelessWidget {
 // Helpers
 // ---------------------------------------------------------------------------
 
-// The per-card CoverFlow pose (perspective / rotateY / translateZ / scale /
-// opacity) and its tween were removed. The track carries the only transform now,
-// so there is nothing left for them to describe.
+/// CSS transform list: perspective(1500px) [container] then
+/// translateX(tx) translateZ(tz) rotateY(ry) scale(s). CSS z points at the viewer,
+/// so the perspective term is -1/d (w = 1 - z/d), matching CSS numerically.
+class _CardPose {
+  final double tx, tz, ryDeg, scale, opacity;
+  const _CardPose(this.tx, this.tz, this.ryDeg, this.scale, this.opacity);
+
+  Matrix4 matrix() {
+    final m = Matrix4.identity()..setEntry(3, 2, -1 / _kPerspective);
+    m.multiply(Matrix4.translationValues(tx, 0, tz));
+    m.multiply(Matrix4.rotationY(ryDeg * math.pi / 180));
+    m.multiply(Matrix4.diagonal3Values(scale, scale, 1));
+    return m;
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is _CardPose &&
+      other.tx == tx &&
+      other.tz == tz &&
+      other.ryDeg == ryDeg &&
+      other.scale == scale &&
+      other.opacity == opacity;
+
+  @override
+  int get hashCode => Object.hash(tx, tz, ryDeg, scale, opacity);
+
+  static _CardPose lerp(_CardPose a, _CardPose b, double t) => _CardPose(
+        a.tx + (b.tx - a.tx) * t,
+        a.tz + (b.tz - a.tz) * t,
+        a.ryDeg + (b.ryDeg - a.ryDeg) * t,
+        a.scale + (b.scale - a.scale) * t,
+        a.opacity + (b.opacity - a.opacity) * t,
+      );
+}
+
+/// CSS transitions interpolate matching transform functions component-wise.
+class _CardPoseTween extends Tween<_CardPose> {
+  _CardPoseTween({super.end});
+
+  @override
+  _CardPose lerp(double t) => _CardPose.lerp(begin ?? end!, end!, t);
+}
 
 class _CssShadow {
   final double dx, dy, blur, spread;
@@ -1958,6 +1980,43 @@ class _CssShadowPainter extends CustomPainter {
       old.shadows != shadows || old.radius != radius;
 }
 
+/// CSS inset box-shadow (0 blur spread), painted inside the padding box.
+class _InsetShadowPainter extends CustomPainter {
+  final Offset offset;
+  final double blur;
+  final Color color;
+  final double radius;
+  const _InsetShadowPainter({
+    required this.offset,
+    required this.blur,
+    required this.color,
+    required this.radius,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final box = RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(radius));
+    canvas.save();
+    canvas.clipRRect(box);
+    final hole = box.shift(offset);
+    final path = Path()
+      ..fillType = PathFillType.evenOdd
+      ..addRect((Offset.zero & size).inflate(blur * 4 + 20))
+      ..addRRect(hole);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = color
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, blur / 2),
+    );
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _InsetShadowPainter old) =>
+      old.offset != offset || old.blur != blur || old.color != color || old.radius != radius;
+}
+
 /// CSS `linear-gradient(<angle>deg, ...)` mapped to Flutter begin/end for [size].
 LinearGradient _cssLinearGradient(
     double angleDeg, Size size, List<Color> colors, List<double> stops) {
@@ -1973,12 +2032,9 @@ LinearGradient _cssLinearGradient(
   );
 }
 
-/// The Figma export declares `ui-sans-serif, system-ui, sans-serif`, which the
-/// platform substitutes with Inter (AUTHORITY S-C13). v9 stops doing that:
-/// Inter was never bundled, so this helper pulled a second family off the CDN
-/// at runtime and the Theme Gallery / Settings surfaces rendered in a different
-/// face from everything around them. It now uses the one bundled family.
-TextStyle _inter(TextStyle s) => appFont(textStyle: s);
+/// Export font is `ui-sans-serif, system-ui, sans-serif`; the platform
+/// substitute on web/Android/Windows is Inter (AUTHORITY S-C13).
+TextStyle _inter(TextStyle s) => GoogleFonts.instrumentSans(textStyle: s);
 
 /// CSS drop-shadow(x y blur color): sigma = blur / 2.
 Shadow _cssDropShadow(double x, double y, double blur, Color color) {

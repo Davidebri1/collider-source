@@ -770,7 +770,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
   /// R09: "row count 1, 2 or 3." A slot is sized for a model name plus a
   /// wrapped one-line summary; longer answers scroll behind the edge fade.
-  static const int _maxTickerRows = 3;
+  static const int _maxTickerRows = 4; // four shown, the rest scroll (v8.6)
   static const double _rowSlot = 92;
 
   /// The category strip that closes the window, with its gap.
@@ -838,20 +838,15 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     });
   }
 
-  List<TickerItem> _tickerRows(ModelCategory c) {
-    // v9: this built one card per model in the category whether or not that
-    // model had ever answered, so a cold app opened on four or five blank
-    // tinted cards with nothing written in them — which is exactly the "no
-    // information that's supposed to be there". A row now exists only when
-    // there is something to read: an answer, or one on the way.
-    final out = <TickerItem>[];
-    for (final m in ModelRoster.forCategory(c)) {
-      for (final t in _tickerItems.where((t) => t.modelDef.id == m.id)) {
-        if (t.conversation.isNotEmpty || t.isStreaming) out.add(t);
-      }
-    }
-    return out;
-  }
+  // Restored v8.6 (9f839b7): the rail is one row per model in the category,
+  // answered or not, so every model can be seen and toggled.
+  List<TickerItem> _tickerRows(ModelCategory c) => [
+        for (final m in ModelRoster.forCategory(c))
+          _tickerItems.firstWhere(
+            (t) => t.modelDef.id == m.id,
+            orElse: () => TickerItem(modelDef: m, relativeTime: '', summary: '', conversation: const []),
+          ),
+      ];
 
   Widget _tickerRow(ModelCategory c, TickerItem item, double elevation) {
     final selected = _selByCat[c]!.contains(item.modelDef.id);
