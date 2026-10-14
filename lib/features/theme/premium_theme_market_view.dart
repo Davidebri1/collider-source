@@ -5,6 +5,7 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/foundation.dart' show kIsWeb, setEquals;
 import 'package:flutter/material.dart';
+import '../../core/vision/category_nav.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -223,10 +224,11 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
           return n.keys.toList()..sort((a, b) => n[b]!.compareTo(n[a]!));
         })(),
       ];
-  String _category = 'All';
+  String _category = '';
+  bool _navOpen = false;
   bool _searchOpen = false;
   bool _exploded = false;
-  bool _inCategory(WallpaperTheme t) => _category == 'All' || t.tags.contains(_category);
+  bool _inCategory(WallpaperTheme t) => CategoryTaxonomy.matches(_category, t.tags);
   void _setCategory(String c) {
     if (c == _category) return;
     _category = c;
@@ -273,11 +275,19 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
         ),
       ),
       const SizedBox(height: 8),
-      GhostMenu(
-        width: 96,
-        items: cats,
-        selected: math.max(0, cats.indexOf(_category)),
-        onSelected: (i) => _setCategory(cats[i]),
+      SuspendedFrost(
+        edge: 0.15,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+            child: ColoredBox(
+              color: const Color(0x14FFFFFF),
+              child: item(Icons.view_sidebar_outlined, _category.isEmpty ? 'Browse' : CategoryTaxonomy.labelOf(_category), _navOpen || _category.isNotEmpty,
+                  () => setState(() => _navOpen = true)),
+            ),
+          ),
+        ),
       ),
     ]);
   }
@@ -493,12 +503,18 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
             fit: StackFit.expand,
             children: [
               // App root: background linear-gradient(to bottom, #000000 0%, #111111 100%)
-              const DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Color(0xFF000000), Color(0xFF111111)],
+              // Tap on the empty room closes the Market (tap outside). The
+              // room is near-opaque so the ticker reads through it, blurred.
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _exploded ? () => setState(() => _exploded = false) : widget.onClose,
+                child: const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0xE6000000), Color(0xE6111111)],
+                    ),
                   ),
                 ),
               ),
@@ -599,6 +615,38 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
                 child: _sideNav(),
               ),
 
+              // Category sidebar (visionOS browser, Figma 1:101). A temporary
+              // panel: tap outside or pick a category to close it.
+              if (_navOpen) ...[
+                Positioned.fill(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => setState(() => _navOpen = false),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                      child: const ColoredBox(color: Color(0x47000000)),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 8,
+                  top: mainTop,
+                  child: Builder(builder: (_) {
+                    final pool = [...WallpaperCatalog.premiumThemes, ...WallpaperCatalog.freeThemes];
+                    return CategorySideNav(
+                      width: 200,
+                      maxHeight: MediaQuery.of(context).size.height - mainTop - 110,
+                      groups: CategoryTaxonomy.build([for (final t in pool) t.tags]),
+                      total: pool.length,
+                      selected: _category,
+                      onSelected: (k) {
+                        setState(() => _navOpen = false);
+                        _setCategory(k);
+                      },
+                    );
+                  }),
+                ),
+              ],
               // Search popup (was the always-on SearchBar): DOF blur behind.
               if (_searchOpen) ...[
                 Positioned.fill(
@@ -2034,7 +2082,7 @@ LinearGradient _cssLinearGradient(
 
 /// Export font is `ui-sans-serif, system-ui, sans-serif`; the platform
 /// substitute on web/Android/Windows is Inter (AUTHORITY S-C13).
-TextStyle _inter(TextStyle s) => GoogleFonts.instrumentSans(textStyle: s);
+TextStyle _inter(TextStyle s) => s.copyWith(fontFamily: 'GoogleSansFlex');
 
 /// CSS drop-shadow(x y blur color): sigma = blur / 2.
 Shadow _cssDropShadow(double x, double y, double blur, Color color) {

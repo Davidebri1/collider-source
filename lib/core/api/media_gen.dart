@@ -42,9 +42,9 @@ String _wireSlug(String wire, String remote) =>
 
 /// Each text model's ordered list of (wire, remote id) attempts.
 const Map<String, List<(String, String)>> _text = {
-  'free/glm-5-3-flash': [('nv', 'z-ai/glm-5.3-flash'), ('oc', 'glm-5.3-flash')],
+  'free/glm-5-3-flash': [('nv', 'z-ai/glm-5.3-flash'), ('nv', 'z-ai/glm-5.3-flash')],
   'free/laguna-s-2-1': [('cc', 'poolside/laguna-s-2.1-free')],
-  'free/laguna-xs-2-1': [('nv', 'poolside/laguna-xs-2.1')],
+  'free/laguna-xs-2-1': [('nv', 'poolside/laguna-xs-2.1'), ('nv', 'poolside/laguna-xs-2.1')],
   'free/ling-3-1-flash': [('cc', 'inclusionai/ling-3.1-flash:free')],
   'free/nemotron-3-5-lightning': [('nv', 'nvidia/nemotron-3.5-lightning-30b-a3b')],
   'pro/glm-5-3': [('nv', 'z-ai/glm-5.3'), ('oc', 'glm-5.3'), ('cc', 'zai-org/GLM-5.3')],
@@ -232,10 +232,15 @@ class MediaGen {
       final res = await _dio.post(url,
           data: {'model': _wireSlug(w, remote), 'messages': messages, if (maxTokens != null) 'max_tokens': maxTokens},
           options: Options(headers: viaProxy ? {'Content-Type': 'application/json'} : {'Content-Type': 'application/json', 'Authorization': 'Bearer ${t.key}'}, receiveTimeout: const Duration(seconds: 90)));
-      final text = _stripThink(res.data['choices']?[0]?['message']?['content'] as String? ?? '');
+      final msg = res.data['choices']?[0]?['message'];
+      final text = _stripThink(msg?['content'] as String? ?? '');
       if (text.isEmpty) throw const MediaGenError('empty');
       return text;
     } on DioException catch (e) {
+      // NVIDIA's free tier sheds load with 503/429 for a moment; wait and let
+      // the next attempt (the same model again) go out.
+      final sc = e.response?.statusCode;
+      if (w == 'nv' && (sc == 503 || sc == 429)) await Future<void>.delayed(const Duration(milliseconds: 1500));
       if (e.type == DioExceptionType.receiveTimeout || e.type == DioExceptionType.connectionTimeout) throw const MediaGenError('timeout');
       throw MediaGenError('provider ${e.response?.statusCode ?? 'unreachable'}: ${_errBody(e)}');
     }

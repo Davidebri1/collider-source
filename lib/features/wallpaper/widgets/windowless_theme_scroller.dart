@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import '../../../core/vision/category_nav.dart';
 import 'package:video_player/video_player.dart';
 import '../../../models/theme_def.dart';
 import '../../../core/vision/vision_kit.dart';
@@ -65,21 +66,7 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
     }
   }
 
-  String _category = 'All';
-  List<String> get _categories => [
-        'All',
-        // v8.7: the ghost menu filters by tag (most used first).
-        ...(() {
-          final n = <String, int>{};
-          for (final t in WallpaperCatalog.freeThemes) {
-            for (final g in t.tags) {
-              n[g] = (n[g] ?? 0) + 1;
-            }
-          }
-          return n.keys.toList()..sort((a, b) => n[b]!.compareTo(n[a]!));
-        })(),
-      ];
-
+  String _category = '';
   List<WallpaperTheme> get _themes {
     final store = ThemePackStore.instance;
     final all = <WallpaperTheme>[
@@ -87,14 +74,14 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
       for (final t in WallpaperCatalog.premiumThemes)
         if (store.storeOpen && store.isUnlocked(t.id)) t,
     ];
-    return _category == 'All' ? all : all.where((t) => t.tags.contains(_category)).toList();
+    return all.where((t) => CategoryTaxonomy.matches(_category, t.tags)).toList();
   }
 
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final pad = MediaQuery.of(context).padding;
-    final winW = (size.width - 32 - 112).clamp(200.0, 440.0); // v8.7: ghost menu column on the left
+    final winW = (size.width - 32 - 150).clamp(200.0, 440.0); // v8.7: ghost menu column on the left
     final winH = (winW * 1.3).clamp(240.0, size.height - pad.top - 84 - 150);
     return ListenableBuilder(
       listenable: ThemePackStore.instance,
@@ -132,21 +119,31 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
               ),
               if (_expanded && _previewed.isLive)
                 Positioned.fill(child: IgnorePointer(child: _LoopVideo(key: ValueKey('full-${_previewed.id}'), url: _previewed.videoUrl!))),
-              // v8.7 floating ghost category menu.
+              // Sidebar (visionOS browser, Figma 1:101): categories with
+              // expandable subcategories and counts.
               if (!_expanded)
                 Positioned(
-                  left: 4,
-                  top: pad.top + 120,
-                  child: Builder(builder: (_) {
-                    final cats = _categories;
-                    return GhostMenu(
-                      width: 104,
-                      visible: 5,
-                      items: cats,
-                      selected: math.max(0, cats.indexOf(_category)),
-                      onSelected: (i) => setState(() => _category = cats[i]),
-                    );
-                  }),
+                  left: 6,
+                  top: pad.top + 64,
+                  bottom: 250,
+                  child: Align(
+                    alignment: Alignment.topLeft,
+                    child: Builder(builder: (_) {
+                      final store = ThemePackStore.instance;
+                      final pool = [
+                        ...WallpaperCatalog.freeThemes,
+                        for (final t in WallpaperCatalog.premiumThemes)
+                          if (store.storeOpen && store.isUnlocked(t.id)) t,
+                      ];
+                      return CategorySideNav(
+                        width: 150,
+                        groups: CategoryTaxonomy.build([for (final t in pool) t.tags]),
+                        total: pool.length,
+                        selected: _category,
+                        onSelected: (k) => setState(() => _category = k),
+                      );
+                    }),
+                  ),
                 ),
               if (_expanded)
                 Positioned(
@@ -156,7 +153,7 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                 ),
               if (!_expanded)
                 Positioned(
-                  left: 112,
+                  left: 152,
                   right: 0,
                   top: pad.top,
                   bottom: 84,

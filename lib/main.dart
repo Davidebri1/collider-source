@@ -613,6 +613,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     setState(() {
       if (_browserOpen) {
         _browserOpen = false;
+        _activeDrawer = null;
       } else if (_settingsOpen && _activeDrawer == 'account') {
         _activeDrawer = null;
       } else if (_settingsOpen) {
@@ -848,6 +849,59 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           ),
       ];
 
+  /// Long-press on a ticker row: its context menu (tap outside closes it).
+  void _rowMenu(ModelCategory c, TickerItem item) {
+    HapticFeedback.mediumImpact();
+    final id = item.modelDef.id;
+    final on = _selByCat[c]!.contains(id);
+    final hasAnswer = item.conversation.isNotEmpty;
+    final last = item.conversation.lastWhere((m) => m.sender == 'model', orElse: () => TickerMessage(id: '', sender: 'model', text: '', timestamp: DateTime.now()));
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Close',
+      barrierColor: const Color(0x47000000),
+      transitionDuration: VMotion.base,
+      pageBuilder: (ctx, _, __) {
+        void close() => Navigator.of(ctx).pop();
+        return Material(type: MaterialType.transparency, child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: close,
+            child: Center(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Text(item.modelDef.label, style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600, decoration: TextDecoration.none)),
+                const SizedBox(height: 12),
+                GlassMenu(scale: 1.0, width: 240, rows: [
+                  if (hasAnswer)
+                    GlassMenuRow(icon: Icons.chat_bubble_outline_rounded, label: 'Open conversation', on: true, toggle: false, onTap: () {
+                      close();
+                      _onTogglePill(id);
+                    }),
+                  GlassMenuRow(icon: on ? Icons.toggle_on_rounded : Icons.toggle_off_outlined, label: on ? 'Turn off' : 'Turn on', on: on, onTap: () {
+                    close();
+                    _toggleSelect(c, id);
+                  }),
+                  if (last.text.isNotEmpty)
+                    GlassMenuRow(icon: Icons.copy_rounded, label: 'Copy reply', on: true, toggle: false, onTap: () {
+                      Clipboard.setData(ClipboardData(text: last.text));
+                      close();
+                    }),
+                  if (hasAnswer)
+                    GlassMenuRow(icon: Icons.delete_outline_rounded, label: 'Clear conversation', on: true, toggle: false, onTap: () {
+                      close();
+                      setState(() => _tickerItems.removeWhere((t) => t.modelDef.id == id));
+                    }),
+                ]),
+              ]),
+            ),
+          ),
+        ));
+      },
+    );
+  }
+
   Widget _tickerRow(ModelCategory c, TickerItem item, double elevation) {
     final selected = _selByCat[c]!.contains(item.modelDef.id);
     final hasAnswer = item.conversation.isNotEmpty || item.isStreaming;
@@ -864,7 +918,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           );
     return GestureDetector(
       key: ValueKey('row-${c.name}-${item.modelDef.id}'),
-      onLongPress: () => _toggleSelect(c, item.modelDef.id),
+      onLongPress: () => _rowMenu(c, item),
       child: AnimatedOpacity(
         duration: VMotion.base,
         opacity: selected ? 1.0 : 0.42,
@@ -1380,6 +1434,28 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       _tickerItems[i] = cur.copyWith(isStreaming: false, relativeTime: _clock(now), summary: text.split('\n').first,
           conversation: [...cur.conversation, TickerMessage(id: 'm$id${now.microsecondsSinceEpoch}', sender: 'model', text: text, timestamp: now)]);
     });
+    if (!error) _summarise(id, text);
+  }
+
+  /// The ticker line is a real one-line summary from the Consensus Agent
+  /// (MiniMax first), not the reply's first line. The first line stands in
+  /// only until the summary lands, or if the agent cannot be reached.
+  Future<void> _summarise(String id, String text) async {
+    try {
+      final s = await MediaGen.instance.consensus([
+        {'role': 'system', 'content': 'Summarise the reply in ONE plain sentence of at most 14 words. No preamble, no quotes, no markdown.'},
+        {'role': 'user', 'content': text.length > 6000 ? text.substring(0, 6000) : text},
+      ]);
+      final line = s.replaceAll(RegExp(r'[*#`>]'), '').trim().split('\n').firstWhere((l) => l.trim().isNotEmpty, orElse: () => '').trim();
+      if (!mounted || line.isEmpty) return;
+      setState(() {
+        final i = _tickerItems.indexWhere((t) => t.modelDef.id == id);
+        if (i == -1) return;
+        final last = _tickerItems[i].conversation.isEmpty ? null : _tickerItems[i].conversation.last;
+        if (last == null || last.text != text) return; // a newer reply already arrived
+        _tickerItems[i] = _tickerItems[i].copyWith(summary: line);
+      });
+    } catch (_) {}
   }
 
   static String _clock(DateTime t) => '${(t.hour % 12 == 0 ? 12 : t.hour % 12)}:${t.minute.toString().padLeft(2, '0')} ${t.hour < 12 ? 'AM' : 'PM'}';
@@ -2257,13 +2333,25 @@ AnimatedScale(
             ),
           ),
 
-          // v9.1 escape: swipe in from the left edge closes the top view.
+          // One rule everywhere: a swipe in from the left edge (back) or a
+          // swipe down from the top of a panel closes the top-most view. A raw
+          // Listener, so no rail or list can win the gesture first.
           if (_anythingOpen)
-            Positioned(
-              left: 0, top: 0, bottom: 0, width: 16,
-              child: GestureDetector(
+            Positioned.fill(
+              child: Listener(
                 behavior: HitTestBehavior.translucent,
-                onHorizontalDragEnd: (d) { if ((d.primaryVelocity ?? 0) > 250) _escape(); },
+                onPointerDown: (e) { _swStart = e.position; _swTime = DateTime.now(); },
+                onPointerUp: (e) {
+                  final s0 = _swStart;
+                  _swStart = null;
+                  if (s0 == null) return;
+                  final d = e.position - s0;
+                  final ms = DateTime.now().difference(_swTime).inMilliseconds;
+                  final h = MediaQuery.sizeOf(context).height;
+                  final back = s0.dx < 28 && d.dx > 70 && d.dy.abs() < d.dx * 0.7 && ms < 700;
+                  final down = s0.dy < h * 0.42 && d.dy > h * 0.22 && d.dx.abs() < d.dy * 0.5 && ms < 900;
+                  if (back || down) _escape();
+                },
               ),
             ),
         ],
@@ -2271,5 +2359,8 @@ AnimatedScale(
       ),
     )));
   }
+
+  Offset? _swStart;
+  DateTime _swTime = DateTime.now();
 }
 

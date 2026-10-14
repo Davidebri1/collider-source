@@ -79,9 +79,8 @@ class ThemeCatalog extends ChangeNotifier {
   ThemeCatalog._();
   static final ThemeCatalog instance = ThemeCatalog._();
 
-  static const String mediaBaseUrl = 'https://davidebri1.github.io/collider-media/';
+  static const String mediaBaseUrl = 'https://pub-6263d41408f145baa5b058378744d787.r2.dev/';
   static const String remoteCatalogUrl = '${mediaBaseUrl}themes.json';
-  static const String bundledCatalogAsset = 'assets/catalog/themes.json';
 
 
   static const String _prefsKey = 'theme_list_r2_v2';
@@ -137,18 +136,9 @@ class ThemeCatalog extends ChangeNotifier {
     unawaited(refreshRemote());
   }
 
-  Future<void> loadBundled() async {
-    try {
-      final s = await rootBundle.loadString(bundledCatalogAsset);
-      final d = ThemeCatalogData.parse(s);
-      _songThemes = d.themes.where((t) => t.tracks.isNotEmpty).toList();
-      _premium = d.themes.where((t) => t.isPremium).toList();
-      _ambient = d.ambientTracks;
-      if (_premium.isNotEmpty) _themes = _premium;
-    } catch (e) {
-      debugPrint('ThemeCatalog: bundled catalog unavailable: $e');
-    }
-  }
+  /// No bundled catalogue any more: every theme, cover, loop and song comes
+  /// from the R2 Worker list ([themesUrl]). Kept as a no-op for callers.
+  Future<void> loadBundled() async {}
 
   Future<void> _loadCached() async {
     try {
@@ -186,6 +176,13 @@ class ThemeCatalog extends ChangeNotifier {
     return null;
   }
 
+  /// A stock file with no words in its name is named from its content tags.
+  static String _nameOr(String n, List<String> tags) {
+    if (n != 'Untitled') return n;
+    final c = _content(tags).take(2).map((t) => t.isEmpty ? t : t[0].toUpperCase() + t.substring(1)).toList();
+    return c.isEmpty ? 'Untitled' : c.join(' ');
+  }
+
   static String niceName(String file) {
     final base = file.split('/').last;
     final dot = base.lastIndexOf('.');
@@ -193,11 +190,15 @@ class ThemeCatalog extends ChangeNotifier {
     // v9.1: drop stock-site ids and resolution/fps tags ("4572947 Coastline
     // Ocean 1280x720" -> "Coastline Ocean").
     final c = b
+        .replaceAll(RegExp(r'\b[0-9a-f]{8}( [0-9a-f]{4}){3} [0-9a-f]{12}\b', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\b(medium|copy|coll|hd|\d{9,})\b|\(\d+\)', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\b\d{6,}\b'), '')
         .replaceAll(RegExp(r'^\d+\s+'), '')
         .replaceAll(RegExp(r'\b\d{3,4}\s*x\s*\d{3,4}\b|\b(4k|8k|hd|uhd|\d+fps|\d{3,4}p)\b', caseSensitive: false), '')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
-    return c.isEmpty ? (b.isEmpty ? base : b) : c;
+    // Nothing human left (a bare stock id): give it a plain name.
+    return c.replaceAll(RegExp(r'^\d+\s*'), '').isEmpty ? 'Untitled' : c;
   }
 
   List<WallpaperTheme> _fromList(List list) {
@@ -282,7 +283,7 @@ class ThemeCatalog extends ChangeNotifier {
     }
     return WallpaperTheme(
       id: 'r2-$name',
-      name: niceName(name),
+      name: _nameOr(niceName(name), tags),
       assetPath: still ? url : FirstFrames.srcFor(url),
       videoPath: still ? null : url,
       creator: 'David Ebri',
@@ -297,7 +298,8 @@ class ThemeCatalog extends ChangeNotifier {
     final t = _fromList(list);
     if (t.isEmpty) return;
     t.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-    _themes = [...t, ..._premium];
+    _themes = t;
+    _songThemes = t.where((x) => x.tracks.isNotEmpty).toList();
     // Default: a portrait ocean loop (fits the phone, decodes everywhere tested).
     WallpaperTheme? pick(String n) => t.where((x) => x.name.toLowerCase().contains(n)).firstOrNull;
     _defaultSlug = (pick('ocean reflection') ?? pick('beach waves') ?? t.where((x) => x.isLive).firstOrNull ?? t.first).id;

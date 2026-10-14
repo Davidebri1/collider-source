@@ -42,7 +42,6 @@ flutter:
   # https://davidebri1.github.io/collider-media/ (see lib/core/media/theme_catalog.dart).
   # Bundled: fallback catalog JSON + the Instrument Sans family.
   assets:
-    - assets/catalog/
     - assets/html/
 
   # v9: the type family is bundled, not fetched (one family, on disk, always).
