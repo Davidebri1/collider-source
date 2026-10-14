@@ -45,7 +45,7 @@ class ConsensusRow extends StatelessWidget {
           // v9.1.2: a soft translucent bubble, no outline.
           color: const Color(0xD018181E),
           borderRadius: BorderRadius.circular(18),
-          boxShadow: const [BoxShadow(color: Color(0x1F000000), blurRadius: 20, offset: Offset(0, 6))],
+          boxShadow: VElev.e6,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

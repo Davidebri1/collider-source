@@ -1,3 +1,4 @@
+import '../../../core/vision/vision_tokens.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/figma/figma_stage.dart';
@@ -145,7 +146,7 @@ class _Row extends StatelessWidget {
           height: 96,
           radius: BorderRadius.circular(20),
           stroke: selected ? const Color(0x66FFFFFF) : null,
-          shadow: selected ? const [BoxShadow(color: Color(0x2B000000), offset: Offset(0, 52), blurRadius: 25.8, spreadRadius: -9)] : null,
+          shadow: selected ? VElev.e6 : null,
           gradient: selected
               ? const RadialGradient(center: Alignment(-0.92, -1), radius: 1.6, colors: [Color(0x809C8585), Color(0x806C6C6C)])
               : null,
@@ -234,25 +235,7 @@ class _TickerAnswerWindowState extends State<TickerAnswerWindow> {
                 FText(item.isStreaming ? 'Answering' : item.relativeTime, size: 15, height: 20, weight: FontWeight.w700, opacity: 0.4),
               ]),
             ),
-            // Close Button Container 10:438 at (711,26), 48 x 48.
-            Positioned(
-              left: 711,
-              top: 26,
-              width: 48,
-              height: 48,
-              child: Semantics(
-                button: true,
-                label: 'Close',
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: widget.onClose,
-                  child: Container(
-                    decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0x4D808080)),
-                    child: const Icon(Icons.close_rounded, size: 24, color: Colors.white),
-                  ),
-                ),
-              ),
-            ),
+            // No on-screen close (David): swipe down or tap outside.
             // Messages from y 110 (9:414) to the text box (y 590).
             Positioned(
               left: 0,

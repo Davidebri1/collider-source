@@ -732,10 +732,9 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
             // h2 text-xl font-light mb-2 text-white drop-shadow-lg
             SizedBox(
               height: 28,
-              child: Text(
+              child: FittedBox(fit: BoxFit.scaleDown, child: Text( // never truncated
                 _displayName(t),
                 maxLines: 1,
-                overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 style: _inter(TextStyle(
                   fontSize: 20,
@@ -744,7 +743,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
                   color: const Color(0xFFFFFFFF),
                   shadows: [_cssDropShadow(0, 4, 4, const Color(0x26000000))],
                 )),
-              ),
+              )),
             ),
             if (tracks.isNotEmpty) ...[
               const SizedBox(height: 8),

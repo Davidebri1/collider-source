@@ -1,3 +1,4 @@
+import '../vision/vision_tokens.dart';
 import 'app_font.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -78,51 +79,23 @@ class SpatialTheme {
 
   /// Ambient occlusion drop shadow per depth plane
   static List<BoxShadow> ambientShadow(SpatialDepthPlane plane) {
+    // Four downward elevation levels (VElev): base 0, panel 2, floating 6, modal 12.
     switch (plane) {
       case SpatialDepthPlane.base:
-        return const [];
+        return VElev.e0;
       case SpatialDepthPlane.basePrompt:
-        return [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.18),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
-          ),
-        ];
+        return VElev.e2;
       case SpatialDepthPlane.resting:
-        return [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.22),
-            blurRadius: 32,
-            offset: const Offset(0, 12),
-          ),
-        ];
+        return VElev.e2;
       case SpatialDepthPlane.elevated:
-        return [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.28),
-            blurRadius: 40,
-            offset: const Offset(0, 16),
-          ),
-        ];
+        return VElev.e6;
       case SpatialDepthPlane.modal:
-        return [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.32),
-            blurRadius: 48,
-            offset: const Offset(0, 20),
-          ),
-        ];
+        return VElev.e12;
       case SpatialDepthPlane.workSurface:
-        return [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.36),
-            blurRadius: 56,
-            offset: const Offset(0, 24),
-          ),
-        ];
+        return VElev.e12;
     }
   }
+
 }
 
 /// Universal, adult typography system: Regal cinematic display paired with

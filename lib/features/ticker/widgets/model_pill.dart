@@ -132,10 +132,7 @@ class _ModelPillState extends State<ModelPill> {
       decoration: BoxDecoration(
         color: Color.alphaBlend(c.withValues(alpha: 0.06), VFrost.tint),
         borderRadius: BorderRadius.circular(VRadius.lg - 4),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.46), blurRadius: 34, spreadRadius: -6, offset: const Offset(0, 18)),
-          BoxShadow(color: c.withValues(alpha: 0.22), blurRadius: 22, spreadRadius: -10),
-        ],
+        boxShadow: VElev.e12,
       ),
       child: Container(
         padding: const EdgeInsets.fromLTRB(VSpace.sm, 10, VSpace.xs, 8),
@@ -225,7 +222,7 @@ class _ModelPillState extends State<ModelPill> {
         // no outline.
         color: Color.alphaBlend(c.withValues(alpha: 0.06 + 0.08 * e), const Color(0xD018181E)),
         borderRadius: BorderRadius.circular(18),
-        boxShadow: const [BoxShadow(color: Color(0x1F000000), blurRadius: 20, offset: Offset(0, 6))],
+        boxShadow: VElev.e6,
       ),
       foregroundDecoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),

@@ -26,7 +26,7 @@ class VFrost {
   // v9.1.6: full-screen work surfaces (Music, Smart Gen, Files, Market) are a
   // touch clearer so the ticker stays visible behind them, blurred.
   static const Color workTint = Color(0x6618181E);
-  static const List<BoxShadow> shadow = [BoxShadow(color: Color(0x29000000), blurRadius: 40, spreadRadius: -8, offset: Offset(0, 10))];
+  static final List<BoxShadow> shadow = VElev.e12;
 }
 
 extension VMaterialX on VMaterial {
@@ -226,6 +226,9 @@ class VCircleButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // David: no on-screen back or close controls anywhere; every surface
+    // leaves by swipe down or tap outside (one rule, enforced here).
+    if (isDismissTooltip(tooltip)) return const SizedBox.shrink();
     final core = Container(
       width: size,
       height: size,
@@ -291,8 +294,10 @@ class VCategoryRow extends StatelessWidget {
 class VCloseButton extends StatelessWidget {
   final VoidCallback? onTap;
   const VCloseButton({super.key, this.onTap});
+  // David: no on-screen close anywhere (swipe down / tap outside).
   @override
-  Widget build(BuildContext context) => Semantics(
+  Widget build(BuildContext context) => const SizedBox.shrink();
+  Widget _unused(BuildContext context) => Semantics(
         button: true,
         label: 'Close',
         child: GestureDetector(
@@ -1312,3 +1317,7 @@ class _GhostMenuState extends State<GhostMenu> {
     );
   }
 }
+
+
+/// Tooltips that mark a dismiss control (close / back), which the app never shows.
+bool isDismissTooltip(String? t) => t == 'Close' || t == 'Close Apps' || t == 'Back';

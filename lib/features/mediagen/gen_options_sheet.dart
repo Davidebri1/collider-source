@@ -436,7 +436,7 @@ class _GenOptionsSheetState extends State<GenOptionsSheet> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(6),
-          boxShadow: const [BoxShadow(color: Color(0x66000000), blurRadius: 8, offset: Offset(2, 3))],
+          boxShadow: VElev.e2,
         ),
         alignment: Alignment.center,
         child: VAvatar(label: m.label, color: m.providerColor, size: 34),

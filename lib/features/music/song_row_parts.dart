@@ -34,6 +34,7 @@ class _SongPlayButtonState extends State<SongPlayButton> {
 
   @override
   Widget build(BuildContext context) {
+    if (isDismissTooltip(widget.tooltip)) return const SizedBox.shrink();
     final enabled = widget.onTap != null;
     final fill = !enabled
         ? const Color(0x0DFFFFFF)

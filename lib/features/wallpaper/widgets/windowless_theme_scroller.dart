@@ -96,7 +96,6 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
           behavior: HitTestBehavior.translucent,
           onVerticalDragEnd: (d) {
             if ((d.primaryVelocity ?? 0) < -300) widget.onUpgradeTier();
-            if ((d.primaryVelocity ?? 0) > 300) widget.onCancel(); // swipe down closes
           },
           child: Stack(
             fit: StackFit.expand,
@@ -146,7 +145,7 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                         SizedBox(
                           width: winW,
                           child: Row(children: [
-                            Expanded(child: Text(_previewed.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: VType.headline(color: Colors.white))),
+                            Expanded(child: Text(_previewed.name, maxLines: 2, softWrap: true, style: VType.headline(color: Colors.white))), // never truncated
                             VPress(
                               key: const ValueKey('gallery-set'),
                               onTap: () => widget.onConfirmTheme(_previewed),

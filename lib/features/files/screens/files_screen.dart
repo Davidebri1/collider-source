@@ -242,7 +242,7 @@ class _FilesScreenState extends State<FilesScreen> {
     return Container(
       decoration: BoxDecoration(
         borderRadius: onPicked != null ? const BorderRadius.all(Radius.circular(52.8)) : const BorderRadius.only(topLeft: Radius.circular(52.8), bottomLeft: Radius.circular(52.8)),
-        boxShadow: const [BoxShadow(color: Color(0x2E000000), offset: Offset(0, 0.85), blurRadius: 20.5)],
+        boxShadow: VElev.e6,
       ),
       child: FGlass(
         radius: onPicked != null ? const BorderRadius.all(Radius.circular(52.8)) : const BorderRadius.only(topLeft: Radius.circular(52.8), bottomLeft: Radius.circular(52.8)),
@@ -424,7 +424,7 @@ class _FilesScreenState extends State<FilesScreen> {
   Widget _segments() => Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(765),
-          boxShadow: const [BoxShadow(color: Color(0x2E000000), offset: Offset(0, 1.53), blurRadius: 36.7)],
+          boxShadow: VElev.e12,
         ),
         child: FGlass(
           radius: BorderRadius.circular(765),

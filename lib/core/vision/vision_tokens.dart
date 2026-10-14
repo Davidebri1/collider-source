@@ -91,20 +91,36 @@ class VBlur {
   static const double sheet = 40;
 }
 
+/// Elevation: downward Flutter (Material) shadows in four levels by layer:
+/// base 0, panel 2, floating 6, modal 12. One constant per layer depth.
+class VElev {
+  VElev._();
+  // Material elevation geometry (kElevationToShadow 2/6/12), alpha doubled
+  // because every surface here sits on a dark scene. All fall downward.
+  static const List<BoxShadow> e0 = [];
+  static const List<BoxShadow> e2 = [
+    BoxShadow(offset: Offset(0, 3), blurRadius: 1, spreadRadius: -2, color: Color(0x66000000)),
+    BoxShadow(offset: Offset(0, 2), blurRadius: 2, color: Color(0x48000000)),
+    BoxShadow(offset: Offset(0, 1), blurRadius: 5, color: Color(0x3E000000)),
+  ];
+  static const List<BoxShadow> e6 = [
+    BoxShadow(offset: Offset(0, 3), blurRadius: 5, spreadRadius: -1, color: Color(0x66000000)),
+    BoxShadow(offset: Offset(0, 6), blurRadius: 10, color: Color(0x48000000)),
+    BoxShadow(offset: Offset(0, 1), blurRadius: 18, color: Color(0x3E000000)),
+  ];
+  static const List<BoxShadow> e12 = [
+    BoxShadow(offset: Offset(0, 7), blurRadius: 8, spreadRadius: -4, color: Color(0x66000000)),
+    BoxShadow(offset: Offset(0, 12), blurRadius: 17, spreadRadius: 2, color: Color(0x48000000)),
+    BoxShadow(offset: Offset(0, 5), blurRadius: 22, spreadRadius: 4, color: Color(0x3E000000)),
+  ];
+}
+
 class VShadow {
   VShadow._();
-  static const List<BoxShadow> subtle = [
-    BoxShadow(color: Color(0x14000000), blurRadius: 12, offset: Offset(0, 4)),
-  ];
-  static const List<BoxShadow> medium = [
-    BoxShadow(color: Color(0x1F000000), blurRadius: 24, offset: Offset(0, 8)),
-  ];
-  static const List<BoxShadow> heavy = [
-    BoxShadow(color: Color(0x2E000000), blurRadius: 48, offset: Offset(0, 16)),
-  ];
-  static const List<BoxShadow> recessed = [
-    BoxShadow(color: Color(0x59000000), blurRadius: 18, offset: Offset(0, 10)),
-  ];
+  static const List<BoxShadow> subtle = VElev.e2;
+  static const List<BoxShadow> medium = VElev.e6;
+  static const List<BoxShadow> heavy = VElev.e12;
+  static const List<BoxShadow> recessed = VElev.e6;
 }
 
 /// Kit type scale. Instrument Sans stands in for SF Pro Text.

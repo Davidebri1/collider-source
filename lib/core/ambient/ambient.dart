@@ -1,3 +1,4 @@
+import '../vision/vision_tokens.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
@@ -37,7 +38,7 @@ class _AmbientGlowState extends State<AmbientGlow> with SingleTickerProviderStat
         return DecoratedBox(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(widget.radius),
-            boxShadow: [BoxShadow(color: widget.color.withValues(alpha: widget.min + (widget.max - widget.min) * t), blurRadius: 14 + 10 * t, spreadRadius: -2)],
+            boxShadow: VElev.e6,
           ),
           child: child,
         );

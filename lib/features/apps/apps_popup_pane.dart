@@ -58,7 +58,7 @@ class AppsPopupPane extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        VScrim(onTap: onClose, blur: true),
+        VScrim(onTap: onClose, blur: false), // ticker stays visible, blurred by its own gate
         Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -142,7 +142,7 @@ class _AppIcon extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: app.colors),
-                boxShadow: const [BoxShadow(color: Color(0x59000000), blurRadius: 14, offset: Offset(0, 6))],
+                boxShadow: VElev.e6,
               ),
               foregroundDecoration: BoxDecoration(
                 shape: BoxShape.circle,

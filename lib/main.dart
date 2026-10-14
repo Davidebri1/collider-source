@@ -47,6 +47,7 @@ import 'features/theme/theme_living_media.dart';
 import 'core/media/theme_catalog.dart';
 import 'core/vision/keyboard_dof.dart';
 import 'core/vision/materialize.dart';
+import 'core/media/first_frame.dart';
 import 'core/nav/back_guard.dart';
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'core/media/theme_media_bundle.dart';
@@ -168,7 +169,9 @@ class ColliderApp extends StatelessWidget {
       // every scroller and every custom drag surface ignored the mouse. The
       // default has no scrollbars, which also satisfies the no-scrollbar rule.
       scrollBehavior: const _MouseDraggableScrollBehavior(),
-      theme: ThemeData.dark(useMaterial3: true).copyWith(
+      // v9.1.6d: Google Sans Flex is the app-wide family (and the fallback), so
+      // the engine never fetches Roboto for an unstyled Text.
+      theme: ThemeData(brightness: Brightness.dark, useMaterial3: true, fontFamily: 'GoogleSansFlex', fontFamilyFallback: const ['GoogleSansFlex']).copyWith(
         scaffoldBackgroundColor: const Color(0xFF07080B),
         // v9.1.4 (playtest #15): every default text style is Google Sans Flex.
         textTheme: ThemeData.dark().textTheme.apply(fontFamily: 'GoogleSansFlex'),
@@ -344,6 +347,10 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       _currentTheme = cat.bySlug(_currentTheme.id) ?? cat.defaultTheme;
       _savedThemeBeforePreview = cat.bySlug(_savedThemeBeforePreview.id) ?? cat.defaultTheme;
     });
+    // v9.1.6d (#3): start the current wallpaper's poster as soon as the
+    // catalogue lands, so the Gallery frame is never empty while it decodes.
+    final v = _currentTheme.videoUrl;
+    if (_currentTheme.isLive && v != null) unawaited(FirstFrames.get(v));
   }
 
   bool _onKey(KeyEvent e) {
@@ -369,7 +376,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     HardwareKeyboard.instance.addHandler(_onKey);
     if (Uri.base.queryParameters['seed'] == '1') _seedSamples();
     ThemeCatalog.instance.addListener(_onCatalogChanged);
-    paneHiddenTick.addListener(_nudgeTicker);
     KeyboardDof.install();
     if (Uri.base.queryParameters['drawer'] == 'premium') {
       _activeDrawer = 'premium';
@@ -641,11 +647,11 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   void _nudgeTicker() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       for (final c in _tickerScroll.values) {
-        if (!c.hasClients) continue;
+        if (c.positions.length != 1) continue;
         final o = c.offset;
         final max = c.position.maxScrollExtent;
         c.jumpTo((o + 1).clamp(0.0, max + 1));
-        WidgetsBinding.instance.addPostFrameCallback((_) { if (c.hasClients) c.jumpTo(o.clamp(0.0, max)); });
+        WidgetsBinding.instance.addPostFrameCallback((_) { if (c.positions.length == 1) c.jumpTo(o.clamp(0.0, max)); });
       }
     });
   }
@@ -812,12 +818,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   /// reaching the lower edge. VGlass.resting alone is a 12% wash with a 12%
   /// shadow, which over a bright wallpaper is the unlayered slab that was
   /// reported as bug 3.
-  static const List<BoxShadow> _windowShadow = [
-    BoxShadow(color: Color(0x73000000), blurRadius: 8, offset: Offset(0, 3)),
-    BoxShadow(color: Color(0x7A000000), blurRadius: 38, offset: Offset(0, 20)),
-    BoxShadow(color: Color(0x3D000000), blurRadius: 72, spreadRadius: -14, offset: Offset(0, 32)),
-    BoxShadow(color: Color(0x1AFFFFFF), blurRadius: 20, spreadRadius: -8),
-  ];
+  static final List<BoxShadow> _windowShadow = VElev.e12;
 
   /// One frosted plane: a single [VGlass] with an opaque-leaning fill so the
   /// wallpaper is seen through exactly one transparent layer instead of a
@@ -983,7 +984,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     return ClipRect(
       child: Stack(
         children: [
-          ListView.separated(
+          ScrollConfiguration(
+            behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false, overscroll: false),
+            child: ListView.separated(
             controller: sc,
             padding: const EdgeInsets.only(bottom: 4),
             physics: const BouncingScrollPhysics(),
@@ -991,7 +994,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             separatorBuilder: (_, __) => const SizedBox(height: 6),
             itemBuilder: (_, i) => _tickerRow(c, rows[i], rows.length <= 1 ? 1.0 : 1.0 - i / (rows.length - 1)),
           ),
-          if (rows.length > 3 && sc.hasClients && sc.position.maxScrollExtent > 0)
+          ),
+          if (rows.length > 3 && sc.positions.length == 1 && sc.position.maxScrollExtent > 0)
             Positioned(
               right: 2,
               bottom: 2,
@@ -999,7 +1003,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                 child: AnimatedBuilder(
                   animation: sc,
                   builder: (_, __) {
-                    final p = sc.hasClients && sc.position.maxScrollExtent > 0
+                    final p = sc.positions.length == 1 && sc.position.maxScrollExtent > 0
                         ? (sc.offset / sc.position.maxScrollExtent).clamp(0.0, 1.0)
                         : 0.0;
                     final more = 1 - p;
@@ -1174,9 +1178,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
   Widget _buildTicker() {
     final idx = _tickerOrder.indexOf(_activeCategory);
-    if (_catPager.hasClients && _catPager.page != null && (_catPager.page!.round() != idx) && !_catPager.position.isScrollingNotifier.value) {
+    if (_catPager.positions.length == 1 && _catPager.page != null && (_catPager.page!.round() != idx) && !_catPager.position.isScrollingNotifier.value) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_catPager.hasClients) _catPager.animateToPage(idx, duration: VMotion.base, curve: Curves.easeOutCubic);
+        if (_catPager.positions.length == 1) _catPager.animateToPage(idx, duration: VMotion.base, curve: Curves.easeOutCubic);
       });
     }
     // The window owns the height (R08: 40% ceiling, one fixed height in every
@@ -1225,7 +1229,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     final window = SizedBox(
       // v9.1.2: chat bubbles span the screen like the reference.
       // v9.1.6 (approved app-11): rows sit right of the side rail.
-      width: math.min(MediaQuery.sizeOf(context).width - 112, 520),
+      width: math.min(MediaQuery.sizeOf(context).width - 128, 520), // narrowed (not shifted) to clear the floating rail
       child: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: _tickerHeight),
         child: _windowSurface(
@@ -1263,7 +1267,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       duration: VMotion.base,
       curve: Curves.easeOutCubic,
       opacity: _isComposerSummoned ? 1.0 : 1,
-      child: IgnorePointer(ignoring: _isComposerSummoned, child: Padding(padding: EdgeInsets.only(left: MediaQuery.sizeOf(context).width < 768 ? 44 : 0), child: window)),
+      child: IgnorePointer(ignoring: _isComposerSummoned, child: window /* David: centred; the side rail floats over it, never offsets it */),
     );
   }
 
@@ -1843,6 +1847,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
   @override
   String _lastSurfaceSig = '';
+  Offset? _swipeStart;
+  DateTime _swipeT = DateTime.now();
+
   Widget build(BuildContext context) {
     final surfaceSig = '$_activeDrawer|${_expandedModelIds.join(',')}|$_settingsOpen|$_browserOpen|$_zoomedMessage|$_localHistoryModel';
     if (surfaceSig != _lastSurfaceSig) { _lastSurfaceSig = surfaceSig; _nudgeTicker(); }
@@ -1867,10 +1874,18 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       child: Focus(autofocus: true, child: Scaffold(
       // v9.1.4: swipe down dismisses the top sheet (mobile convention);
       // scrolling lists inside still win their own drags.
-      body: GestureDetector(
+      // v9.1.6d (#37, proved with real pointer drags): a GestureDetector here
+      // lost the gesture arena to every inner drag/tap recogniser, so swipe
+      // down closed nothing. A raw Listener sees every pointer regardless of
+      // the arena: a clear downward swipe closes the top surface, everywhere.
+      body: Listener(
       behavior: HitTestBehavior.translucent,
-      onVerticalDragEnd: (d) {
-        if (_anythingOpen && !_browserOpen && _activeDrawer != 'premium' && (d.primaryVelocity ?? 0) > 600) _escape();
+      onPointerDown: (e) { _swipeStart = e.position; _swipeT = DateTime.now(); },
+      onPointerUp: (e) {
+        final st = _swipeStart; _swipeStart = null;
+        if (st == null || !_anythingOpen) return;
+        final d = e.position - st;
+        if (d.dy > 120 && d.dx.abs() < d.dy * 0.6) _escape(); // distance + direction only: slow test rigs and slow swipes both count
       },
       child: Stack(
         fit: StackFit.expand,
@@ -2124,9 +2139,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // v9.1.4 (playtest #14): dissolves out instead of a hard cut.
             Positioned.fill(child: MaterializeSwitch(show: _activeDrawer == 'premium', builder: (_) => GestureDetector(
                 behavior: HitTestBehavior.translucent,
-                onVerticalDragEnd: (d) {
-                  if ((d.primaryVelocity ?? 0) > 300) setState(() => _activeDrawer = 'themes');
-                },
                 child: PremiumThemeMarketView(
                 // v9.1.4 (playtest #2): rebuild once the catalog arrives, so a
                 // direct link shows real covers.
