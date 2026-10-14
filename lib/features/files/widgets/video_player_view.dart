@@ -169,7 +169,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
             return Center(
               child: SizedBox(
                 width: vw,
-                height: vh + 28 + 26 + VSpace.sm + 8,
+                height: vh + 22 + 26 + VSpace.sm + 8,
                 child: Stack(
                   clipBehavior: Clip.none,
                   children: [
@@ -200,17 +200,32 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
                           ),
                         ),
                       ),
+                    // v9.1.6 (Figma player3): title over the picture, volume as
+                    // a small glass pill top-right, and transport as a glass
+                    // ornament straddling the window's bottom edge.
                     Positioned(
-                      left: 14,
-                      right: 14,
-                      top: vh - 74,
-                      height: 66,
+                      left: 16, right: 60, top: vh - 64,
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(widget.file.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700)),
-                        Text(FileStore.ago(widget.file.addedAt), style: const TextStyle(color: Colors.white70, fontSize: 10)),
-                        const SizedBox(height: 4),
-                        Row(children: [
-                          _icon(ready && c.value.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, ready && c.value.isPlaying ? 'Pause' : 'Play', _toggle, size: 22),
+                        Text(widget.file.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
+                        Text(FileStore.ago(widget.file.addedAt), style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                      ]),
+                    ),
+                    if (ready)
+                      Positioned(
+                        right: 10, top: 10,
+                        child: VOrnament(
+                          padding: const EdgeInsets.all(2),
+                          child: _icon(c.value.volume == 0 ? Icons.volume_off_rounded : Icons.volume_up_rounded, 'Mute', () => c.setVolume(c.value.volume == 0 ? 1 : 0), size: 20),
+                        ),
+                      ),
+                    Positioned(
+                      left: vw * 0.12, right: vw * 0.12, top: vh - 22, height: 44,
+                      child: VOrnament(
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        child: Row(children: [
+                          _icon(Icons.replay_10_rounded, 'Back 10 seconds', () => _skip(-10), size: 20),
+                          _icon(ready && c.value.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, ready && c.value.isPlaying ? 'Pause' : 'Play', _toggle, size: 24),
+                          _icon(Icons.forward_10_rounded, 'Forward 10 seconds', () => _skip(10), size: 20),
                           Expanded(
                             child: _track(
                               frac,
@@ -221,14 +236,13 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
                               },
                             ),
                           ),
+                          const SizedBox(width: 6),
+                          Text(_fmt(shown), style: VType.caption(color: Colors.white).copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
                           const SizedBox(width: 8),
-                          Text(_fmt(shown), style: VType.caption(color: Colors.white70).copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
-                          if (ready)
-                            _icon(c.value.volume == 0 ? Icons.volume_off_rounded : Icons.volume_up_rounded, 'Mute', () => c.setVolume(c.value.volume == 0 ? 1 : 0), size: 18),
                         ]),
-                      ]),
+                      ),
                     ),
-                    const Positioned(left: 0, right: 0, bottom: 0, child: Center(child: VWindowBar())),
+                    const SizedBox.shrink(),
                   ],
                 ),
               ),

@@ -285,28 +285,21 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
   Widget _explodedView(WallpaperTheme t, double w, double h) {
     final cw = math.min(w * 0.62, 300.0);
     final owned = _owned(t);
-    final menu = GlassMenu(rows: [
-      GlassMenuRow(
-          icon: owned ? Icons.check_rounded : Icons.shopping_bag_outlined,
-          label: owned ? 'Apply' : 'Buy · ${_store.priceLabelFor(t.id, catalogPrice: t.priceLabel)}',
-          on: true,
-          toggle: false,
-          onTap: () {
-            setState(() => _exploded = false);
-            owned ? widget.onApplyTheme(t) : _confirmBuy(t, _store.priceLabelFor(t.id, catalogPrice: t.priceLabel));
-          }),
-      GlassMenuRow(
-          icon: Icons.visibility_outlined,
-          label: 'Preview',
-          toggle: false,
-          onTap: () {
-            setState(() => _exploded = false);
-            widget.onPreviewTheme(t);
-          }),
-      GlassMenuRow(
-          icon: Icons.close_rounded, label: 'Close', toggle: false,
-          onTap: () => setState(() => _exploded = false)),
-    ]);
+    // v9.1.6 (Visual Playtest / CONVENTIONS): one action, one centred
+    // button: the price to buy, "Set as wallpaper" once owned. Tap outside
+    // closes (no Preview / Close rows).
+    final price = _store.priceLabelFor(t.id, catalogPrice: t.priceLabel);
+    final menu = VPress(
+      onTap: () {
+        setState(() => _exploded = false);
+        owned ? widget.onApplyTheme(t) : _confirmBuy(t, price);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 12),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(999)),
+        child: Text(owned ? 'Set as wallpaper' : price, style: const TextStyle(color: Color(0xFF111111), fontSize: 16, fontWeight: FontWeight.w600)),
+      ),
+    );
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => setState(() => _exploded = false),
@@ -373,6 +366,18 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
   }
 
   // App.tsx fetchSongs(): list, then centre on Math.floor(length / 2)
+  /// v9.1.6 (root cause of the black cover): the store used to open on the
+  /// middle item. With every live loop now premium (117, not 19) the middle
+  /// was a near-black sparkle clip (mean luma 16/255), so the cover looked
+  /// empty. It opens on a featured, well-lit theme instead.
+  static int _heroIndex(List<WallpaperTheme> r) {
+    for (final re in [RegExp('neon shopfront', caseSensitive: false), RegExp('neon|alley|sanctuary|lantern', caseSensitive: false)]) {
+      final i = r.indexWhere((t) => re.hasMatch(t.name));
+      if (i >= 0) return i;
+    }
+    return r.length ~/ 2;
+  }
+
   void _fetchThemes(String query, {String? keepId}) {
     final q = query.trim().toLowerCase();
     final catalog = _catalog;
@@ -383,7 +388,8 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
                 t.collection.toLowerCase().contains(q) ||
                 t.creator.toLowerCase().contains(q) ||
                 t.tier.toLowerCase().contains(q) ||
-                t.id.toLowerCase().contains(q);
+                t.id.toLowerCase().contains(q) ||
+                t.tags.any((g) => g.toLowerCase().contains(q));
           }).toList();
     final prevId = _selected?.id;
     setState(() {
@@ -391,7 +397,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
       _themes = results;
       final kept = keepId == null ? -1 : results.indexWhere((t) => t.id == keepId);
       _currentIndex =
-          results.isEmpty ? 0 : (kept >= 0 ? kept : results.length ~/ 2);
+          results.isEmpty ? 0 : (kept >= 0 ? kept : _heroIndex(results));
       _selected = results.isEmpty ? null : results[_currentIndex];
     });
     final s = _selected;
@@ -557,16 +563,17 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
                   height: _kLabelsBlockHeight,
                   // Top-aligned: with songs the column fills the block exactly
                   // (as before); without songs it ends under the name.
-                  child: Align(
+                  // Hidden under the detail view so the name shows once.
+                  child: Opacity(opacity: _exploded ? 0 : 1, child: Align(
                     alignment: Alignment.topCenter,
                     child: _buildLabels(selected, contentWidth),
-                  ),
+                  )),
                 ),
                 // CoverFlow wrapper
                 Positioned(
-                  // v8.7: leave room for the side nav (covers can be HTML
-                  // video layers, which paint above the canvas).
-                  left: _kMainPadX + 76,
+                  // v9.1.6: dead centre; the old side-nav offset (76 px) is gone
+                  // with the side nav (now the top category bar).
+                  left: _kMainPadX,
                   right: _kMainPadX,
                   top: stageTop,
                   height: _kStageHeight,
@@ -790,14 +797,14 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
     if (_owned(t)) {
       return _GlassCapsule(
         key: _capsuleKey,
-        label: 'Apply',
+        label: 'Set as wallpaper',
         onTap: () => widget.onApplyTheme(t),
       );
     }
     final price = _store.priceLabelFor(t.id, catalogPrice: t.priceLabel);
     return _GlassCapsule(
       key: _capsuleKey,
-      label: 'Buy · $price',
+      label: price,
       onTap: () => _confirmBuy(t, price),
     );
   }

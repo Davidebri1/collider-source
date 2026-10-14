@@ -223,19 +223,45 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
           padding: const EdgeInsets.all(VSpace.sm),
           child: EdgeFade(fadeHeight: 24, child: GridView.builder(
             physics: const BouncingScrollPhysics(),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: cols, childAspectRatio: 0.9),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: cols, childAspectRatio: 0.85, mainAxisSpacing: 12, crossAxisSpacing: 12),
             itemCount: widget.tabs.length,
             itemBuilder: (_, i) {
               final t = widget.tabs[i];
-              return VTile(
-                selected: t.id == _activeTabId,
+              // v9.1.6 (Figma tabs.png): a page card: header with site badge,
+              // title and close; the page preview below it.
+              final on = t.id == _activeTabId;
+              final host = t.isModelAssigned ? (t.modelName ?? 'Model') : _host(t.url);
+              return VPress(
                 onTap: () => _switchTab(t.id),
-                aspect: 4 / 3,
-                title: t.title,
-                subtitle: t.isModelAssigned ? (t.modelName ?? 'Model') : _host(t.url),
-                media: Container(
-                  color: VColors.fillCell,
-                  child: Icon(t.isModelAssigned ? Icons.terminal_rounded : Icons.person_outline_rounded, size: 26, color: VColors.textSecondary),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xE6FFFFFF),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: on ? const Color(0xFF0A84FF) : Colors.transparent, width: 2),
+                    boxShadow: VShadow.medium,
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    Container(
+                      height: 30,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      color: const Color(0xFFF2F2F7),
+                      child: Row(children: [
+                        Container(width: 16, height: 16, decoration: const BoxDecoration(color: Color(0xFF0A84FF), shape: BoxShape.circle),
+                            child: Icon(t.isModelAssigned ? Icons.terminal_rounded : Icons.public_rounded, size: 10, color: Colors.white)),
+                        const SizedBox(width: 6),
+                        Expanded(child: Text(t.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF111111)))),
+                      ]),
+                    ),
+                    Expanded(
+                      child: Container(
+                        color: Colors.white,
+                        alignment: Alignment.center,
+                        padding: const EdgeInsets.all(8),
+                        child: Text(host, textAlign: TextAlign.center, maxLines: 2, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF1C1C1E))),
+                      ),
+                    ),
+                  ]),
                 ),
               );
             },

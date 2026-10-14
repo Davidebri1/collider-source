@@ -34,7 +34,6 @@ class CategoryTaxonomy {
     ('Cozy', Icons.weekend_outlined, 'cozy', []),
     ('Fantasy', Icons.castle_outlined, 'fantasy', []),
     ('Abstract', Icons.blur_on_rounded, 'abstract', []),
-    ('Motion', Icons.movie_outlined, '', ['live wallpaper', 'wallpaper']),
   ];
 
   static const Map<String, String> _names = {'live wallpaper': 'Live', 'wallpaper': 'Stills'};

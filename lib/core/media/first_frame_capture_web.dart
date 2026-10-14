@@ -30,7 +30,17 @@ Future<Uint8List?> captureFirstFrame(String url) async {
       done.complete(null);
     }
   }
-  v.addEventListener('loadeddata', ((web.Event _) => grab()).toJS);
+  // v9.1.6: many loops fade in from black, so the poster is taken a moment
+  // in (1 s, or 10 % of a short clip), not at frame 0.
+  var seeking = false;
+  v.addEventListener('loadeddata', ((web.Event _) {
+    final d = v.duration;
+    final t = d.isFinite && d > 0 ? (d * 0.1 < 1 ? d * 0.1 : 1.0) : 0.0;
+    if (t <= 0) return grab();
+    seeking = true;
+    v.currentTime = t;
+  }).toJS);
+  v.addEventListener('seeked', ((web.Event _) { if (seeking) grab(); }).toJS);
   v.addEventListener('error', ((web.Event _) { if (!done.isCompleted) done.complete(null); }).toJS);
   v.src = url;
   v.load();

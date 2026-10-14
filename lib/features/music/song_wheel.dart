@@ -161,17 +161,7 @@ class _SongWheelState extends State<SongWheel> {
                 )),
               ),
             ),
-            // Skip: the start column at the carousel's centre (fixed spot).
-            Positioned(
-              left: 0,
-              top: (h - col) / 2,
-              child: SongPlayButton(
-                playing: false,
-                icon: Icons.skip_next_rounded,
-                tooltip: 'Skip',
-                onTap: _skip,
-              ),
-            ),
+            // v9.1.6: no Skip button (the wheel itself moves between songs).
           ],
         ),
       ),

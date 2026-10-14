@@ -67,7 +67,9 @@ class VGlass extends StatelessWidget {
       child: ClipRRect(
         borderRadius: r,
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: material.blur * Materialize.of(context), sigmaY: material.blur * Materialize.of(context)),
+          // v9.1.6: full-screen work surfaces blur lightly so the (already
+          // blurred) ticker behind stays visible as soft rows.
+          filter: ImageFilter.blur(sigmaX: (fill == VFrost.workTint ? 6 : material.blur) * Materialize.of(context), sigmaY: (fill == VFrost.workTint ? 6 : material.blur) * Materialize.of(context)),
           child: Container(
             padding: padding,
             decoration: BoxDecoration(color: fill ?? material.fill, borderRadius: r),

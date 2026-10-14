@@ -178,6 +178,10 @@ class ThemeCatalog extends ChangeNotifier {
 
   /// A stock file with no words in its name is named from its content tags.
   static String _nameOr(String n, List<String> tags) {
+    // v9.1.6: hand-written titles for files with no words (R2 tag "title:…").
+    for (final t in tags) {
+      if (t.startsWith('title:') && t.length > 6) return t.substring(6);
+    }
     if (n != 'Untitled') return n;
     // v9.1.6: tags are now category + subcategory; name from the
     // subcategories ("Night City Streets"), never from the bare category.
@@ -256,7 +260,7 @@ class ThemeCatalog extends ChangeNotifier {
   static const _autoTags = {'4K', '1440p', '1080p', '720p', 'SD', 'live wallpaper', 'wallpaper', 'song'};
   static const _fileTypes = {'mp4', 'm4v', 'mov', 'webm', 'jpg', 'jpeg', 'png', 'webp', 'avif', 'gif', 'm4a', 'mp3', 'aac', 'ogg', 'opus', 'wav', 'flac'};
   static Set<String> _content(List<String> t) =>
-      {for (final x in t) if (!_autoTags.contains(x) && !_fileTypes.contains(x)) x};
+      {for (final x in t) if (!_autoTags.contains(x) && !_fileTypes.contains(x) && !x.startsWith('title:')) x};
   static List<String> _tagsOf(Map o) => [for (final x in (o['tags'] as List? ?? const [])) '$x'];
   String _kind(Map o) {
     final k = o['kind'];

@@ -30,7 +30,8 @@ class MusicCollectionDrawer extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        VScrim(onTap: onClose),
+        // v9.1.6: the shared depth scrim behind already blurs; tap-out only.
+        GestureDetector(behavior: HitTestBehavior.opaque, onTap: onClose),
         Positioned(
           left: (size.width - width) / 2,
           width: width,
@@ -39,7 +40,7 @@ class MusicCollectionDrawer extends StatelessWidget {
           child: ClipRRect(
             borderRadius: BorderRadius.circular(10),
             child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: VFrost.blur, sigmaY: VFrost.blur),
+              filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   color: VFrost.workTint,

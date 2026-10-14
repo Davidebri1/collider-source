@@ -924,15 +924,10 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         opacity: selected ? 1.0 : 0.42,
         child: selected
             ? AmbientGlow(color: item.modelDef.providerColor, radius: 18, phase: (item.modelDef.id.hashCode % 100) / 100, child: card)
-            : ColorFiltered(
-                colorFilter: const ColorFilter.matrix(<double>[
-                  0.2126, 0.7152, 0.0722, 0, 0,
-                  0.2126, 0.7152, 0.0722, 0, 0,
-                  0.2126, 0.7152, 0.0722, 0, 0,
-                  0, 0, 0, 1, 0,
-                ]),
-                child: card,
-              ),
+            // v9.1.6 (root cause of the grey slab): a ColorFiltered over a row
+            // with its own BackdropFilter, inside the EdgeFade mask, flattens the
+            // whole ticker into a grey block on web. Off rows just fade.
+            : card,
       ),
     );
   }
@@ -967,8 +962,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     // No Scrollbar: a hard grey track on a glass surface reads as a debug
     // affordance and flattens the illusion. The EdgeFade plus the chevron
     // carry the affordance instead.
-    return EdgeFade(
-      fadeHeight: 20,
+    // v9.1.6 (grey slab): no ShaderMask over rows that carry BackdropFilters;
+    // on web the mask's layer flattens them to grey. Rows clip at the edge.
+    return ClipRect(
       child: Stack(
         children: [
           ListView.separated(
@@ -1624,6 +1620,13 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           summary: session.summary,
           relativeTime: session.relativeTime,
         );
+      } else if (targetDef != null) {
+        // v9.1.6: the restored conversation needs a row to open into; an
+        // empty ticker used to leave an "open" id with nothing to show.
+        _tickerItems = [
+          ..._tickerItems,
+          TickerItem(modelDef: targetDef, relativeTime: session.relativeTime, summary: session.summary, conversation: session.messages),
+        ];
       }
 
       _expandedModelIds.clear();
@@ -1814,7 +1817,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       ignoring: off,
       child: ImageFiltered(
         enabled: off,
-        imageFilter: ui.ImageFilter.blur(sigmaX: VDepth.blur / 2, sigmaY: VDepth.blur / 2),
+        // v9.1.6: light enough that the rows stay clearly visible as rows
+        // (sigma 8 plus the surface's own blur erased them).
+        imageFilter: ui.ImageFilter.blur(sigmaX: 3, sigmaY: 3),
         child: child,
       ),
     );
@@ -1978,7 +1983,11 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                       // Bug 10: this one dims when the composer is summoned.
                       ValueListenableBuilder<bool>(
                         valueListenable: KeyboardDof.active,
-                        builder: (_, on, child) => ImageFiltered(enabled: on, imageFilter: ui.ImageFilter.blur(sigmaX: VDepth.blur / 2, sigmaY: VDepth.blur / 2), child: child!),
+                        // v9.1.6 (root cause of the grey slab): an ImageFiltered over rows that
+                        // carry their own BackdropFilter renders as a flat grey block on web,
+                        // and the field-focus signal can stay on after History's search
+                        // closes. The wallpaper DOF plane already blurs; the rail just quiets.
+                        builder: (_, on, child) => AnimatedOpacity(duration: VMotion.base, opacity: on && _isComposerSummoned ? 0.6 : 1, child: child!),
                         child: _buildTickerWindow(),
                       ),
                       const SizedBox(height: _windowGap),
@@ -2131,8 +2140,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             Positioned.fill(child: MaterializeSwitch(show: _activeDrawer == 'account' && !_settingsOpen, builder: (_) => AccountSheet(tier: ModelTier.free, onClose: () => setState(() => _activeDrawer = null)))),
 
           // Durable work surfaces sit over one shared scrim (kit overlay + medium blur).
-          if (_activeDrawer == 'smartgen' || _activeDrawer == 'market' || _activeDrawer == 'files')
-            const Positioned.fill(child: VScrim()),
+          // v9.1.6: no second scrim here: the shared depth scrim above already
+          // blurs and dims; a second pass blurred the ticker out of sight.
 
           if (_activeDrawer == 'smartgen')
             Positioned(

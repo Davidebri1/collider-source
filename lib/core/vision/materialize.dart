@@ -64,6 +64,11 @@ class _MaterializeState extends State<Materialize> with SingleTickerProviderStat
           // One stable tree in every frame (the filter is enabled/disabled, never
           // inserted/removed), so the subtree is never rebuilt mid-animation:
           // that rebuild was the flicker on open.
+          // v9.1.6 (root cause of the grey slab after History): a
+          // BackdropFilter inside a nearly transparent layer still paints its
+          // blur on web, so a dissolved pane left a frosted ghost. Once a
+          // dissolve is visually done, nothing is painted at all.
+          if (!widget.visible && o < 0.03) return const SizedBox.shrink();
           return IgnorePointer(
             ignoring: !widget.visible,
             child: Opacity(

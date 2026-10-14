@@ -21,7 +21,7 @@ class FirstFrames {
   static Future<Uint8List?> get(String videoUrl) => _mem[videoUrl] ??= _load(videoUrl);
 
   static Future<Uint8List?> _load(String url) async {
-    final key = 'poster1:$url';
+    final key = 'poster2:$url';
     try {
       final hit = await FileBlobs.get(key);
       if (hit != null && hit.isNotEmpty) return hit;
