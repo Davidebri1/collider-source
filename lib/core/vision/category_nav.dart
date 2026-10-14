@@ -19,19 +19,22 @@ class NavGroup {
   const NavGroup(this.label, this.icon, this.leaves, this.count);
 }
 
-/// Category taxonomy derived from the catalogue's content tags (format and
-/// resolution tags such as "mp4" or "720p" never appear here).
+/// v9.1.6 taxonomy (David: the minimum necessary, less is more). The R2
+/// objects carry exactly these tags (qa/retag.py): one category tag plus
+/// subcategory tags, plus format tags that never show here.
 class CategoryTaxonomy {
-  static const List<(String, IconData, List<String>)> groups = [
-    ('Nature', Icons.forest_outlined, ['nature', 'forest', 'mountains', 'lake', 'desert', 'cave', 'snow']),
-    ('Water', Icons.water_outlined, ['ocean', 'waves', 'water', 'rain']),
-    ('Sky', Icons.cloud_outlined, ['clouds', 'sky', 'sunset', 'storm', 'fog']),
-    ('Space', Icons.auto_awesome_outlined, ['space', 'stars']),
-    ('City', Icons.location_city_outlined, ['city', 'night', 'neon']),
-    ('Cozy', Icons.weekend_outlined, ['cozy', 'room', 'cat']),
-    ('Fantasy', Icons.castle_outlined, ['fantasy', 'anime', 'castle']),
-    ('Abstract', Icons.blur_on_rounded, ['abstract', 'minimal', 'gradient', 'dark']),
-    ('Motion', Icons.movie_outlined, ['live wallpaper', 'wallpaper']),
+  // v9.1.6b: searchable subjects (what people type), hand-checked against
+  // what each R2 item depicts. Flat; Motion keeps Live / Stills.
+  static const List<(String, IconData, String, List<String>)> groups = [
+    ('Nature', Icons.forest_outlined, 'nature', []),
+    ('Ocean', Icons.waves_rounded, 'ocean', []),
+    ('Space', Icons.auto_awesome_outlined, 'space', []),
+    ('City', Icons.location_city_outlined, 'city', []),
+    ('Rain', Icons.water_drop_outlined, 'rain', []),
+    ('Cozy', Icons.weekend_outlined, 'cozy', []),
+    ('Fantasy', Icons.castle_outlined, 'fantasy', []),
+    ('Abstract', Icons.blur_on_rounded, 'abstract', []),
+    ('Motion', Icons.movie_outlined, '', ['live wallpaper', 'wallpaper']),
   ];
 
   static const Map<String, String> _names = {'live wallpaper': 'Live', 'wallpaper': 'Stills'};
@@ -46,14 +49,15 @@ class CategoryTaxonomy {
     if (key.startsWith('t:')) return low.contains(key.substring(2));
     final g = groups.where((e) => 'g:${e.$1}' == key);
     if (g.isEmpty) return true;
-    return g.first.$3.any(low.contains);
+    final e = g.first;
+    return e.$3.isNotEmpty ? low.contains(e.$3) : e.$4.any(low.contains);
   }
 
-  static String labelOf(String key) => key.isEmpty ? 'All' : (_names[key.substring(2)] ?? title(key.substring(2)));
+  static String labelOf(String key) => key.isEmpty ? 'All' : (key.startsWith('g:') ? key.substring(2) : (_names[key.substring(2)] ?? title(key.substring(2))));
 
   static List<NavGroup> build(List<List<String>> allTags) {
     final out = <NavGroup>[];
-    for (final (label, icon, tags) in groups) {
+    for (final (label, icon, _, tags) in groups) {
       final leaves = <NavLeaf>[];
       for (final t in tags) {
         final n = allTags.where((ts) => ts.any((x) => x.toLowerCase() == t)).length;
@@ -66,10 +70,10 @@ class CategoryTaxonomy {
   }
 }
 
-/// visionOS browser-style sidebar (Figma 1:101): a glass panel with a list of
-/// categories, each expandable to its subcategories, every row with a count.
-/// Built from ListTile and ExpansionTile.
-class CategorySideNav extends StatelessWidget {
+/// visionOS browser-style sidebar (Figma 1:101) that floats OVER the content
+/// (it never pushes the preview). Categories are a short list; a category's
+/// subcategories cascade HORIZONTALLY into a second glass panel beside it.
+class CategorySideNav extends StatefulWidget {
   final List<NavGroup> groups;
   final int total;
   final String selected;
@@ -79,76 +83,208 @@ class CategorySideNav extends StatelessWidget {
   const CategorySideNav({super.key, required this.groups, required this.total, required this.selected, required this.onSelected, this.width = 168, this.maxHeight});
 
   @override
-  Widget build(BuildContext context) {
-    const white = Colors.white;
-    Widget count(int n, bool on) => Text('$n', style: TextStyle(fontSize: 12, color: white.withValues(alpha: on ? 1 : 0.8), fontFeatures: const [FontFeature.tabularFigures()]));
-    Widget tile({required String key, required String label, IconData? icon, required int n, bool dense = false}) {
-      final on = selected == key;
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-        child: ListTile(
-          dense: true,
-          visualDensity: const VisualDensity(horizontal: -4, vertical: -3),
-          contentPadding: EdgeInsets.only(left: dense ? 22 : 10, right: 10),
-          minLeadingWidth: 0,
-          horizontalTitleGap: 8,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          tileColor: Colors.transparent,
-          selectedTileColor: const Color(0x33FFFFFF),
-          selected: on,
-          leading: icon == null ? null : Icon(icon, size: 18, color: white),
-          title: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: dense ? 13 : 14, fontWeight: on ? FontWeight.w600 : FontWeight.w500, color: white)),
-          trailing: count(n, on),
-          onTap: () => onSelected(key),
-        ),
-      );
-    }
+  State<CategorySideNav> createState() => _CategorySideNavState();
+}
 
-    final list = ListView(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      shrinkWrap: true,
-      physics: const BouncingScrollPhysics(),
-      children: [
-        tile(key: '', label: 'All', n: total),
-        for (final g in groups)
-          Theme(
-            data: Theme.of(context).copyWith(dividerColor: Colors.transparent, splashColor: Colors.transparent, listTileTheme: const ListTileThemeData(dense: true)),
-            child: ExpansionTile(
-              key: PageStorageKey('nav-${g.label}'),
-              initiallyExpanded: selected == 'g:${g.label}' || g.leaves.any((l) => selected == 't:${l.tag}'),
-              tilePadding: const EdgeInsets.only(left: 16, right: 4),
-              dense: true,
-              visualDensity: const VisualDensity(horizontal: -4, vertical: -3),
-              iconColor: white,
-              collapsedIconColor: white,
-              shape: const Border(),
-              collapsedShape: const Border(),
-              title: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => onSelected('g:${g.label}'),
-                child: Row(children: [
-                  Expanded(child: Text(g.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, fontWeight: selected == 'g:${g.label}' ? FontWeight.w600 : FontWeight.w500, color: white))),
-                  count(g.count, selected == 'g:${g.label}'),
-                ]),
-              ),
-              children: [for (final l in g.leaves) tile(key: 't:${l.tag}', label: l.label, n: l.count, dense: true)],
+class _CategorySideNavState extends State<CategorySideNav> {
+  String? _open;
+
+  @override
+  void initState() {
+    super.initState();
+    final s = widget.selected;
+    for (final g in widget.groups) {
+      if (s == 'g:${g.label}' || g.leaves.any((l) => s == 't:${l.tag}')) _open = g.label;
+    }
+  }
+
+  static const white = Colors.white;
+  Widget _count(int n, bool on) => Text('$n', style: TextStyle(fontSize: 12, color: white.withValues(alpha: on ? 1 : 0.8), fontFeatures: const [FontFeature.tabularFigures()]));
+
+  Widget _row({required String label, IconData? icon, required int n, required bool on, required VoidCallback onTap, bool chevron = false, bool hi = false, Key? key}) => Padding(
+        key: key,
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: onTap,
+            child: Container(
+              height: 40,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: BoxDecoration(color: on || hi ? const Color(0x33FFFFFF) : Colors.transparent, borderRadius: BorderRadius.circular(12)),
+              child: Row(children: [
+                if (icon != null) ...[Icon(icon, size: 18, color: white), const SizedBox(width: 8)],
+                Expanded(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, fontWeight: on ? FontWeight.w600 : FontWeight.w500, color: white))),
+                _count(n, on),
+                if (chevron) ...[const SizedBox(width: 4), Icon(Icons.chevron_right_rounded, size: 18, color: white.withValues(alpha: 0.8))],
+              ]),
             ),
           ),
+        ),
+      );
+
+  Widget _panel(Widget child, double w) => ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+          child: Container(
+            width: w,
+            constraints: BoxConstraints(maxHeight: widget.maxHeight ?? double.infinity),
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(color: const Color(0xD018181E), borderRadius: BorderRadius.circular(24)),
+            child: SingleChildScrollView(physics: const BouncingScrollPhysics(), child: Column(mainAxisSize: MainAxisSize.min, children: [child])),
+          ),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.selected;
+    final open = widget.groups.where((g) => g.label == _open).firstOrNull;
+    final main = _panel(
+      Column(mainAxisSize: MainAxisSize.min, children: [
+        _row(key: const ValueKey('nav-all'), label: 'All', n: widget.total, on: s.isEmpty, onTap: () => widget.onSelected('')),
+        for (final g in widget.groups)
+          _row(
+            key: ValueKey('nav-${g.label}'),
+            label: g.label,
+            icon: g.icon,
+            n: g.count,
+            on: s == 'g:${g.label}' || g.leaves.any((l) => s == 't:${l.tag}'),
+            hi: _open == g.label,
+            chevron: g.leaves.isNotEmpty,
+            onTap: () => g.leaves.isEmpty ? widget.onSelected('g:${g.label}') : setState(() => _open = _open == g.label ? null : g.label),
+          ),
+      ]),
+      widget.width,
+    );
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        main,
+        AnimatedSize(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topLeft,
+          child: open == null
+              ? const SizedBox(height: 0)
+              : Padding(
+                  padding: const EdgeInsets.only(left: 6),
+                  child: _panel(
+                    Column(mainAxisSize: MainAxisSize.min, children: [
+                      _row(key: ValueKey('leaf-all-${open.label}'), label: 'All ${open.label}', n: open.count, on: s == 'g:${open.label}', onTap: () => widget.onSelected('g:${open.label}')),
+                      for (final l in open.leaves)
+                        _row(key: ValueKey('leaf-${l.tag}'), label: l.label, n: l.count, on: s == 't:${l.tag}', onTap: () => widget.onSelected('t:${l.tag}')),
+                    ]),
+                    130,
+                  ),
+                ),
+        ),
       ],
     );
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-        child: Container(
-          width: width,
-          constraints: BoxConstraints(maxHeight: maxHeight ?? double.infinity),
-          decoration: BoxDecoration(
-            color: const Color(0xD018181E),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: const Color(0x33FFFFFF), width: 0.5),
+  }
+}
+
+/// v9.1.6: the central tier button ('Free' / 'Premium'). Swipe it up or
+/// down (or tap it) to switch tier.
+class TierSwitchPill extends StatelessWidget {
+  final String label;
+  final VoidCallback onSwitch;
+  const TierSwitchPill({super.key, required this.label, required this.onSwitch});
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+        button: true,
+        label: '$label. Swipe up or down to switch',
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onSwitch,
+          onVerticalDragEnd: (d) {
+            if ((d.primaryVelocity ?? 0).abs() > 150) onSwitch();
+          },
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+              child: Container(
+                height: 44,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                color: const Color(0xB318181E),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.unfold_more_rounded, size: 18, color: Colors.white),
+                  const SizedBox(width: 6),
+                  Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
+                ]),
+              ),
+            ),
           ),
-          child: Material(type: MaterialType.transparency, child: list),
+        ),
+      );
+}
+
+/// v9.1.6c: the category nav pinned as a bar along the top of the pane
+/// (visionOS browser, Figma 1:101): always visible, never moves the content.
+/// One frosted strip of Title-Case buttons; scrolls sideways with edge fades.
+class CategoryBar extends StatelessWidget {
+  final List<NavGroup> groups;
+  final int total;
+  final String selected;
+  final ValueChanged<String> onSelected;
+  const CategoryBar({super.key, required this.groups, required this.total, required this.selected, required this.onSelected});
+
+  @override
+  Widget build(BuildContext context) {
+    final items = <(String, String, int)>[('', 'All', total)];
+    for (final g in groups) {
+      if (g.leaves.isEmpty) {
+        items.add(('g:${g.label}', g.label, g.count));
+      } else {
+        for (final l in g.leaves) {
+          items.add(('t:${l.tag}', l.label, l.count));
+        }
+      }
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(999),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          height: 44,
+          color: const Color(0xB318181E),
+          child: ShaderMask(
+            shaderCallback: (r) => const LinearGradient(colors: [Color(0x00FFFFFF), Colors.white, Colors.white, Color(0x00FFFFFF)], stops: [0, 0.05, 0.95, 1]).createShader(r),
+            blendMode: BlendMode.dstIn,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              children: [
+                for (final (k, label, _) in items)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    child: Semantics(
+                      button: true,
+                      selected: selected == k,
+                      label: label,
+                      child: GestureDetector(
+                        key: ValueKey('cat-$label'),
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => onSelected(k),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(color: selected == k ? const Color(0x40FFFFFF) : Colors.transparent, borderRadius: BorderRadius.circular(999)),
+                          child: Text(label, style: TextStyle(fontSize: 15, fontWeight: selected == k ? FontWeight.w600 : FontWeight.w500, color: Colors.white)),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ),
       ),
     );

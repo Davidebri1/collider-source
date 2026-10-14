@@ -179,7 +179,10 @@ class ThemeCatalog extends ChangeNotifier {
   /// A stock file with no words in its name is named from its content tags.
   static String _nameOr(String n, List<String> tags) {
     if (n != 'Untitled') return n;
-    final c = _content(tags).take(2).map((t) => t.isEmpty ? t : t[0].toUpperCase() + t.substring(1)).toList();
+    // v9.1.6: tags are now category + subcategory; name from the
+    // subcategories ("Night City Streets"), never from the bare category.
+    const words = {'nature': 'Nature', 'ocean': 'Ocean', 'space': 'Space', 'city': 'City', 'rain': 'Rain', 'cozy': 'Cozy', 'fantasy': 'Fantasy', 'abstract': 'Abstract'};
+    final c = [for (final t in _content(tags)) if (words[t.toLowerCase()] != null) words[t.toLowerCase()]!].take(2).toList();
     return c.isEmpty ? 'Untitled' : c.join(' ');
   }
 
@@ -262,6 +265,15 @@ class ThemeCatalog extends ChangeNotifier {
     return _aud.hasMatch(n) ? 'audio' : _img.hasMatch(n) ? 'image' : 'video';
   }
 
+  static bool _starter(String file) => niceName(file).toLowerCase().contains('ocean reflection');
+  static String _priceFor(List<String> tags) {
+    if (tags.contains('4K')) return r'$7.99';
+    if (tags.contains('1440p')) return r'$6.99';
+    if (tags.contains('1080p')) return r'$4.99';
+    if (tags.contains('720p')) return r'$3.99';
+    return r'$2.99';
+  }
+
   WallpaperTheme _r2Theme(Map o, [List<Map> songs = const []]) {
     final url = o['url'] as String;
     final name = '${o['name']}';
@@ -287,7 +299,13 @@ class ThemeCatalog extends ChangeNotifier {
       assetPath: still ? url : FirstFrames.srcFor(url),
       videoPath: still ? null : url,
       creator: 'David Ebri',
-      tier: still ? 'Free Still' : 'Free Live Loop',
+      // v9.1.6 (PRD "Wallpapers & Music"): live loops are premium, sold one
+      // by one in the $2.99-$7.99 band (priced by source quality); stills
+      // are free.
+      // The starter wallpaper (the default, Ocean Reflection) is included.
+      tier: still ? 'Free Still' : (_starter(name) ? 'Included Live Loop' : 'Premium Live Loop'),
+      isPremium: !still && !_starter(name),
+      priceLabel: still || _starter(name) ? null : _priceFor(tags),
       collection: 'Collider Themes',
       tags: tags,
       tracks: tracks,

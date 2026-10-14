@@ -8,10 +8,24 @@ class Materialize extends StatefulWidget {
   final Widget child;
   final bool visible;
   final Alignment origin;
-  const Materialize({super.key, required this.child, this.visible = true, this.origin = Alignment.center});
+  final VoidCallback? onHidden;
+  const Materialize({super.key, required this.child, this.visible = true, this.origin = Alignment.center, this.onHidden});
+  // v9.1.6: in: a lively spring with a little settle; out: critically damped,
+  // so a dissolve never overshoots, snaps or pops.
   static final SpringDescription spring = SpringDescription.withDampingRatio(mass: 1, stiffness: 380, ratio: 0.82);
+  static final SpringDescription springOut = SpringDescription.withDampingRatio(mass: 1, stiffness: 300, ratio: 1.0);
+  /// 0..1 progress of the nearest enclosing materialize, for backdrop blurs
+  /// (a BackdropFilter ignores the Opacity above it, so it must scale itself).
+  static double of(BuildContext context) => context.dependOnInheritedWidgetOfExactType<_MatScope>()?.v ?? 1;
   @override
   State<Materialize> createState() => _MaterializeState();
+}
+
+class _MatScope extends InheritedWidget {
+  final double v;
+  const _MatScope({required this.v, required super.child});
+  @override
+  bool updateShouldNotify(_MatScope old) => old.v != v;
 }
 
 class _MaterializeState extends State<Materialize> with SingleTickerProviderStateMixin {
@@ -26,7 +40,14 @@ class _MaterializeState extends State<Materialize> with SingleTickerProviderStat
     super.didUpdateWidget(old);
     if (old.visible != widget.visible) _go();
   }
-  void _go() => _c.animateWith(SpringSimulation(Materialize.spring, _c.value, widget.visible ? 1 : 0, _c.velocity));
+  void _go() {
+    final f = _c.animateWith(SpringSimulation(widget.visible ? Materialize.spring : Materialize.springOut, _c.value, widget.visible ? 1 : 0, _c.velocity));
+    if (!widget.visible) {
+      f.whenCompleteOrCancel(() {
+        if (mounted && !widget.visible) widget.onHidden?.call();
+      });
+    }
+  }
   @override
   void dispose() {
     _c.dispose();
@@ -40,9 +61,24 @@ class _MaterializeState extends State<Materialize> with SingleTickerProviderStat
           final v = _c.value;
           final o = v.clamp(0.0, 1.0);
           final b = (1 - o) * 10;
-          Widget w = Transform.scale(scale: 0.9 + 0.1 * v, alignment: widget.origin, child: child);
-          if (b > 0.2) w = ImageFiltered(imageFilter: ui.ImageFilter.blur(sigmaX: b, sigmaY: b), child: w);
-          return IgnorePointer(ignoring: !widget.visible, child: Opacity(opacity: o, child: w));
+          // One stable tree in every frame (the filter is enabled/disabled, never
+          // inserted/removed), so the subtree is never rebuilt mid-animation:
+          // that rebuild was the flicker on open.
+          return IgnorePointer(
+            ignoring: !widget.visible,
+            child: Opacity(
+              opacity: o,
+              child: ImageFiltered(
+                enabled: b > 0.05,
+                imageFilter: ui.ImageFilter.blur(sigmaX: b, sigmaY: b),
+                child: Transform.scale(
+                  scale: 0.9 + 0.1 * v,
+                  alignment: widget.origin,
+                  child: _MatScope(v: o, child: child!),
+                ),
+              ),
+            ),
+          );
         },
       );
 }
@@ -64,12 +100,14 @@ class _MaterializeSwitchState extends State<MaterializeSwitch> {
     if (widget.show) {
       _mounted = true;
       _last = widget.builder(context);
-    } else if (_mounted) {
-      Future.delayed(const Duration(milliseconds: 300), () {
-        if (mounted && !widget.show) setState(() => _mounted = false);
-      });
     }
     if (!_mounted || _last == null) return const SizedBox.shrink();
-    return Materialize(visible: widget.show, child: _last!);
+    return Materialize(
+      visible: widget.show,
+      onHidden: () {
+        if (mounted && !widget.show) setState(() => _mounted = false);
+      },
+      child: _last!,
+    );
   }
 }

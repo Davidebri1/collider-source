@@ -1,3 +1,4 @@
+import '../../core/vision/materialize.dart';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../core/vision/vision_kit.dart';
@@ -36,7 +37,7 @@ class SettingsDrawer extends StatelessWidget {
       fit: StackFit.expand,
       children: [
         // Figma 1:2 has no dimming behind the menu: a clear tap-to-close layer.
-        Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: onClose, child: ClipRect(child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18), child: const ColoredBox(color: Color(0x14000000)))))),
+        Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: onClose, child: ClipRect(child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 18 * Materialize.of(context), sigmaY: 18 * Materialize.of(context)), child: const ColoredBox(color: Color(0x14000000)))))),
         // v8.6: Figma 10:2193 (visionOS Settings, 1179 x 877) built at its
         // own size and scaled as one unit to 30 % (David: 25-33 %).
         Center(
@@ -95,7 +96,7 @@ class _VisionSettings extends StatelessWidget {
     return SuspendedFrost(edge: 0.04, child: ClipRRect(
       borderRadius: BorderRadius.circular(46),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
+        filter: ImageFilter.blur(sigmaX: 40 * Materialize.of(context), sigmaY: 40 * Materialize.of(context)),
         child: Container(
           color: const Color(0x33808080),
           child: Row(children: [

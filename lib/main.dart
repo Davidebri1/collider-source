@@ -1212,7 +1212,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     final visible = rowCount.clamp(1, _maxTickerRows);
     final window = SizedBox(
       // v9.1.2: chat bubbles span the screen like the reference.
-      width: math.min(MediaQuery.sizeOf(context).width - 100, 520),
+      // v9.1.6 (approved app-11): rows sit right of the side rail.
+      width: math.min(MediaQuery.sizeOf(context).width - 112, 520),
       child: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: _tickerHeight),
         child: _windowSurface(
@@ -1250,7 +1251,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       duration: VMotion.base,
       curve: Curves.easeOutCubic,
       opacity: _isComposerSummoned ? 1.0 : 1,
-      child: IgnorePointer(ignoring: _isComposerSummoned, child: window),
+      child: IgnorePointer(ignoring: _isComposerSummoned, child: Padding(padding: EdgeInsets.only(left: MediaQuery.sizeOf(context).width < 768 ? 44 : 0), child: window)),
     );
   }
 
@@ -1966,6 +1967,10 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                     else ...[
                       // Bug 5: the opened answer is a tray anchored over the
                       // ticker, not a permanent block in the middle of it.
+                      // v9.1.6: the approved layout (app-11): the rail sits
+                      // centred in the lower half, directly over the composer,
+                      // with open wallpaper above it.
+                      const Spacer(),
                       if (_buildTray() case final tray?) ...[
                         tray,
                         const SizedBox(height: _windowGap),
@@ -1973,10 +1978,10 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                       // Bug 10: this one dims when the composer is summoned.
                       ValueListenableBuilder<bool>(
                         valueListenable: KeyboardDof.active,
-                        builder: (_, on, child) => ImageFiltered(enabled: on, imageFilter: ui.ImageFilter.blur(sigmaX: 1.2, sigmaY: 1.2), child: child!),
+                        builder: (_, on, child) => ImageFiltered(enabled: on, imageFilter: ui.ImageFilter.blur(sigmaX: VDepth.blur / 2, sigmaY: VDepth.blur / 2), child: child!),
                         child: _buildTickerWindow(),
                       ),
-                      const Spacer(),
+                      const SizedBox(height: _windowGap),
                       // Bug 7: the composer has its own slot now, so it cannot
                       // land on the category chips.
                       _buildComposer(),
@@ -2111,6 +2116,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                   });
                 },
                 onClose: () => setState(() => _activeDrawer = null),
+                onFree: () => setState(() => _activeDrawer = 'themes'),
               ),
               ))),
 

@@ -53,6 +53,7 @@ class VWorkSurface extends StatelessWidget {
                     .copyWith(maxHeight: VOverlay.toolMaxHeight(context)),
                 child: VGlass(
                     material: VMaterial.work,
+                    fill: VFrost.workTint,
                     radius: VRadius.xl,
                     child: title == null
                         ? Stack(children: [

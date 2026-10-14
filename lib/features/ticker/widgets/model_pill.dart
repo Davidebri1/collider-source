@@ -381,6 +381,33 @@ class _ModelPillState extends State<ModelPill> {
         ),
       ),
       // v9.1.4 (playtest #6): no second input; the one composer is at the bottom.
+      // v9.1.6: ported back verbatim from v9-final (collider-source).
+      const SizedBox(height: VSpace.xs),
+      // Isolated inline composer capsule (sends to this model only)
+      Container(
+        height: 40,
+        padding: const EdgeInsets.only(left: VSpace.sm, right: 4),
+        decoration: BoxDecoration(color: VColors.fillRecessed, borderRadius: BorderRadius.circular(VRadius.full)),
+        child: Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _inlineCtrl,
+                cursorColor: VColors.textPrimary,
+                style: VType.callout(weight: FontWeight.w400),
+                decoration: InputDecoration(
+                  hintStyle: VType.callout(color: VColors.textTertiary, weight: FontWeight.w400),
+                  border: InputBorder.none,
+                  isDense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+                onSubmitted: (_) => _submitInline(),
+              ),
+            ),
+            VCircleButton(icon: Icons.arrow_upward_rounded, size: 32, selected: true, tooltip: 'Send', onTap: _submitInline),
+          ],
+        ),
+      ),
     ];
   }
 }

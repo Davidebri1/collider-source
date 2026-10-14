@@ -67,12 +67,13 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
   }
 
   String _category = '';
+  bool _navOpen = false;
   List<WallpaperTheme> get _themes {
     final store = ThemePackStore.instance;
     final all = <WallpaperTheme>[
       ...WallpaperCatalog.freeThemes,
       for (final t in WallpaperCatalog.premiumThemes)
-        if (store.storeOpen && store.isUnlocked(t.id)) t,
+        if (store.isUnlocked(t.id)) t,
     ];
     return all.where((t) => CategoryTaxonomy.matches(_category, t.tags)).toList();
   }
@@ -81,8 +82,8 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final pad = MediaQuery.of(context).padding;
-    final winW = (size.width - 32 - 150).clamp(200.0, 440.0); // v8.7: ghost menu column on the left
-    final winH = (winW * 1.3).clamp(240.0, size.height - pad.top - 84 - 150);
+    final winW = (size.width - 120).clamp(200.0, 440.0); // v9.1.6: dead centre; the nav floats over it
+    final winH = (winW * 1.3).clamp(240.0, size.height - pad.top - 84 - 112 - 90);
     return ListenableBuilder(
       listenable: ThemePackStore.instance,
       builder: (context, _) {
@@ -119,32 +120,6 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
               ),
               if (_expanded && _previewed.isLive)
                 Positioned.fill(child: IgnorePointer(child: _LoopVideo(key: ValueKey('full-${_previewed.id}'), url: _previewed.videoUrl!))),
-              // Sidebar (visionOS browser, Figma 1:101): categories with
-              // expandable subcategories and counts.
-              if (!_expanded)
-                Positioned(
-                  left: 6,
-                  top: pad.top + 64,
-                  bottom: 250,
-                  child: Align(
-                    alignment: Alignment.topLeft,
-                    child: Builder(builder: (_) {
-                      final store = ThemePackStore.instance;
-                      final pool = [
-                        ...WallpaperCatalog.freeThemes,
-                        for (final t in WallpaperCatalog.premiumThemes)
-                          if (store.storeOpen && store.isUnlocked(t.id)) t,
-                      ];
-                      return CategorySideNav(
-                        width: 150,
-                        groups: CategoryTaxonomy.build([for (final t in pool) t.tags]),
-                        total: pool.length,
-                        selected: _category,
-                        onSelected: (k) => setState(() => _category = k),
-                      );
-                    }),
-                  ),
-                ),
               if (_expanded)
                 Positioned(
                   left: VSpace.md,
@@ -153,9 +128,9 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                 ),
               if (!_expanded)
                 Positioned(
-                  left: 152,
+                  left: 0,
                   right: 0,
-                  top: pad.top,
+                  top: pad.top + 112,
                   bottom: 84,
                   child: Center(
                     child: Column(
@@ -212,6 +187,33 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                       ],
                     ),
                   ),
+                ),
+              // v9.1.6c: catalog selector (Free/Premium switch) centred at the
+              // top; the category nav is a bar pinned under it, always visible.
+              if (!_expanded)
+                Positioned(
+                  left: 0, right: 0,
+                  top: pad.top + 10,
+                  child: Center(child: TierSwitchPill(label: 'Free', onSwitch: widget.onUpgradeTier)),
+                ),
+              if (!_expanded)
+                Positioned(
+                  left: 12, right: 12,
+                  top: pad.top + 62,
+                  child: Builder(builder: (_) {
+                    final store = ThemePackStore.instance;
+                    final pool = [
+                      ...WallpaperCatalog.freeThemes,
+                      for (final t in WallpaperCatalog.premiumThemes)
+                        if (store.isUnlocked(t.id)) t,
+                    ];
+                    return CategoryBar(
+                      groups: CategoryTaxonomy.build([for (final t in pool) t.tags]),
+                      total: pool.length,
+                      selected: _category,
+                      onSelected: (k) => setState(() => _category = k),
+                    );
+                  }),
                 ),
             ],
           ),
@@ -436,4 +438,34 @@ class EdgeFadeHorizontal extends StatelessWidget {
       child: child,
     );
   }
+}
+
+
+/// Floating 'Browse' button (opens the category overlay).
+class TierlessBrowseButton extends StatelessWidget {
+  final String label;
+  final bool on;
+  final VoidCallback onTap;
+  const TierlessBrowseButton({super.key, required this.label, required this.on, required this.onTap});
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+            child: Container(
+              height: 44,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              color: on ? const Color(0x55FFFFFF) : const Color(0xB318181E),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.view_sidebar_outlined, size: 18, color: Colors.white),
+                const SizedBox(width: 6),
+                ConstrainedBox(constraints: const BoxConstraints(maxWidth: 90), child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white))),
+              ]),
+            ),
+          ),
+        ),
+      );
 }

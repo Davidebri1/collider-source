@@ -235,6 +235,7 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
         padding: const EdgeInsets.fromLTRB(VSpace.md - 2, VSpace.xs, VSpace.md - 2, VSpace.md - 2),
         child: VGlass(
           material: VMaterial.work,
+          fill: VFrost.workTint,
           radius: VRadius.xl,
           child: Stack(
             children: [
@@ -350,12 +351,51 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
         tooltip: 'New card',
         child: _Panel(
           shadow: VShadow.heavy,
-          child: _Plate(
-            seed: 7,
-            accent: accents[0],
-            center: const Icon(Icons.image_outlined, size: 34, color: VColors.textTertiary),
-            overlay: Align(alignment: Alignment.bottomRight, child: controls),
-          ),
+          // v9.1.6: a real empty state: what this board is, and one clear
+          // way to start (no blank tinted plate).
+          child: ColoredBox(color: const Color(0x14FFFFFF), child: Stack(children: [
+            Positioned.fill(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: VSpace.lg),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 64, height: 64,
+                      decoration: const BoxDecoration(color: Color(0x26FFFFFF), shape: BoxShape.circle),
+                      child: const Icon(Icons.auto_awesome_rounded, size: 30, color: Colors.white),
+                    ),
+                    const SizedBox(height: VSpace.md),
+                    Text(_col == 0 ? 'Nothing to do yet' : (_col == 1 ? 'Nothing in progress' : 'Nothing finished yet'),
+                        textAlign: TextAlign.center, style: VType.headline()),
+                    const SizedBox(height: VSpace.xs),
+                    Text(
+                      _col == 0
+                          ? 'Add a task and Smart Gen turns it into a card with a picture and next steps.'
+                          : 'Cards move here when you drag them or mark them from the card menu.',
+                      textAlign: TextAlign.center,
+                      style: VType.callout(color: const Color(0xD9FFFFFF)),
+                    ),
+                    if (_col == 0) ...[
+                      const SizedBox(height: VSpace.lg),
+                      VPress(
+                        onTap: _add,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(999)),
+                          child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                            Icon(Icons.add_rounded, size: 20, color: Color(0xFF111111)),
+                            SizedBox(width: 6),
+                            Text('New card', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF111111))),
+                          ]),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ])),
         ),
       );
     }

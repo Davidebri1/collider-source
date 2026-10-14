@@ -53,6 +53,8 @@ class PremiumThemeMarketView extends StatefulWidget {
   final ValueChanged<WallpaperTheme> onApplyTheme;
   final ValueChanged<WallpaperTheme> onPreviewTheme;
   final VoidCallback onClose;
+  /// v9.1.6: the central tier button switches back to the Free gallery.
+  final VoidCallback? onFree;
 
   const PremiumThemeMarketView({
     super.key,
@@ -60,6 +62,7 @@ class PremiumThemeMarketView extends StatefulWidget {
     required this.onApplyTheme,
     required this.onPreviewTheme,
     required this.onClose,
+    this.onFree,
   });
 
   /// Height the market keeps free for the app shell's bottom bar.
@@ -206,7 +209,6 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
   /// themes first, then the stills: no names, counts or gate in the code.
   List<WallpaperTheme> get _catalog => [
         ...WallpaperCatalog.premiumThemes,
-        ...WallpaperCatalog.freeThemes,
       ].where(_inCategory).toList();
 
   // v8.7 side nav: categories + a search button (popup search with DOF).
@@ -216,7 +218,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
         // v8.7: the ghost menu filters by tag (most used first).
         ...(() {
           final n = <String, int>{};
-          for (final t in [...WallpaperCatalog.premiumThemes, ...WallpaperCatalog.freeThemes]) {
+          for (final t in [...WallpaperCatalog.premiumThemes]) {
             for (final g in t.tags) {
               n[g] = (n[g] ?? 0) + 1;
             }
@@ -259,7 +261,9 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
           ),
         );
     final cats = _categories;
-    return Column(mainAxisSize: MainAxisSize.min, children: [
+    // v9.1.6: a row above the carousel, so no neighbouring cover peeks
+    // under the buttons.
+    return Row(mainAxisSize: MainAxisSize.min, children: [
       SuspendedFrost(
         edge: 0.15,
         child: ClipRRect(
@@ -270,21 +274,6 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
               color: const Color(0x14FFFFFF),
               child: item(Icons.search_rounded, 'Search', _searchOpen || _searchQuery.isNotEmpty,
                   () => _openSearch(true)),
-            ),
-          ),
-        ),
-      ),
-      const SizedBox(height: 8),
-      SuspendedFrost(
-        edge: 0.15,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(28),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-            child: ColoredBox(
-              color: const Color(0x14FFFFFF),
-              child: item(Icons.view_sidebar_outlined, _category.isEmpty ? 'Browse' : CategoryTaxonomy.labelOf(_category), _navOpen || _category.isNotEmpty,
-                  () => setState(() => _navOpen = true)),
             ),
           ),
         ),
@@ -610,10 +599,30 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
 
               // v8.7 side nav (categories + search), left edge.
               Positioned(
-                left: 8,
-                top: mainTop,
+                left: 12,
+                top: MediaQuery.paddingOf(context).top + 12,
                 child: _sideNav(),
               ),
+              // v9.1.6c: category bar pinned along the top, always visible.
+              Positioned(
+                left: 12, right: 12,
+                top: MediaQuery.paddingOf(context).top + 66,
+                child: Builder(builder: (_) {
+                  final pool = [...WallpaperCatalog.premiumThemes];
+                  return CategoryBar(
+                    groups: CategoryTaxonomy.build([for (final t in pool) t.tags]),
+                    total: pool.length,
+                    selected: _category,
+                    onSelected: (k) => setState(() => _setCategory(k)),
+                  );
+                }),
+              ),
+              if (widget.onFree != null)
+                Positioned(
+                  left: 0, right: 0,
+                  top: MediaQuery.paddingOf(context).top + 16,
+                  child: Center(child: TierSwitchPill(label: 'Premium', onSwitch: widget.onFree!)),
+                ),
 
               // Category sidebar (visionOS browser, Figma 1:101). A temporary
               // panel: tap outside or pick a category to close it.
@@ -622,6 +631,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
                     onTap: () => setState(() => _navOpen = false),
+                    onHorizontalDragEnd: (_) => setState(() => _navOpen = false),
                     child: BackdropFilter(
                       filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
                       child: const ColoredBox(color: Color(0x47000000)),
@@ -632,7 +642,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
                   left: 8,
                   top: mainTop,
                   child: Builder(builder: (_) {
-                    final pool = [...WallpaperCatalog.premiumThemes, ...WallpaperCatalog.freeThemes];
+                    final pool = [...WallpaperCatalog.premiumThemes];
                     return CategorySideNav(
                       width: 200,
                       maxHeight: MediaQuery.of(context).size.height - mainTop - 110,
@@ -714,7 +724,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
             SizedBox(
               height: 28,
               child: Text(
-                '${t.isLive ? '\u25B6\uFE0E ' : ''}${_displayName(t)}',
+                _displayName(t),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,

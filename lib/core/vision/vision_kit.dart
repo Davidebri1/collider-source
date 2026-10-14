@@ -1,6 +1,7 @@
 import '../theme/app_font.dart';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'materialize.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/services.dart';
 import '../theme/edge_fade.dart';
@@ -22,6 +23,9 @@ class VFrost {
   // slight frost and a slight blur. Reads as an object, never a hologram.
   static const double blur = 14;
   static const Color tint = Color(0xD018181E);
+  // v9.1.6: full-screen work surfaces (Music, Smart Gen, Files, Market) are a
+  // touch clearer so the ticker stays visible behind them, blurred.
+  static const Color workTint = Color(0x6618181E);
   static const List<BoxShadow> shadow = [BoxShadow(color: Color(0x29000000), blurRadius: 40, spreadRadius: -8, offset: Offset(0, 10))];
 }
 
@@ -63,7 +67,7 @@ class VGlass extends StatelessWidget {
       child: ClipRRect(
         borderRadius: r,
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: material.blur, sigmaY: material.blur),
+          filter: ImageFilter.blur(sigmaX: material.blur * Materialize.of(context), sigmaY: material.blur * Materialize.of(context)),
           child: Container(
             padding: padding,
             decoration: BoxDecoration(color: fill ?? material.fill, borderRadius: r),
@@ -86,11 +90,14 @@ class VScrim extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dim = Container(color: VDepth.dim);
+    // v9.1.6: the backdrop blur follows the materialize progress, so it fades
+    // with the layer instead of cutting in/out at full strength.
+    final k = Materialize.of(context);
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: blur
-          ? BackdropFilter(filter: ImageFilter.blur(sigmaX: VDepth.blur, sigmaY: VDepth.blur), child: dim)
+          ? BackdropFilter(filter: ImageFilter.blur(sigmaX: VDepth.blur * k, sigmaY: VDepth.blur * k), child: dim)
           : dim,
     );
   }
