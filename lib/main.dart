@@ -387,6 +387,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     }
     if (Uri.base.queryParameters['composer'] == '1') _isComposerSummoned = true;
     if (Uri.base.queryParameters['settings'] == '1') _settingsOpen = true;
+    if (Uri.base.queryParameters['browser'] == '1') _browserOpen = true;
     final cq = Uri.base.queryParameters['cat'];
     if (cq != null) _activeCategory = ModelCategory.values.firstWhere((c) => c.name == cq, orElse: () => ModelCategory.general);
     if (Uri.base.queryParameters['genopts'] == '1' && _activeCategory.isMedia) _genOptionsOpen = true;
@@ -641,20 +642,12 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     });
   }
 
-  /// v9.1.6c (grey slab, proved on web): after a frosted pane closes over the
-  /// ticker, the list keeps a stale frosted raster until it scrolls; a rebuild
-  /// does not clear it, a scroll does. So every pane close nudges the scroll.
-  void _nudgeTicker() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      for (final c in _tickerScroll.values) {
-        if (c.positions.length != 1) continue;
-        final o = c.offset;
-        final max = c.position.maxScrollExtent;
-        c.jumpTo((o + 1).clamp(0.0, max + 1));
-        WidgetsBinding.instance.addPostFrameCallback((_) { if (c.positions.length == 1) c.jumpTo(o.clamp(0.0, max)); });
-      }
-    });
-  }
+  // v9.1.6e ROOT CAUSE of the grey slab: `_catPager.page` (and the ticker
+  // scroll controllers' `.position`) call List.single on their positions.
+  // While a pane swap briefly attached two scroll views, that threw
+  // 'Bad state: Too many elements' inside build, and release Flutter paints
+  // a failed build as a flat grey ErrorWidget: the slab. Every such access is
+  // now guarded by positions.length == 1; the 1px scroll nudge is removed.
 
   void _closeAllPanes() {
     _activeDrawer = null;
@@ -938,7 +931,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       onLongPress: () => _rowMenu(c, item),
       child: AnimatedOpacity(
         duration: VMotion.base,
-        opacity: selected ? 1.0 : 0.42,
+        opacity: 1.0, // full-strength text; off-rows read by no glow, not by fading
         child: selected
             ? AmbientGlow(color: item.modelDef.providerColor, radius: 18, phase: (item.modelDef.id.hashCode % 100) / 100, child: card)
             // v9.1.6 (root cause of the grey slab): a ColorFiltered over a row
@@ -1655,6 +1648,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   }
 
   bool _browserOpen = false;
+  final _browserKey = GlobalKey();
   String _browserActiveTabId = 'user_default';
 
   /// R34: one browser instance. Asking again while it is already open only
@@ -1852,7 +1846,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
   Widget build(BuildContext context) {
     final surfaceSig = '$_activeDrawer|${_expandedModelIds.join(',')}|$_settingsOpen|$_browserOpen|$_zoomedMessage|$_localHistoryModel';
-    if (surfaceSig != _lastSurfaceSig) { _lastSurfaceSig = surfaceSig; _nudgeTicker(); }
+    if (surfaceSig != _lastSurfaceSig) { _lastSurfaceSig = surfaceSig; }
     _guardPreview();
     // Max 9 active model rows filtered by active category with fallback
     var categoryPills = _tickerItems
@@ -1885,7 +1879,13 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         final st = _swipeStart; _swipeStart = null;
         if (st == null || !_anythingOpen) return;
         final d = e.position - st;
-        if (d.dy > 120 && d.dx.abs() < d.dy * 0.6) _escape(); // distance + direction only: slow test rigs and slow swipes both count
+        if (d.dy > 120 && d.dx.abs() < d.dy * 0.6) _escape();
+        // Tap outside the browser window: decided on the raw pointer, because
+        // the page platform view swallows the gesture arena.
+        if (_browserOpen && d.distance < 8) {
+          final box = _browserKey.currentContext?.findRenderObject() as RenderBox?;
+          if (box != null && box.hasSize && !(box.localToGlobal(Offset.zero) & box.size).contains(e.position)) _closeBrowser();
+        } // distance + direction only: slow test rigs and slow swipes both count
       },
       child: Stack(
         fit: StackFit.expand,
@@ -2297,10 +2297,12 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // all four sides of it (R36). The transparent barrier keeps taps on
           // the resting surface from reaching through behind it.
           if (_browserOpen) ...[
-            const Positioned.fill(child: ModalBarrier(color: Colors.transparent)),
+            // Tap outside the window closes it (David: swipe and tap outside are the escapes).
+            Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: _closeBrowser)),
             Positioned.fill(
               child: Center(
                 child: InAppBrowserSheet(
+                  key: _browserKey,
                   initialTabId: _browserActiveTabId,
                   tabs: _browserTabs,
                   onClose: _closeBrowser,

@@ -118,7 +118,6 @@ class _MaterializeSwitchState extends State<MaterializeSwitch> {
       onHidden: () {
         if (mounted && !widget.show) {
           setState(() => _mounted = false);
-          WidgetsBinding.instance.addPostFrameCallback((_) => paneHiddenTick.value++);
         }
       },
       child: _last!,

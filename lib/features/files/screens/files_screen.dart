@@ -327,6 +327,7 @@ class _FilesScreenState extends State<FilesScreen> {
       radius: phone ? const BorderRadius.all(Radius.circular(52.8)) : const BorderRadius.only(topRight: Radius.circular(52.8), bottomRight: Radius.circular(52.8)),
       blur: 24.5,
       gradient: const LinearGradient(begin: Alignment(-0.9, -1), end: Alignment(0.9, 1), colors: [Color(0x8C262626), Color(0x8C404040)]),
+      // overlay-ok: panel chrome; the thumbnails sit in the grid below, nothing over them
       child: Stack(children: [
         if (phone)
           Positioned(

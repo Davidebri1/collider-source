@@ -166,85 +166,53 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
               vh = maxH;
               vw = vh * aspect;
             }
+            // David: nothing sits on top of a video. Picture first; title,
+            // volume and transport live below it.
             return Center(
               child: SizedBox(
                 width: vw,
-                height: vh + 22 + 26 + VSpace.sm + 8,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      top: 0,
-                      height: vh,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(VRadius.xl),
-                        child: ColoredBox(color: Colors.black, child: picture),
-                      ),
+                child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  SizedBox(
+                    height: vh,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(VRadius.xl),
+                      child: ColoredBox(color: Colors.black, child: picture),
                     ),
-                    Positioned(left: 10, top: 10, child: close),
-                    // v8.6: Figma 11:2552 / 11:3060 / 6:842: controls live inside
-                    // the picture: title and date bottom-left over a soft shade,
-                    // then play/pause, a thin scrubber, time and volume.
-                    if (ready)
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        top: 0,
-                        height: vh,
-                        child: IgnorePointer(
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(VRadius.xl),
-                            child: const DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment(0, 0.2), end: Alignment.bottomCenter, colors: [Color(0x00000000), Color(0x8C000000)]))),
+                  ),
+                  const SizedBox(height: VSpace.sm),
+                  Row(children: [
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(widget.file.name, maxLines: 2, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
+                      Text(FileStore.ago(widget.file.addedAt), style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                    ])),
+                    if (ready) _icon(c.value.volume == 0 ? Icons.volume_off_rounded : Icons.volume_up_rounded, 'Mute', () => c.setVolume(c.value.volume == 0 ? 1 : 0), size: 20),
+                  ]),
+                  const SizedBox(height: VSpace.sm),
+                  SizedBox(
+                    height: 44,
+                    child: VOrnament(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: Row(children: [
+                        _icon(Icons.replay_10_rounded, 'Back 10 seconds', () => _skip(-10), size: 20),
+                        _icon(ready && c.value.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, ready && c.value.isPlaying ? 'Pause' : 'Play', _toggle, size: 24),
+                        _icon(Icons.forward_10_rounded, 'Forward 10 seconds', () => _skip(10), size: 20),
+                        Expanded(
+                          child: _track(
+                            frac,
+                            ready ? (v) => setState(() => _scrub = v) : null,
+                            onEnd: (v) {
+                              if (ready) c.seekTo(Duration(milliseconds: (dur.inMilliseconds * v).round()));
+                              setState(() => _scrub = null);
+                            },
                           ),
                         ),
-                      ),
-                    // v9.1.6 (Figma player3): title over the picture, volume as
-                    // a small glass pill top-right, and transport as a glass
-                    // ornament straddling the window's bottom edge.
-                    Positioned(
-                      left: 16, right: 60, top: vh - 64,
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(widget.file.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
-                        Text(FileStore.ago(widget.file.addedAt), style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                        const SizedBox(width: 6),
+                        Text(_fmt(shown), style: VType.caption(color: Colors.white).copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
+                        const SizedBox(width: 8),
                       ]),
                     ),
-                    if (ready)
-                      Positioned(
-                        right: 10, top: 10,
-                        child: VOrnament(
-                          padding: const EdgeInsets.all(2),
-                          child: _icon(c.value.volume == 0 ? Icons.volume_off_rounded : Icons.volume_up_rounded, 'Mute', () => c.setVolume(c.value.volume == 0 ? 1 : 0), size: 20),
-                        ),
-                      ),
-                    Positioned(
-                      left: vw * 0.12, right: vw * 0.12, top: vh - 22, height: 44,
-                      child: VOrnament(
-                        padding: const EdgeInsets.symmetric(horizontal: 6),
-                        child: Row(children: [
-                          _icon(Icons.replay_10_rounded, 'Back 10 seconds', () => _skip(-10), size: 20),
-                          _icon(ready && c.value.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, ready && c.value.isPlaying ? 'Pause' : 'Play', _toggle, size: 24),
-                          _icon(Icons.forward_10_rounded, 'Forward 10 seconds', () => _skip(10), size: 20),
-                          Expanded(
-                            child: _track(
-                              frac,
-                              ready ? (v) => setState(() => _scrub = v) : null,
-                              onEnd: (v) {
-                                if (ready) c.seekTo(Duration(milliseconds: (dur.inMilliseconds * v).round()));
-                                setState(() => _scrub = null);
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(_fmt(shown), style: VType.caption(color: Colors.white).copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
-                          const SizedBox(width: 8),
-                        ]),
-                      ),
-                    ),
-                    const SizedBox.shrink(),
-                  ],
-                ),
+                  ),
+                ]),
               ),
             );
           }),

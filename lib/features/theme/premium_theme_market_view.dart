@@ -111,7 +111,7 @@ const double _kHighVelocityThreshold = 2.0;
 // Card chrome: rounded-lg = --radius .625rem
 const double _kRadius = 10;
 // border border-gray-800/30  (#1E2939 @ 30%)
-const Color _kCoverBorder = Color.fromRGBO(30, 41, 57, 0.3);
+const Color _kCoverBorder = Color(0x00000000); // no outline
 // img boxShadow: 0 25px 50px -12px rgba(0,0,0,0.9), 0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.1)
 const List<_CssShadow> _kCoverShadows = [
   _CssShadow(0, 25, 50, -12, Color.fromRGBO(0, 0, 0, 0.9)),
@@ -323,7 +323,10 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
               child: SizedBox(
                 width: cw,
                 height: cw * kPhoneAspect, // phone-shaped
-                child: ThemeImage(t.assetPath, fit: BoxFit.cover, filterQuality: FilterQuality.high),
+                // Live themes play their own video here (sharp), not the upscaled frame.
+                child: t.isLive && t.videoUrl != null
+                    ? Stack(fit: StackFit.expand, children: [ThemeImage(t.assetPath, fit: BoxFit.cover, filterQuality: FilterQuality.high), LiveCoverVideo(key: ValueKey('detail-${t.id}'), url: t.videoUrl!)])
+                    : ThemeImage(t.assetPath, fit: BoxFit.cover, filterQuality: FilterQuality.high),
               ),
             ),
             const SizedBox(height: 10),
@@ -510,7 +513,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
-                      colors: [Color(0xE6000000), Color(0xE6111111)],
+                      colors: [Color(0xA6000000), Color(0xA6111111)], // ticker shows through, blurred
                     ),
                   ),
                 ),
@@ -1393,7 +1396,7 @@ class _CoverCard extends StatelessWidget {
             top: 0,
             width: size,
             height: h,
-            child: CustomPaint(painter: _RingPainter(_kRadius, 1, _kCoverShadows[2].color)),
+            child: const SizedBox.shrink(), // no light outline round the cover
           ),
           // <img> object-cover rounded-lg border border-gray-800/30
           Positioned(
@@ -1478,13 +1481,13 @@ class _CoverCard extends StatelessWidget {
             left: 0,
             top: h,
             width: size,
-            height: h,
-            child: _Reflection(
+            height: h * 0.32, // ends above the title
+            child: ClipRect(child: OverflowBox(alignment: Alignment.topCenter, minHeight: h, maxHeight: h, child: _Reflection(
               theme: theme,
               size: size,
               opacity: reflectionOpacity,
               dim: dimmed ? _kUnownedCardDim : 0,
-            ),
+            ))),
           ),
           // Floor highlight: top-full h-3 rounded-lg translateY(6px), opacity 0.6 / 0.35 (duration-1000)
           // linear-gradient(to bottom, rgba(255,255,255,0.06) 0%, 0.12 40%, transparent 100%)
@@ -1525,8 +1528,7 @@ class _CoverCard extends StatelessWidget {
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(_kRadius),
-                  border: Border.all(
-                      color: const Color.fromRGBO(255, 255, 255, 0.3), width: 1),
+                  // no light outline round the cover
                 ),
               ),
             ),
