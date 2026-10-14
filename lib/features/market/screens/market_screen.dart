@@ -38,7 +38,7 @@ class _Tile {
 }
 
 class _MarketScreenState extends State<MarketScreen> {
-  static const _kinds = ['Stills', 'Templates', 'Cinematic', 'Night'];
+  static const _kinds = ['Stills', 'Templates', 'Night']; // fits the pane, no clipped chip
   int _kind = 0;
   final List<_Tile> _generated = [];
   final TextEditingController _ctrl = TextEditingController();
@@ -136,24 +136,25 @@ class _MarketScreenState extends State<MarketScreen> {
                         padding: const EdgeInsets.fromLTRB(VSpace.md, VSpace.md, VSpace.md, VSpace.xs),
                         child: Text('Create from template', style: VType.callout(weight: FontWeight.w600, color: Colors.white70)),
                       ),
-                      SizedBox(
-                        height: 196,
-                        child: ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          physics: const BouncingScrollPhysics(),
-                          padding: const EdgeInsets.symmetric(horizontal: VSpace.md),
-                          itemCount: shelf.length,
-                          separatorBuilder: (_, __) => const SizedBox(width: VSpace.xs),
-                          itemBuilder: (_, i) => VPress(
-                            tooltip: shelf[i].title,
-                            onTap: () => _remix(shelf[i]),
-                            child: SizedBox(width: 104, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                              ClipRRect(borderRadius: BorderRadius.circular(VRadius.md), child: SizedBox(width: 104, height: 156, child: _img(shelf[i]))),
-                              const SizedBox(height: 4),
-                              Text(shelf[i].title, maxLines: 2, style: VType.caption(color: Colors.white)),
-                            ])),
-                          ),
-                        ),
+                      // Three portrait templates that fit the pane (nothing clipped).
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: VSpace.md),
+                        child: LayoutBuilder(builder: (ctx, c) {
+                          final w = (c.maxWidth - 2 * VSpace.xs) / 3;
+                          return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            for (var i = 0; i < shelf.length && i < 3; i++) ...[
+                              if (i > 0) const SizedBox(width: VSpace.xs),
+                              VPress(
+                                onTap: () => _remix(shelf[i]),
+                                child: SizedBox(width: w, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                  ClipRRect(borderRadius: BorderRadius.circular(VRadius.md), child: SizedBox(width: w, height: w * 1.5, child: _img(shelf[i]))),
+                                  const SizedBox(height: 4),
+                                  Text(shelf[i].title, maxLines: 2, style: VType.caption(color: Colors.white)),
+                                ])),
+                              ),
+                            ],
+                          ]);
+                        }),
                       ),
                       // Flush photographic grid (PhotoMasonry), second beat.
                       Padding(
@@ -163,7 +164,6 @@ class _MarketScreenState extends State<MarketScreen> {
                           return Wrap(spacing: VSpace.xs, runSpacing: VSpace.xs, children: [
                             for (var i = 0; i < grid.length; i++)
                               VPress(
-                                tooltip: grid[i].title,
                                 onTap: () => setState(() => _open = grid[i]),
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(VRadius.sm),
@@ -194,7 +194,6 @@ class _MarketScreenState extends State<MarketScreen> {
       padding: const EdgeInsets.fromLTRB(VSpace.md, VSpace.sm, VSpace.md, 0),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         VPress(
-          tooltip: t.title,
           onTap: () => setState(() => _open = t),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(VRadius.xl),

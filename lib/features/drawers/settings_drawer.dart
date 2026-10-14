@@ -40,28 +40,27 @@ class SettingsDrawer extends StatelessWidget {
         Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: onClose, child: ClipRect(child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 18 * Materialize.of(context), sigmaY: 18 * Materialize.of(context)), child: const ColoredBox(color: Color(0x14000000)))))),
         // v8.6: Figma 10:2193 (visionOS Settings, 1179 x 877) built at its
         // own size and scaled as one unit to 30 % (David: 25-33 %).
+        // Playtest: the whole 1179 px frame scaled to 30 % made 6 px text.
+        // A small floating pane stays, but on a phone it is the Figma detail
+        // column built at readable native size (16 px body).
         Center(
-          child: SizedBox(
-            width: panel.width,
-            height: panel.height,
-            child: FittedBox(
-              child: SizedBox(
-                width: 1179,
-                height: 877,
-                child: ListenableBuilder(
-                  listenable: Listenable.merge([FloatingMusic.enabled, ThemeCatalog.instance]),
-                  builder: (_, __) => _VisionSettings(
-                    onAccount: onAccount,
+          child: ListenableBuilder(
+            listenable: Listenable.merge([FloatingMusic.enabled, ThemeCatalog.instance]),
+            builder: (context, __) {
+              final phone = MediaQuery.sizeOf(context).width < 700;
+              final settings = _VisionSettings(
+                onAccount: onAccount,
+                compact: phone,
                     rows: [
                       _Row(Icons.visibility_off_rounded, const Color(0xFF8E8E93), 'Incognito', incognito, () => onIncognito(!incognito)),
                       _Row(Icons.history_rounded, const Color(0xFF0A84FF), 'Save to History', autosave && !incognito, incognito ? null : () => onAutosave(!autosave)),
                       if (MusicPlayer.library.isNotEmpty)
                         _Row(Icons.music_note_rounded, const Color(0xFFFF375F), 'Music widget', FloatingMusic.enabled.value, () => FloatingMusic.setEnabled(!FloatingMusic.enabled.value)),
                     ],
-                  ),
-                ),
-              ),
-            ),
+              );
+              if (phone) return SizedBox(width: (MediaQuery.sizeOf(context).width * 0.82).clamp(280.0, 360.0), child: settings);
+              return SizedBox(width: panel.width, height: panel.height, child: FittedBox(child: SizedBox(width: 1179, height: 877, child: settings)));
+            },
           ),
         ),
       ],
@@ -81,7 +80,8 @@ class _Row {
 class _VisionSettings extends StatelessWidget {
   final List<_Row> rows;
   final VoidCallback? onAccount;
-  const _VisionSettings({required this.rows, this.onAccount});
+  final bool compact;
+  const _VisionSettings({required this.rows, this.onAccount, this.compact = false});
 
   Widget _icon(IconData i, Color c, {double s = 36}) => Container(
         width: s, height: s,
@@ -89,8 +89,70 @@ class _VisionSettings extends StatelessWidget {
         child: Icon(i, size: s * 0.55, color: Colors.white),
       );
 
+  Widget _compact(BuildContext context) {
+    const w = TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600);
+    return SuspendedFrost(edge: 0.04, child: ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 40 * Materialize.of(context), sigmaY: 40 * Materialize.of(context)),
+        child: Container(
+          color: const Color(0x33808080),
+          padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Text('Settings', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 14),
+            _icon(Icons.person_rounded, const Color(0xFF3A3A3C), s: 64),
+            const SizedBox(height: 8),
+            const Text('David Ebri', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)),
+            const Text('Collider', style: TextStyle(color: Colors.white60, fontSize: 14)),
+            const SizedBox(height: 16),
+            Container(
+              decoration: BoxDecoration(color: const Color(0x33000000), borderRadius: BorderRadius.circular(16)),
+              child: Column(children: [
+                for (var i = 0; i < rows.length; i++) ...[
+                  if (i > 0) const Divider(height: 1, color: Color(0x1FFFFFFF), indent: 52),
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: rows[i].onTap,
+                    child: SizedBox(height: 50, child: Row(children: [
+                      const SizedBox(width: 12),
+                      _icon(rows[i].icon, rows[i].color, s: 28),
+                      const SizedBox(width: 12),
+                      Expanded(child: Text(rows[i].label, style: w)),
+                      Transform.scale(scale: 0.8, child: Switch(value: rows[i].on, onChanged: rows[i].onTap == null ? null : (_) => rows[i].onTap!(), activeColor: Colors.white, activeTrackColor: const Color(0xFF34C759))),
+                      const SizedBox(width: 4),
+                    ])),
+                  ),
+                ],
+              ]),
+            ),
+            if (onAccount != null) ...[
+              const SizedBox(height: 12),
+              GestureDetector(
+                onTap: onAccount,
+                child: Container(
+                  height: 50,
+                  decoration: BoxDecoration(color: const Color(0x33000000), borderRadius: BorderRadius.circular(16)),
+                  child: Row(children: [
+                    const SizedBox(width: 12),
+                    _icon(Icons.person_outline_rounded, const Color(0xFF0A84FF), s: 28),
+                    const SizedBox(width: 12),
+                    const Expanded(child: Text('Account', style: w)),
+                    const Icon(Icons.chevron_right_rounded, color: Colors.white54, size: 24),
+                    const SizedBox(width: 10),
+                  ]),
+                ),
+              ),
+            ],
+          ]),
+        ),
+      ),
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (compact) return _compact(context);
     const w = TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w600);
     // v8.7: suspended frost: lighter fill, perimeter dissolves, no outline.
     return SuspendedFrost(edge: 0.04, child: ClipRRect(

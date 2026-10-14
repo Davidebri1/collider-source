@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import '../../../core/media/theme_catalog.dart';
 import '../../../core/vision/category_nav.dart';
 import 'package:video_player/video_player.dart';
 import '../../../models/theme_def.dart';
@@ -80,6 +81,27 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
 
   @override
   Widget build(BuildContext context) {
+    // Cold-load race (playtest: black card 1 run in 2): the gallery could
+    // build before the R2 catalog arrived and keep the empty placeholder
+    // theme. It now rebuilds on every catalog change and swaps the
+    // placeholder for the real current theme the moment one exists; until
+    // then it draws nothing rather than a black card.
+    return ListenableBuilder(
+      listenable: ThemeCatalog.instance,
+      builder: (context, _) {
+        if (_previewed.assetPath.isEmpty) {
+          final cur = widget.currentTheme;
+          final free = WallpaperCatalog.freeThemes;
+          final r = cur.assetPath.isNotEmpty ? cur : (free.isNotEmpty ? free.first : null);
+          if (r == null) return const SizedBox.shrink();
+          _previewed = r;
+        }
+        return _build(context);
+      },
+    );
+  }
+
+  Widget _build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final pad = MediaQuery.of(context).padding;
     // David: previews are phone-shaped (device portrait aspect), centred;
@@ -164,18 +186,23 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                         SizedBox(
                           width: winW,
                           height: 60,
-                          child: ClipRect( // David: no carousel edge blur
-                            child: ListView.separated(
-                              scrollDirection: Axis.horizontal,
-                              physics: const BouncingScrollPhysics(),
-                              itemCount: themes.length,
-                              separatorBuilder: (_, __) => const SizedBox(width: 4),
-                              itemBuilder: (_, i) {
+                          // Playtest: the strip ran past the edge. It now shows only the
+                          // thumbnails that fit, centred on the selected one, so
+                          // nothing is cut; picking one recentres the window.
+                          child: Builder(builder: (context) {
+                            final fit = ((winW - 64) / 40).floor().clamp(1, themes.length);
+                            final sel = themes.indexWhere((t) => t.id == _previewed.id).clamp(0, themes.length - 1);
+                            final start = (sel - fit ~/ 2).clamp(0, (themes.length - fit).clamp(0, themes.length));
+                            final shown = themes.sublist(start, (start + fit).clamp(0, themes.length));
+                            return Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                              for (var k = 0; k < shown.length; k++) ...[
+                                if (k > 0) const SizedBox(width: 4),
+                                Builder(builder: (_) {
+                                  final i = themes.indexOf(shown[k]);
                                 final t = themes[i];
                                 final sel = t.id == _previewed.id;
                                 return VPress(
                                   onTap: () => _select(t),
-                                  tooltip: t.name,
                                   child: AnimatedContainer(
                                     duration: VMotion.base,
                                     curve: Curves.easeOutCubic,
@@ -190,9 +217,10 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                                     ),
                                   ),
                                 );
-                              },
-                            ),
-                          ),
+                                }),
+                              ],
+                            ]);
+                          }),
                         ),
                       ],
                     ),

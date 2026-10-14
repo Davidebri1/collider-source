@@ -1880,6 +1880,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         if (st == null || !_anythingOpen) return;
         final d = e.position - st;
         if (d.dy > 120 && d.dx.abs() < d.dy * 0.6) _escape();
+        else if (st.dx < 28 && d.dx > 70 && d.dy.abs() < d.dx * 0.7) _escape(); // edge swipe back
         // Tap outside the browser window: decided on the raw pointer, because
         // the page platform view swallows the gesture arena.
         if (_browserOpen && d.distance < 8) {
@@ -2388,31 +2389,16 @@ AnimatedScale(
           // One rule everywhere: a swipe in from the left edge (back) or a
           // swipe down from the top of a panel closes the top-most view. A raw
           // Listener, so no rail or list can win the gesture first.
-          if (_anythingOpen)
-            Positioned.fill(
-              child: Listener(
-                behavior: HitTestBehavior.translucent,
-                onPointerDown: (e) { _swStart = e.position; _swTime = DateTime.now(); },
-                onPointerUp: (e) {
-                  final s0 = _swStart;
-                  _swStart = null;
-                  if (s0 == null) return;
-                  final d = e.position - s0;
-                  final ms = DateTime.now().difference(_swTime).inMilliseconds;
-                  final h = MediaQuery.sizeOf(context).height;
-                  final back = s0.dx < 28 && d.dx > 70 && d.dy.abs() < d.dx * 0.7 && ms < 700;
-                  final down = s0.dy < h * 0.42 && d.dy > h * 0.22 && d.dx.abs() < d.dy * 0.5 && ms < 900;
-                  if (back || down) _escape();
-                },
-              ),
-            ),
+          // Playtest (Upload / video tile did nothing): a childless translucent
+          // Listener here was the top Stack child whenever anything was open,
+          // and a Stack stops hit-testing at the first child that is hit, so
+          // it swallowed every tap meant for the pane under it. Removed; the
+          // root Listener handles swipe-down and edge-swipe back.
         ],
       ),
       ),
     )));
   }
 
-  Offset? _swStart;
-  DateTime _swTime = DateTime.now();
 }
 

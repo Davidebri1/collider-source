@@ -513,7 +513,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
-                      colors: [Color(0xA6000000), Color(0xA6111111)], // ticker shows through, blurred
+                      colors: [Color(0x59000000), Color(0x59111111)], // ticker shows through, blurred
                     ),
                   ),
                 ),

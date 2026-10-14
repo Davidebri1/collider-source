@@ -1,3 +1,4 @@
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'first_frame.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -213,7 +214,7 @@ class ThemeCatalog extends ChangeNotifier {
     // v9.1.6g: full-resolution posters (qa/make_posters.py, frame at 1 s,
     // ffmpeg) live under posters/; they are covers, never themes.
     _posters = {for (final o in all) if ('${o['name']}'.startsWith('posters/')) '${o['name']}'.substring(8).replaceAll(RegExp(r'\.jpg$'), ''): o['url'] as String};
-    final maps = [for (final o in all) if (!'${o['name']}'.startsWith('posters/')) o];
+    final maps = [for (final o in all) if (!'${o['name']}'.startsWith('posters/') && !'${o['name']}'.startsWith('thumbs/')) o];
     final songs = [for (final o in maps) if (_kind(o) == 'audio') o];
     final themes = [for (final o in maps) if (_kind(o) != 'audio') _r2Theme(o, songs)];
     // v9.1: every R2 song is in the music library, with the art of the
@@ -273,7 +274,10 @@ class ThemeCatalog extends ChangeNotifier {
     return _aud.hasMatch(n) ? 'audio' : _img.hasMatch(n) ? 'image' : 'video';
   }
 
-  static bool _starter(String file) => niceName(file).toLowerCase().contains('ocean reflection');
+  // The included starter = the default wallpaper. Ocean Reflection's source file
+  // has streaked frames (checked by ffmpeg frame extract outside the app), so
+  // the default is Reflection Lake.
+  static bool _starter(String file) => niceName(file).toLowerCase().contains('reflection lake');
   static String _priceFor(List<String> tags) {
     if (tags.contains('4K')) return r'$7.99';
     if (tags.contains('1440p')) return r'$6.99';
@@ -283,6 +287,16 @@ class ThemeCatalog extends ChangeNotifier {
   }
 
   Map<String, String> _posters = const {};
+
+  /// 48px placeholder (qa/make_thumbs.py) for any R2 image URL, or null.
+  static String? thumbFor(String url) {
+    if (!url.startsWith(mediaBaseUrl)) return null;
+    final rest = Uri.decodeComponent(url.substring(mediaBaseUrl.length).split('?').first);
+    if (rest.startsWith('thumbs/')) return null;
+    final base = rest.split('/').last;
+    if (!RegExp(r'\.(jpe?g|png|webp)$', caseSensitive: false).hasMatch(base)) return null;
+    return '${mediaBaseUrl}thumbs%2F${Uri.encodeComponent(base)}.jpg';
+  }
 
   WallpaperTheme _r2Theme(Map o, [List<Map> songs = const []]) {
     final url = o['url'] as String;
@@ -328,10 +342,17 @@ class ThemeCatalog extends ChangeNotifier {
     if (t.isEmpty) return;
     t.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     _themes = t;
+    // Playtest #8: preload every 48px placeholder, and the first covers in full.
+    var n = 0;
+    for (final x in t) {
+      final th = thumbFor(x.assetPath);
+      if (th != null) DefaultCacheManager().getSingleFile(th).ignore();
+      if (n++ < 12 && x.assetPath.startsWith('http')) DefaultCacheManager().getSingleFile(x.assetPath).ignore();
+    }
     _songThemes = t.where((x) => x.tracks.isNotEmpty).toList();
     // Default: a portrait ocean loop (fits the phone, decodes everywhere tested).
     WallpaperTheme? pick(String n) => t.where((x) => x.name.toLowerCase().contains(n)).firstOrNull;
-    _defaultSlug = (pick('ocean reflection') ?? pick('beach waves') ?? t.where((x) => x.isLive).firstOrNull ?? t.first).id;
+    _defaultSlug = (pick('reflection lake') ?? pick('ocean reflection') ?? t.where((x) => x.isLive).firstOrNull ?? t.first).id;
     _source = source;
     notifyListeners();
   }

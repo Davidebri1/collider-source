@@ -234,6 +234,7 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
   // section ornament under the pane. Sections are the PRD's five tools
   // (functional-spec.txt line 21). No close button: swipe or tap outside.
   static const _sections = ['Tasks & Kanban', 'Projects', 'Reminders', 'Memories', 'Artifacts'];
+  static const _sectionIcons = [Icons.view_kanban_outlined, Icons.folder_outlined, Icons.alarm_rounded, Icons.psychology_outlined, Icons.description_outlined];
   int _section = 0;
   String _q = '';
 
@@ -254,12 +255,12 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(VRadius.xl),
                     child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                      filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
                       child: DecoratedBox(
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(VRadius.xl),
                           border: Border.all(color: const Color(0x26FFFFFF)),
-                          gradient: const LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0x66606060), Color(0x55505858)]),
+                          gradient: const LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0x40606060), Color(0x38505858)]),
                         ),
                         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                           Padding(
@@ -304,10 +305,14 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
                         onTap: () => setState(() => _section = i),
                         child: Container(
                           height: 34,
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          padding: EdgeInsets.symmetric(horizontal: i == _section ? 12 : 10),
                           alignment: Alignment.center,
                           decoration: BoxDecoration(color: i == _section ? const Color(0x40FFFFFF) : Colors.transparent, borderRadius: BorderRadius.circular(17)),
-                          child: Text(_sections[i], style: TextStyle(fontSize: 14, fontWeight: i == _section ? FontWeight.w700 : FontWeight.w500, color: Colors.white)),
+                          // Five tools fit: icons, with the open one named (nothing clipped).
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Icon(_sectionIcons[i], size: 18, color: Colors.white),
+                            if (i == _section) ...[const SizedBox(width: 6), Text(_sections[i].split(' ').first, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white))],
+                          ]),
                         ),
                       ),
                   ]),
@@ -325,7 +330,7 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
   Widget _tasks() {
     return Stack(children: [
       Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Center(child: _rail()),
+        Padding(padding: const EdgeInsets.symmetric(horizontal: VSpace.xs), child: FittedBox(fit: BoxFit.scaleDown, child: _rail())), // never clipped
         Expanded(child: ListenableBuilder(listenable: _sel, builder: (_, __) => _board())),
       ]),
               ListenableBuilder(
@@ -625,52 +630,38 @@ class _CardFace extends StatelessWidget {
   }
 
   Widget _face(BuildContext context, {bool dragging = false}) {
+    // Nothing on the picture: selection is a ring, name and More sit below.
     return SizedBox(
       width: 116,
-      child: _Panel(
-        shadow: dragging ? VShadow.heavy : VShadow.medium,
-        child: VPress(
-          onTap: onOpen,
-          child: _Plate(
-            seed: card.id.hashCode,
-            accent: accent,
-            overlay: Stack(
-              children: [
-                if (selected)
-                  const Positioned(left: 6, top: 6, child: Icon(Icons.check_circle_rounded, color: Color(0xFF0A84FF), size: 22)),
-                if (card.title.isEmpty)
-                  const Center(child: Icon(Icons.image_outlined, size: 22, color: VColors.textTertiary)),
-                Positioned(
-                  left: 8,
-                  right: 8,
-                  bottom: 7,
-                  child: Text(card.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: VType.footnote(color: Colors.white, weight: FontWeight.w600).copyWith(shadows: _textShadow)),
-                ),
-                if (!dragging)
-                  Positioned(
-                    right: 2,
-                    top: 2,
-                    child: Builder(
-                      builder: (more) => VPress(
-                        tooltip: 'More',
-                        onTap: () {
-                          final b = more.findRenderObject() as RenderBox?;
-                          if (b == null) return;
-                          onMenu(card, b.localToGlobal(Offset.zero) & b.size);
-                        },
-                        child: const SizedBox(width: 28, height: 28, child: Icon(Icons.more_horiz_rounded, size: 18, color: Colors.white, shadows: _textShadow)),
-                      ),
-                    ),
-                  ),
-              ],
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(
+          child: Container(
+            decoration: selected ? BoxDecoration(borderRadius: BorderRadius.circular(VRadius.md + 2), border: Border.all(color: const Color(0xFF0A84FF), width: 2)) : null,
+            child: _Panel(
+              shadow: dragging ? VShadow.heavy : VShadow.medium,
+              child: VPress(onTap: onOpen, child: _Plate(seed: card.id.hashCode, accent: accent, overlay: const SizedBox.shrink())),
             ),
           ),
         ),
-      ),
+        const SizedBox(height: 4),
+        Row(children: [
+          Expanded(child: Text(card.title, maxLines: 2, softWrap: true, style: VType.footnote(color: Colors.white, weight: FontWeight.w600))),
+          if (!dragging)
+            Builder(
+              builder: (more) => VPress(
+                tooltip: 'More',
+                onTap: () {
+                  final b = more.findRenderObject() as RenderBox?;
+                  if (b == null) return;
+                  onMenu(card, b.localToGlobal(Offset.zero) & b.size);
+                },
+                child: const SizedBox(width: 24, height: 24, child: Icon(Icons.more_horiz_rounded, size: 18, color: Colors.white)),
+              ),
+            ),
+        ]),
+      ]),
     );
+
   }
 }
 
@@ -687,32 +678,23 @@ class _HeroView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // David: nothing on top of a picture. The name and the controls sit
+    // under the card's image.
     return SizedBox(
       width: 240,
-      child: _Panel(
-        shadow: VShadow.heavy,
-        child: VPress(
-          onTap: onOpen,
-          child: _Plate(
-            seed: card.id.hashCode,
-            accent: accent,
-            overlay: Stack(
-              children: [
-                Positioned(
-                  left: VSpace.sm,
-                  right: VSpace.sm,
-                  bottom: 10,
-                  child: Text(card.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: VType.callout(color: Colors.white, weight: FontWeight.w600).copyWith(fontSize: VType.lg, shadows: _textShadow)),
-                ),
-                if (controls != null) Positioned(right: VSpace.xs, bottom: VSpace.xs, child: controls!),
-              ],
-            ),
+      child: Column(children: [
+        Expanded(
+          child: _Panel(
+            shadow: VShadow.heavy,
+            child: VPress(onTap: onOpen, child: _Plate(seed: card.id.hashCode, accent: accent, overlay: const SizedBox.shrink())),
           ),
         ),
-      ),
+        const SizedBox(height: VSpace.xs),
+        Row(children: [
+          Expanded(child: Text(card.title, maxLines: 2, softWrap: true, style: VType.callout(color: Colors.white, weight: FontWeight.w600))),
+          if (controls != null) controls!,
+        ]),
+      ]),
     );
   }
 }

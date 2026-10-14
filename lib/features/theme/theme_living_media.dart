@@ -1,3 +1,4 @@
+import 'dart:ui' show ImageFilter;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -71,6 +72,21 @@ class ThemeImage extends StatelessWidget {
     this.alignment = Alignment.center,
   });
 
+  Widget? _thumb() {
+    final t = ThemeCatalog.thumbFor(src);
+    if (t == null) return null;
+    return SizedBox(
+      width: width,
+      height: height,
+      child: ClipRect(
+        child: ImageFiltered(
+          imageFilter: ImageFilter.blur(sigmaX: 6, sigmaY: 6, tileMode: TileMode.clamp),
+          child: CachedNetworkImage(imageUrl: t, fit: fit, width: width, height: height, fadeInDuration: Duration.zero, placeholder: (_, __) => _fallback(), errorWidget: (_, __, ___) => _fallback()),
+        ),
+      ),
+    );
+  }
+
   Widget _fallback() => SizedBox(width: width, height: height, child: const ColoredBox(color: Color(0xFF0E0F14)));
 
   @override
@@ -90,7 +106,9 @@ class ThemeImage extends StatelessWidget {
         fadeInDuration: const Duration(milliseconds: 180),
         fadeOutDuration: Duration.zero,
         placeholderFadeInDuration: Duration.zero,
-        placeholder: (_, __) => _fallback(),
+        // Playtest #8: a blurred 48px placeholder shows at once while the
+        // full image loads (art took up to 15 s on a cold cache).
+        placeholder: (_, __) => _thumb() ?? _fallback(),
         errorWidget: (_, __, ___) => _fallback(),
       );
     }

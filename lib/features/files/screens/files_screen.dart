@@ -157,7 +157,8 @@ class _FilesScreenState extends State<FilesScreen> {
             final s = c.maxWidth / pw;
             final ph = c.maxHeight / s;
             final top = (MediaQuery.paddingOf(context).top + 60) / s;
-            final panelH = ph - top - 40;
+            // Clear the home composer and nav bar (playtest: filter bar overlapped the composer).
+            final panelH = ph - top - 200 / s;
             return FigmaStage(
               frame: Size(pw, ph),
               cropWidth: pw,

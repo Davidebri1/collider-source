@@ -40,10 +40,10 @@ class MusicCollectionDrawer extends StatelessWidget {
           child: ClipRRect(
             borderRadius: BorderRadius.circular(10),
             child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+              filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: VFrost.workTint,
+                  color: const Color(0x4018181E), // lighter than workTint: the ticker reads through
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: AnimatedBuilder(animation: p, builder: (context, _) => _body(p)),
