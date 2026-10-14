@@ -1375,21 +1375,10 @@ class _CoverCard extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          // img boxShadow (two blurred layers, cached) + the 1px white ring
+          // Elevation level 6 (floating), downward Material shadow, no halo.
           Positioned(
-            left: -_shadowPad,
-            top: -_shadowPad,
-            width: size + _shadowPad * 2,
-            height: h + _shadowPad * 2,
-            child: _CachedPaint(
-              cacheKey: 'cover-shadow|$size|$h',
-              size: Size(size + _shadowPad * 2, h + _shadowPad * 2),
-              painter: _OffsetPainter(
-                const Offset(_shadowPad, _shadowPad),
-                Size(size, h),
-                const _CssShadowPainter(_kCoverShadowsBlurred, _kRadius),
-              ),
-            ),
+            left: 0, top: 0, width: size, height: h,
+            child: DecoratedBox(decoration: BoxDecoration(borderRadius: BorderRadius.circular(_kRadius), boxShadow: VElev.e6)),
           ),
           Positioned(
             left: 0,
@@ -1504,22 +1493,8 @@ class _CoverCard extends StatelessWidget {
             ),
           ),
           if (isCurrent) ...[
-            // absolute inset-0 rounded-lg border border-white/30 shadow-2xl
-            Positioned(
-              left: -_shadowPad,
-              top: -_shadowPad,
-              width: size + _shadowPad * 2,
-              height: h + _shadowPad * 2,
-              child: _CachedPaint(
-                cacheKey: 'center-shadow|$size',
-                size: Size(size + _shadowPad * 2, h + _shadowPad * 2),
-                painter: _OffsetPainter(
-                  const Offset(_shadowPad, _shadowPad),
-                  Size(size, h),
-                  const _CssShadowPainter(_kShadow2xl, _kRadius),
-                ),
-              ),
-            ),
+            // Centre cover: elevation 12 (modal level), downward only.
+            Positioned(left: 0, top: 0, width: size, height: h, child: DecoratedBox(decoration: BoxDecoration(borderRadius: BorderRadius.circular(_kRadius), boxShadow: VElev.e12))),
             Positioned(
               left: 0,
               top: 0,
@@ -1532,18 +1507,7 @@ class _CoverCard extends StatelessWidget {
                 ),
               ),
             ),
-            // top-0 left-1/4 right-1/4 h-1 bg-white/20 rounded-full blur-sm (8px)
-            Positioned(
-              top: -_glowPad,
-              left: size / 4 - _glowPad,
-              width: size / 2 + _glowPad * 2,
-              height: 4 + _glowPad * 2,
-              child: _CachedPaint(
-                cacheKey: 'center-glow|$size',
-                size: Size(size / 2 + _glowPad * 2, 4 + _glowPad * 2),
-                painter: _GlowPainter(_glowPad, Size(size / 2, 4)),
-              ),
-            ),
+            // (top glow removed: elevation only, per shadows-fix-collider-app.md)
           ],
         ],
       ),

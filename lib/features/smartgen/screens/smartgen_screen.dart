@@ -1,5 +1,6 @@
 import '../../../core/theme/edge_fade.dart';
 import 'dart:convert';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import '../../../core/api/media_gen.dart';
@@ -228,18 +229,105 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
     }
   }
 
+  // Figma smartgen.png: a light frosted pane (the scene shows through),
+  // "Smart Gen Workspace" + search on top, the section's content, and the
+  // section ornament under the pane. Sections are the PRD's five tools
+  // (functional-spec.txt line 21). No close button: swipe or tap outside.
+  static const _sections = ['Tasks & Kanban', 'Projects', 'Reminders', 'Memories', 'Artifacts'];
+  int _section = 0;
+  String _q = '';
+
   @override
   Widget build(BuildContext context) {
+    final w = MediaQuery.sizeOf(context).width;
+    final paneW = (w * 0.72).clamp(280.0, 520.0);
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(VSpace.md - 2, VSpace.xs, VSpace.md - 2, VSpace.md - 2),
-        child: VGlass(
-          material: VMaterial.work,
-          fill: VFrost.workTint,
-          radius: VRadius.xl,
-          child: Stack(
-            children: [
-              Positioned.fill(child: ListenableBuilder(listenable: _sel, builder: (_, __) => _board())),
+        padding: const EdgeInsets.fromLTRB(0, 40, 0, 120),
+        child: Center(
+          child: SizedBox(
+            width: paneW,
+            child: Column(children: [
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(VRadius.xl), boxShadow: VElev.e6),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(VRadius.xl),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(VRadius.xl),
+                          border: Border.all(color: const Color(0x26FFFFFF)),
+                          gradient: const LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0x66606060), Color(0x55505858)]),
+                        ),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(VSpace.md, VSpace.md, VSpace.md, VSpace.sm),
+                            child: Text('Smart Gen Workspace', style: VType.headline(color: Colors.white)),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: VSpace.sm),
+                            child: Container(
+                              height: 36,
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              decoration: BoxDecoration(color: const Color(0x33000000), borderRadius: BorderRadius.circular(999)),
+                              child: Row(children: [
+                                const Icon(Icons.search_rounded, size: 18, color: Colors.white70),
+                                const SizedBox(width: 8),
+                                Expanded(child: TextField(
+                                  onChanged: (v) => setState(() => _q = v.trim().toLowerCase()),
+                                  cursorColor: Colors.white,
+                                  style: const TextStyle(color: Colors.white, fontSize: 15),
+                                  decoration: const InputDecoration(isCollapsed: true, border: InputBorder.none, hintText: 'Search workspace', hintStyle: TextStyle(color: Colors.white54, fontSize: 15)),
+                                )),
+                              ]),
+                            ),
+                          ),
+                          const SizedBox(height: VSpace.sm),
+                          Expanded(child: _section == 0 ? _tasks() : Center(child: Text('Nothing yet', style: VType.callout(color: Colors.white70)))),
+                        ]),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: VSpace.sm),
+              VOrnament(
+                padding: const EdgeInsets.all(3),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    for (var i = 0; i < _sections.length; i++)
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => setState(() => _section = i),
+                        child: Container(
+                          height: 34,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(color: i == _section ? const Color(0x40FFFFFF) : Colors.transparent, borderRadius: BorderRadius.circular(17)),
+                          child: Text(_sections[i], style: TextStyle(fontSize: 14, fontWeight: i == _section ? FontWeight.w700 : FontWeight.w500, color: Colors.white)),
+                        ),
+                      ),
+                  ]),
+                ),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Tasks & Kanban: the status row (To Do / Doing / Done, drop targets),
+  /// then the board.
+  Widget _tasks() {
+    return Stack(children: [
+      Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Center(child: _rail()),
+        Expanded(child: ListenableBuilder(listenable: _sel, builder: (_, __) => _board())),
+      ]),
               ListenableBuilder(
                 listenable: _sel,
                 builder: (context, _) => !_sel.active
@@ -273,34 +361,19 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
                         ),
                       ),
               ),
-              Positioned(
-                left: VSpace.sm,
-                top: VSpace.sm,
-                child: VCircleButton(icon: Icons.close_rounded, floating: true, tooltip: 'Close', onTap: widget.onClose),
-              ),
-              Positioned(
-                left: VSpace.xs,
-                top: 0,
-                bottom: _stripH + VSpace.lg,
-                child: Center(child: _rail()),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    ]);
   }
 
   // The three columns as icon-only circles, floating over the scene, and a
   // drop target each: long-press a card and drop it on a column to move it.
   Widget _rail() {
-    return VOrnament(
-      padding: const EdgeInsets.all(3),
-      child: Column(
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: VSpace.sm),
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           for (var i = 0; i < KanbanStore.columns.length; i++) ...[
-            if (i > 0) const SizedBox(height: VSpace.xxs),
+            if (i > 0) const SizedBox(width: VSpace.xxs),
             DragTarget<KanbanCard>(
               onWillAcceptWithDetails: (d) => d.data.column != i,
               onAcceptWithDetails: (d) => _store.move(d.data, i),
@@ -311,7 +384,7 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
                 child: Container(
                   height: 36,
                   padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(color: i == _col ? const Color(0xE6FFFFFF) : VFrost.tint, borderRadius: BorderRadius.circular(18)),
+                  decoration: BoxDecoration(color: i == _col ? const Color(0xE6FFFFFF) : const Color(0x26FFFFFF), borderRadius: BorderRadius.circular(18)),
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
                     Icon(colIcons[i], size: 16, color: cand.isNotEmpty ? VColors.accentBlue : (i == _col ? const Color(0xFF111111) : Colors.white)),
                     const SizedBox(width: 6),
@@ -328,7 +401,7 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
 
   Widget _board() {
     if (!_store.loaded) return const SizedBox.shrink();
-    final cards = _store.inColumn(_col);
+    final cards = _store.inColumn(_col).where((c) => _q.isEmpty || c.title.toLowerCase().contains(_q)).toList();
     return Padding(
       padding: const EdgeInsets.fromLTRB(VSpace.xs, VSpace.sm, VSpace.xs, VSpace.xs),
       child: Column(

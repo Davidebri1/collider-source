@@ -76,17 +76,18 @@ class MusicPlayer extends ChangeNotifier {
   static List<MusicTrack> get library {
     final out = <MusicTrack>[];
     final inPacks = <String>{};
+    final titles = <String>{};
     for (final t in ThemeCatalog.instance.allThemes) {
       for (final m in themeTracks(t.id)) {
-        out.add(m);
-        inPacks.add(m.key);
+        // One row per song: a song shared by several packs is listed once.
+        if (inPacks.add(m.key) && titles.add(m.title.toLowerCase())) out.add(m);
       }
     }
     final seen = <String>{};
     for (final a in [...ThemeCatalog.instance.r2Songs, ...ThemeCatalog.instance.ambientTracks]) {
       if (a.title.trim().isEmpty) continue;
       final m = MusicTrack(displayTitle(a.title.trim(), 'Ambient'), a.artUrl, a.audioUrl);
-      if (!inPacks.contains(m.key) && seen.add(m.key)) out.add(m);
+      if (!inPacks.contains(m.key) && seen.add(m.key) && titles.add(m.title.toLowerCase())) out.add(m);
     }
     return out;
   }

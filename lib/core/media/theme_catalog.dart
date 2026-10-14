@@ -209,7 +209,11 @@ class ThemeCatalog extends ChangeNotifier {
   }
 
   List<WallpaperTheme> _fromList(List list) {
-    final maps = [for (final o in list.whereType<Map>()) if ((o['url'] as String?)?.isNotEmpty == true) o];
+    final all = [for (final o in list.whereType<Map>()) if ((o['url'] as String?)?.isNotEmpty == true) o];
+    // v9.1.6g: full-resolution posters (qa/make_posters.py, frame at 1 s,
+    // ffmpeg) live under posters/; they are covers, never themes.
+    _posters = {for (final o in all) if ('${o['name']}'.startsWith('posters/')) '${o['name']}'.substring(8).replaceAll(RegExp(r'\.jpg$'), ''): o['url'] as String};
+    final maps = [for (final o in all) if (!'${o['name']}'.startsWith('posters/')) o];
     final songs = [for (final o in maps) if (_kind(o) == 'audio') o];
     final themes = [for (final o in maps) if (_kind(o) != 'audio') _r2Theme(o, songs)];
     // v9.1: every R2 song is in the music library, with the art of the
@@ -278,6 +282,8 @@ class ThemeCatalog extends ChangeNotifier {
     return r'$2.99';
   }
 
+  Map<String, String> _posters = const {};
+
   WallpaperTheme _r2Theme(Map o, [List<Map> songs = const []]) {
     final url = o['url'] as String;
     final name = '${o['name']}';
@@ -300,7 +306,8 @@ class ThemeCatalog extends ChangeNotifier {
     return WallpaperTheme(
       id: 'r2-$name',
       name: _nameOr(niceName(name), tags),
-      assetPath: still ? url : FirstFrames.srcFor(url),
+      // The sharp poster when one exists; the browser-captured frame only as a fallback.
+      assetPath: still ? url : (_posters[name] ?? FirstFrames.srcFor(url)),
       videoPath: still ? null : url,
       creator: 'David Ebri',
       // v9.1.6 (PRD "Wallpapers & Music"): live loops are premium, sold one

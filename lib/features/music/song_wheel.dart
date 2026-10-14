@@ -199,7 +199,6 @@ class _SongWheelState extends State<SongWheel> {
             },
           ),
         ),
-        SongPlayButton(playing: playing, onTap: () => _tapRow(i)),
       ],
     );
   }

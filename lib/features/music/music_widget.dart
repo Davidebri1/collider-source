@@ -314,19 +314,14 @@ class _QueueListState extends State<_QueueList> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      SizedBox(
-                        height: 16,
-                        child: FadeTitle(t.title, style: MusicWidget._sf(15, FontWeight.w600)),
+                      ConstrainedBox(constraints: BoxConstraints(minHeight: 16), child: FadeTitle(t.title, style: MusicWidget._sf(15, FontWeight.w600)),
                       ),
                       const SizedBox(height: 7),
-                      SizedBox(
-                        height: 16,
-                        child: FadeTitle(t.subtitle.isEmpty ? 'Library' : t.subtitle, style: MusicWidget._sf(15, FontWeight.w400, opacity: 0.6)),
+                      ConstrainedBox(constraints: BoxConstraints(minHeight: 16), child: FadeTitle(t.subtitle.isEmpty ? 'Library' : t.subtitle, style: MusicWidget._sf(15, FontWeight.w400, opacity: 0.6)),
                       ),
                     ],
                   ),
                 ),
-                SongPlayButton(playing: playing, onTap: () => widget.onTap(i)),
               ],
             ),
           );

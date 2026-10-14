@@ -124,42 +124,8 @@ class FadeTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, c) {
-      final tp = TextPainter(
-        text: TextSpan(text: text, style: style),
-        maxLines: 1,
-        textDirection: TextDirection.ltr,
-        textScaler: MediaQuery.textScalerOf(context),
-      )..layout();
-      final fits = tp.width <= c.maxWidth;
-      final lineH = tp.height;
-      tp.dispose();
-      final t = Text(text, maxLines: 1, softWrap: false, overflow: TextOverflow.visible, style: style, semanticsLabel: semanticsLabel);
-      if (fits) return Align(alignment: align, child: t);
-      final stop = c.maxWidth <= fade ? 0.0 : 1 - fade / c.maxWidth;
-      // Bounded height even under a Positioned without a height: the
-      // OverflowBox below takes its parent's height.
-      return SizedBox(
-        height: c.hasBoundedHeight ? null : lineH,
-        child: ClipRect(
-        child: ShaderMask(
-          blendMode: BlendMode.dstIn,
-          shaderCallback: (r) => LinearGradient(
-            colors: const [Color(0xFFFFFFFF), Color(0xFFFFFFFF), Color(0x00FFFFFF)],
-            stops: [0, stop, 1],
-          ).createShader(r),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: OverflowBox(
-              alignment: Alignment.centerLeft,
-              maxWidth: double.infinity,
-              child: t,
-            ),
-          ),
-        ),
-      ),
-      );
-    });
+    // Playtest: titles wrap, never cut or fade.
+    return Align(alignment: align, child: Text(text, maxLines: 2, softWrap: true, textAlign: align.x > 0.5 ? TextAlign.right : (align.x.abs() < 0.5 ? TextAlign.center : TextAlign.left), style: style, semanticsLabel: semanticsLabel));
   }
 }
 
@@ -205,9 +171,7 @@ class LibrarySongRow extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                SizedBox(
-                  height: 24 * s,
-                  child: FadeTitle(
+                ConstrainedBox(constraints: BoxConstraints(minHeight: 24 * s), child: FadeTitle(
                     title,
                     style: titleStyle ??
                         VType.body(weight: current ? FontWeight.w600 : FontWeight.w400).copyWith(fontSize: 20 * s, height: 1.2),
@@ -216,15 +180,13 @@ class LibrarySongRow extends StatelessWidget {
                 ),
                 if (subtitle != null && subtitle!.isNotEmpty) ...[
                   const SizedBox(height: 7 * s),
-                  SizedBox(
-                    height: 22 * s,
-                    child: FadeTitle(subtitle!, style: VType.footnote(color: const Color(0xFFBDBDBD)).copyWith(fontSize: 18 * s, height: 1.2)),
+                  ConstrainedBox(constraints: BoxConstraints(minHeight: 22 * s), child: FadeTitle(subtitle!, style: VType.footnote(color: const Color(0xFFBDBDBD)).copyWith(fontSize: 18 * s, height: 1.2)),
                   ),
                 ],
               ],
             ),
           ),
-          SongPlayButton(playing: playing, onTap: onPlay, tooltip: tooltip),
+          // row tap plays; no redundant per-row play button
         ],
       ),
     );

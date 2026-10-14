@@ -128,13 +128,16 @@ class _MarketScreenState extends State<MarketScreen> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _hero(featured),
+                      // Grok Imagine order: hero banner, "Create from template"
+                      // portrait row, then the flush masonry. Labels sit below
+                      // media (David: nothing on top of an image).
+                      _hero(featured, shelf),
                       Padding(
                         padding: const EdgeInsets.fromLTRB(VSpace.md, VSpace.md, VSpace.md, VSpace.xs),
-                        child: Text(_kinds[_kind], style: VType.callout(weight: FontWeight.w600)),
+                        child: Text('Create from template', style: VType.callout(weight: FontWeight.w600, color: Colors.white70)),
                       ),
                       SizedBox(
-                        height: 92,
+                        height: 196,
                         child: ListView.separated(
                           scrollDirection: Axis.horizontal,
                           physics: const BouncingScrollPhysics(),
@@ -143,8 +146,12 @@ class _MarketScreenState extends State<MarketScreen> {
                           separatorBuilder: (_, __) => const SizedBox(width: VSpace.xs),
                           itemBuilder: (_, i) => VPress(
                             tooltip: shelf[i].title,
-                            onTap: () => setState(() => _open = shelf[i]),
-                            child: ClipRRect(borderRadius: BorderRadius.circular(VRadius.sm), child: SizedBox(width: 150, height: 92, child: _img(shelf[i]))),
+                            onTap: () => _remix(shelf[i]),
+                            child: SizedBox(width: 104, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              ClipRRect(borderRadius: BorderRadius.circular(VRadius.md), child: SizedBox(width: 104, height: 156, child: _img(shelf[i]))),
+                              const SizedBox(height: 4),
+                              Text(shelf[i].title, maxLines: 2, style: VType.caption(color: Colors.white)),
+                            ])),
                           ),
                         ),
                       ),
@@ -179,29 +186,37 @@ class _MarketScreenState extends State<MarketScreen> {
     );
   }
 
-  Widget _hero(_Tile t) {
-    // v9.1.4 (playtest #12): no painted gradient and nothing on the media;
-    // the title and actions sit below the picture.
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-          SizedBox(height: 200, child: ClipRRect(borderRadius: BorderRadius.circular(VRadius.sm), child: _img(t))),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(VSpace.md, VSpace.sm, VSpace.md, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(t.title.toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis, style: VType.title()),
-                const SizedBox(height: VSpace.sm),
-                Row(children: [
-                  VButton(label: 'Open', icon: Icons.play_arrow_rounded, dense: true, onTap: () => setState(() => _open = t)),
-                  const SizedBox(width: VSpace.xs),
-                  VButton(label: 'Remix', icon: Icons.autorenew_rounded, dense: true, onTap: () => _remix(t)),
-                ]),
-              ],
+  /// Grok Imagine hero: a wide rounded banner of three bright stills, with
+  /// its line and the Continue pill under it instead of over it.
+  Widget _hero(_Tile t, List<_Tile> more) {
+    final trio = [t, ...more.take(2)];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(VSpace.md, VSpace.sm, VSpace.md, 0),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        VPress(
+          tooltip: t.title,
+          onTap: () => setState(() => _open = t),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(VRadius.xl),
+            child: SizedBox(height: 168, child: Row(children: [for (final x in trio) Expanded(child: _img(x))])),
+          ),
+        ),
+        const SizedBox(height: VSpace.sm),
+        Row(children: [
+          Expanded(child: Text('Remix a wallpaper', style: VType.headline(color: Colors.white))),
+          VPress(
+            tooltip: 'Continue',
+            onTap: () => _remix(t),
+            child: Container(
+              height: 36,
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(color: const Color(0x33FFFFFF), borderRadius: BorderRadius.circular(999)),
+              child: Text('Continue', style: VType.footnote(color: Colors.white, weight: FontWeight.w600)),
             ),
           ),
-        ],
+        ]),
+      ]),
     );
   }
 

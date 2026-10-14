@@ -246,8 +246,8 @@ class _FilesScreenState extends State<FilesScreen> {
       ),
       child: FGlass(
         radius: onPicked != null ? const BorderRadius.all(Radius.circular(52.8)) : const BorderRadius.only(topLeft: Radius.circular(52.8), bottomLeft: Radius.circular(52.8)),
-        blur: 24.5,
-        gradient: const LinearGradient(begin: Alignment(-0.9, -1), end: Alignment(0.9, 1), colors: [Color(0x99393939), Color(0x99616161)]),
+        blur: 6,
+        gradient: const LinearGradient(begin: Alignment(-0.9, -1), end: Alignment(0.9, 1), colors: [Color(0x66393939), Color(0x66616161)]),
         child: Stack(children: [
           const Positioned(left: 25, top: 23, child: FText('Files', size: 29.8, weight: FontWeight.w700, color: Color(0xFFFAF9F5))),
           menuRow('All', Icons.schedule_rounded, 0),
@@ -320,13 +320,13 @@ class _FilesScreenState extends State<FilesScreen> {
   Widget _main(String title, List<StoredFile> files, String cat, {bool phone = false}) {
     final mw = phone ? FilesScreen.phoneWidth - 28 : 946.0;
     final tl = phone ? 96.0 : 40.0;
-    final lib = cat == 'music' || (cat == 'all' && _type == 'All') ? MusicPlayer.library : const <MusicTrack>[];
+    final lib = cat == 'music' ? MusicPlayer.library : const <MusicTrack>[];
     final p = MusicPlayer.instance;
     final cur = p.current;
     return FGlass(
       radius: phone ? const BorderRadius.all(Radius.circular(52.8)) : const BorderRadius.only(topRight: Radius.circular(52.8), bottomRight: Radius.circular(52.8)),
-      blur: 24.5,
-      gradient: const LinearGradient(begin: Alignment(-0.9, -1), end: Alignment(0.9, 1), colors: [Color(0x8C262626), Color(0x8C404040)]),
+      blur: 6, // ticker stays visible, blurred, behind Files
+      gradient: const LinearGradient(begin: Alignment(-0.9, -1), end: Alignment(0.9, 1), colors: [Color(0x66262626), Color(0x66404040)]),
       // overlay-ok: panel chrome; the thumbnails sit in the grid below, nothing over them
       child: Stack(children: [
         if (phone)
@@ -342,7 +342,7 @@ class _FilesScreenState extends State<FilesScreen> {
         Positioned(
           left: tl,
           top: 22,
-          width: mw - tl - 100,
+          width: mw - tl - 140,
           height: 34,
           child: cat == 'search'
               ? TextField(
@@ -358,10 +358,10 @@ class _FilesScreenState extends State<FilesScreen> {
         // Adding files is the real storage path (D22/D32); Figma has no add
         // control, so it sits on the title row's end (v8.4 note in D22).
         Positioned(
-          left: mw - 84,
-          top: 17,
-          width: 44,
-          height: 44,
+          left: mw - 128,
+          top: 19,
+          width: 100,
+          height: 40,
           child: Semantics(
             button: true,
             label: 'Add files',
@@ -369,8 +369,10 @@ class _FilesScreenState extends State<FilesScreen> {
               behavior: HitTestBehavior.opaque,
               onTap: _pickFile,
               child: Container(
-                decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0x4DFFFFFF)),
-                child: const Icon(Icons.add_rounded, size: 28, color: Colors.white),
+                // Playtest: a clear, labelled standard action, not a bare +.
+                alignment: Alignment.center,
+                decoration: BoxDecoration(borderRadius: BorderRadius.circular(999), color: const Color(0x4DFFFFFF)),
+                child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.upload_rounded, size: 20, color: Colors.white), SizedBox(width: 6), Text('Upload', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600))]),
               ),
             ),
           ),
@@ -470,7 +472,7 @@ class _FilesScreenState extends State<FilesScreen> {
           child: Stack(fit: StackFit.expand, children: [
             ColoredBox(color: const Color(0x33FFFFFF), child: _Thumb(id: f.id, fallback: f.type == 'Video' ? Icons.play_circle_outline_rounded : Icons.image_outlined)),
             const DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment(0, -0.2), colors: [Color(0x66000000), Color(0x00000000)]))),
-            Positioned(left: 12, top: 10, right: 12, child: Text(f.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700))),
+            Positioned(left: 12, top: 10, right: 12, child: Text(f.name, maxLines: 2, softWrap: true, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700))),
             if (f.type == 'Video') const Positioned(right: 10, bottom: 8, child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: 22)),
             _check(f),
           ]),
