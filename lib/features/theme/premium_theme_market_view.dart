@@ -318,11 +318,17 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
       // label form, fixed height) is centred between it and the bottom bar.
       const mainTop =
           _kHeaderHeight + _kSearchPad + _kSearchHeight + _kSearchHintGap + _kSearchPad;
-      final mainHeight = math.max(0.0, h - mainTop - barReserve);
       const contentHeight =
           _kStageHeight + _kLabelsMarginTop + _kLabelsBlockHeight;
-      final contentTop =
-          mainTop + math.max(0.0, (mainHeight - contentHeight) / 2);
+      // David (Oct 15): every pane is centred on the FULL screen, over the
+      // ticker layer, with nothing reserved for the ticker or the bar. The
+      // stage, name and price centre on h / 2 (never above the search). A
+      // theme's songs open below the name without moving the stage.
+      // What shows runs from the cover's top (52 px into the stage, measured
+      // at 390x844) to the price pill's bottom (8 px above the block's end).
+      const coverInset = 52.0;
+      const visibleHeight = _kStageHeight + _kLabelsMarginTop + 8 + 28 + _kNoSongsGap + _kActionHeight - coverInset;
+      final contentTop = math.max(mainTop, (h - visibleHeight) / 2 - coverInset);
       final stageTop = contentTop;
       final labelsTop = stageTop + _kStageHeight + _kLabelsMarginTop;
       final contentWidth = w - _kMainPadX * 2;
@@ -1079,13 +1085,23 @@ class _CoverFlowState extends State<_CoverFlow> {
                         if (!_onScreen(pose, coverSize, originX)) {
                           return const SizedBox.shrink();
                         }
+                        // David (Oct 15): the carousel ends are blurred. Each
+                        // step from the centre card adds 2.5 sigma (max 5).
+                        final sigma = math.min(5.0, 2.5 * _rel(i).abs().toDouble());
                         return Opacity(
                           opacity: pose.opacity.clamp(0.0, 1.0),
-                          child: Transform(
+                          child: sigma <= 0 ? Transform(
                             // transform-origin: centre of the cover box
                             alignment: const Alignment(0, -0.5),
                             transform: pose.matrix(),
                             child: child,
+                          ) : ImageFiltered(
+                            imageFilter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+                            child: Transform(
+                              alignment: const Alignment(0, -0.5),
+                              transform: pose.matrix(),
+                              child: child,
+                            ),
                           ),
                         );
                       },

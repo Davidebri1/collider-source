@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -135,7 +136,7 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                               itemBuilder: (_, i) {
                                 final t = themes[i];
                                 final sel = t.id == _previewed.id;
-                                return VPress(
+                                return _EdgeBlur(child: VPress(
                                   onTap: () => _select(t),
                                   tooltip: t.name,
                                   child: AnimatedContainer(
@@ -149,7 +150,7 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                                       child: ThemePosterImage(theme: t, fit: BoxFit.cover, filterQuality: FilterQuality.medium),
                                     ),
                                   ),
-                                );
+                                ));
                               },
                             ),
                           ),
@@ -371,5 +372,56 @@ class EdgeFadeHorizontal extends StatelessWidget {
       },
       child: child,
     );
+  }
+}
+
+
+/// David (Oct 15): the carousel ends are blurred. A thumbnail blurs as it
+/// nears either end of the strip (only the thumbnail itself; the wallpaper
+/// behind is never blurred, PRD R32).
+class _EdgeBlur extends StatefulWidget {
+  final Widget child;
+  const _EdgeBlur({required this.child});
+  @override
+  State<_EdgeBlur> createState() => _EdgeBlurState();
+}
+
+class _EdgeBlurState extends State<_EdgeBlur> {
+  static const _zone = 48.0;
+  static const _maxSigma = 3.5;
+  ScrollPosition? _pos;
+  double _sigma = 0;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _pos?.removeListener(_measure);
+    _pos = Scrollable.maybeOf(context)?.position;
+    _pos?.addListener(_measure);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _measure());
+  }
+
+  void _measure() {
+    if (!mounted) return;
+    final box = context.findRenderObject() as RenderBox?;
+    final view = Scrollable.maybeOf(context)?.context.findRenderObject() as RenderBox?;
+    if (box == null || view == null || !box.attached || !view.attached) return;
+    final x = box.localToGlobal(Offset.zero, ancestor: view).dx;
+    final d = math.min(x + box.size.width / 2, view.size.width - x - box.size.width / 2);
+    final s = d >= _zone ? 0.0 : _maxSigma * (1 - (d / _zone).clamp(0.0, 1.0));
+    if ((s - _sigma).abs() > 0.05) setState(() => _sigma = s);
+  }
+
+  @override
+  void dispose() {
+    _pos?.removeListener(_measure);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) => _measure());
+    if (_sigma <= 0) return widget.child;
+    return ImageFiltered(imageFilter: ImageFilter.blur(sigmaX: _sigma, sigmaY: _sigma), child: widget.child);
   }
 }

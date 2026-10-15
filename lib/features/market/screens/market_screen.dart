@@ -24,7 +24,7 @@ class MarketScreen extends StatefulWidget {
   /// One quiet line (e.g. a generation that cannot run on this link).
   final void Function(String text)? onNotice;
 
-  /// The Discover side-nav pick (PRD Surfaces): home, search, library or looks.
+  /// The Discover side-nav pick (PRD Surfaces): home, search or library.
   final String feed;
 
   const MarketScreen({super.key, required this.onClose, required this.onUsePrompt, this.onNotice, this.feed = 'home'});
@@ -43,11 +43,9 @@ class _Tile {
 }
 
 class _MarketScreenState extends State<MarketScreen> {
-  // PRD R27 / Surfaces (Discover Market): the side nav is Search, Library and
-  // Looks. Home (nothing picked) is the Imagine order: a row of pictures, a
-  // row of labelled looks, then the two-column feed. No template shelf (X5).
-  static const _looks = ['Nature', 'Ocean', 'Space', 'City', 'Rain', 'Cozy', 'Fantasy', 'Abstract'];
-  String? _look;
+  // PRD R27 / Surfaces (Discover Market), edited by David Oct 15: the side
+  // nav is Search and Library. Home (nothing picked) is the Imagine order: a
+  // row of pictures, then the two-column feed. No looks, no template shelf.
   String _q = '';
   final List<_Tile> _generated = [];
   final TextEditingController _ctrl = TextEditingController();
@@ -80,17 +78,9 @@ class _MarketScreenState extends State<MarketScreen> {
 
   List<_Tile> _feed(List<_Tile> seed) {
     var merged = widget.feed == 'library' ? [..._generated] : [..._generated, ...seed];
-    if (_look != null) merged = [for (final t in merged) if (t.tags.any((g) => g.toLowerCase() == _look!.toLowerCase())) t];
     if (widget.feed == 'search' && _q.isNotEmpty) merged = [for (final t in merged) if (t.title.toLowerCase().contains(_q.toLowerCase())) t];
     return merged;
   }
-
-  /// One picture per look: the first seed image tagged with it.
-  List<(String, _Tile)> _lookTiles(List<_Tile> seed) => [
-        for (final l in _looks)
-          if (seed.any((t) => t.tags.any((g) => g.toLowerCase() == l.toLowerCase())))
-            (l, seed.firstWhere((t) => t.tags.any((g) => g.toLowerCase() == l.toLowerCase()))),
-      ];
 
   Future<void> _submit() async {
     final text = _ctrl.text.trim();
@@ -122,24 +112,9 @@ class _MarketScreenState extends State<MarketScreen> {
     if (seed.isEmpty && _generated.isEmpty) return const SizedBox.shrink();
     final feed = widget.feed;
     final grid = _feed(seed);
-    final looks = _lookTiles(seed);
-    final home = feed != 'library' && feed != 'search' && feed != 'looks';
+    final home = feed != 'library' && feed != 'search';
     // v9.1.7 (#126): Discover is a centred floating pane (CPane).
     // PRD R27: pictures only, in the Imagine order. Labels stay below images.
-    Widget lookCard((String, _Tile) l, {double w = 96, double h = 120}) => VPress(
-          onTap: () => setState(() => _look = _look == l.$1 ? null : l.$1),
-          child: SizedBox(
-            width: w,
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: SizedBox(width: w, height: h, child: Opacity(opacity: _look == null || _look == l.$1 ? 1 : 0.45, child: _img(l.$2))),
-              ),
-              const SizedBox(height: 4),
-              Text(l.$1, maxLines: 1, overflow: TextOverflow.ellipsis, style: VType.caption(color: _look == l.$1 ? Colors.white : Colors.white70)),
-            ]),
-          ),
-        );
     final pane = Stack(
       children: [
         const Positioned.fill(child: ColoredBox(color: Colors.black)),
@@ -165,29 +140,7 @@ class _MarketScreenState extends State<MarketScreen> {
                   ),
                 ),
                 const SliverToBoxAdapter(child: SizedBox(height: 12)),
-                // 2. A row of labelled looks.
-                SliverToBoxAdapter(
-                  child: SizedBox(
-                    height: 100,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      itemCount: looks.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 6),
-                      itemBuilder: (_, i) => lookCard(looks[i], w: 64, h: 76),
-                    ),
-                  ),
-                ),
-                const SliverToBoxAdapter(child: SizedBox(height: 12)),
               ],
-              if (feed == 'looks')
-                SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  sliver: SliverGrid(
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, mainAxisSpacing: 10, crossAxisSpacing: 8, childAspectRatio: 0.72),
-                    delegate: SliverChildBuilderDelegate((_, i) => LayoutBuilder(builder: (_, c) => lookCard(looks[i], w: c.maxWidth, h: c.maxHeight - 22)), childCount: looks.length),
-                  ),
-                ),
               if (feed == 'library' && grid.isEmpty)
                 SliverToBoxAdapter(
                   child: Padding(
@@ -195,8 +148,7 @@ class _MarketScreenState extends State<MarketScreen> {
                     child: Text('Images you make or save show here', textAlign: TextAlign.center, style: VType.callout(color: Colors.white70)),
                   ),
                 ),
-              // 3. The two-column feed.
-              if (feed != 'looks')
+              // 2. The two-column feed.
               SliverGrid(
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, mainAxisSpacing: 3, crossAxisSpacing: 3, childAspectRatio: 0.67),
                 delegate: SliverChildBuilderDelegate(
@@ -241,7 +193,7 @@ class _MarketScreenState extends State<MarketScreen> {
                           decoration: InputDecoration(isCollapsed: true, border: InputBorder.none, hintText: 'Search', hintStyle: VType.callout(color: Colors.white54)),
                         ),
                       )
-                    : Text(switch (feed) { 'library' => 'Library', 'looks' => 'Looks', _ => _look ?? 'Discover' }, style: VType.callout(weight: FontWeight.w600, color: Colors.white)),
+                    : Text(switch (feed) { 'library' => 'Library', _ => 'Discover' }, style: VType.callout(weight: FontWeight.w600, color: Colors.white)),
               ),
               // v9.1.7: no close circle (David: no on-screen close controls;
               // tap outside or swipe closes), so the general rule wins here too.
