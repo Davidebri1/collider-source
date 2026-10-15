@@ -210,58 +210,10 @@ class SgKanban extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: hot ? const Color(0xFF3D7A6A) : const Color(0x14000000), width: hot ? 1.5 : 1),
             ),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
-                child: Text(list.title, style: appFont(fontSize: 16, fontWeight: FontWeight.w700, color: const Color(0xFF1C1B19))),
-              ),
-              Expanded(
-                child: ScrollConfiguration(
-                  behavior: const SgScroll(),
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                    children: [
-                      for (final c in cards) _tile(b, c),
-                      TextButton(
-                        onPressed: () {
-                          final made = store.addCard(SgType.task);
-                          if (made != null) {
-                            store.touch(() {
-                              made.listId = list.id;
-                              made.status = list.title;
-                            });
-                            onOpen(made);
-                          }
-                        },
-                        child: Align(alignment: Alignment.centerLeft, child: Text('Add a card', style: appFont(fontSize: 14, color: const Color(0xFF5C564E)))),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ]),
+              child: _KanbanColumn(store: store, board: b, list: list, cards: cards, multi: multi, selected: selected, onOpen: onOpen, onSelect: onSelect),
           ),
         );
       },
-    );
-  }
-
-  Widget _tile(SgBoard b, SgCard c) {
-    final on = selected.contains(c.id);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: LongPressDraggable<String>(
-        data: c.id,
-        feedback: SizedBox(width: 150, child: Transform.scale(scale: 1.04, child: SgFace(card: c, board: b, compact: true))),
-        childWhenDragging: Opacity(opacity: 0.35, child: SgFace(card: c, board: b, compact: true)),
-        child: GestureDetector(
-          onTap: () => multi ? onSelect?.call(c) : onOpen(c),
-          child: DecoratedBox(
-            decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: on ? Colors.white : Colors.transparent, width: 1.5)),
-            child: SgFlip(card: c, board: b, compact: true),
-          ),
-        ),
-      ),
     );
   }
 
@@ -273,6 +225,99 @@ class SgKanban extends StatelessWidget {
         child: TextButton(
           onPressed: () => store.addList('List ${store.board!.lists.length + 1}'),
           child: Text('Add a list', style: appFont(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
+        ),
+      ),
+    );
+  }
+}
+
+/// One Trello list: a title with "…", the cards, and a pinned "+ Add a card".
+class _KanbanColumn extends StatefulWidget {
+  const _KanbanColumn({required this.store, required this.board, required this.list, required this.cards, required this.multi, required this.selected, required this.onOpen, required this.onSelect});
+  final SgStore store;
+  final SgBoard board;
+  final SgList list;
+  final List<SgCard> cards;
+  final bool multi;
+  final Set<String> selected;
+  final void Function(SgCard) onOpen;
+  final void Function(SgCard)? onSelect;
+  @override
+  State<_KanbanColumn> createState() => _KanbanColumnState();
+}
+
+class _KanbanColumnState extends State<_KanbanColumn> {
+  bool _menu = false;
+
+  void _add() {
+    final made = widget.store.addCard(SgType.task);
+    if (made == null) return;
+    widget.store.touch(() {
+      made.listId = widget.list.id;
+      made.status = widget.list.title;
+    });
+    setState(() => _menu = false);
+    widget.onOpen(made);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const ink = Color(0xFF1C1B19);
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(12, 4, 0, 0),
+        child: Row(children: [
+          Expanded(child: Text(widget.list.title, style: appFont(fontSize: 17, fontWeight: FontWeight.w700, color: ink))),
+          IconButton(
+            tooltip: 'List menu',
+            onPressed: () => setState(() => _menu = !_menu),
+            icon: const Icon(Icons.more_horiz, color: ink, size: 22),
+          ),
+        ]),
+      ),
+      if (_menu)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
+          child: TextButton(
+            style: TextButton.styleFrom(alignment: Alignment.centerLeft, minimumSize: const Size(double.infinity, 40)),
+            onPressed: _add,
+            child: Text('Add a card', style: appFont(fontSize: 15, color: ink)),
+          ),
+        ),
+      Expanded(
+        child: ScrollConfiguration(
+          behavior: const SgScroll(),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+            children: [for (final c in widget.cards) _tile(c)],
+          ),
+        ),
+      ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
+        child: TextButton(
+          style: TextButton.styleFrom(alignment: Alignment.centerLeft, minimumSize: const Size(double.infinity, 44)),
+          onPressed: _add,
+          child: Text('+ Add a card', style: appFont(fontSize: 16, color: const Color(0xFF5C564E))),
+        ),
+      ),
+    ]);
+  }
+
+  Widget _tile(SgCard c) {
+    final on = widget.selected.contains(c.id);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: LongPressDraggable<String>(
+        data: c.id,
+        feedback: SizedBox(width: 150, child: Transform.scale(scale: 1.04, child: SgFace(card: c, board: widget.board, compact: true))),
+        childWhenDragging: Opacity(opacity: 0.35, child: SgFace(card: c, board: widget.board, compact: true)),
+        child: GestureDetector(
+          onTap: () => widget.multi ? widget.onSelect?.call(c) : widget.onOpen(c),
+          child: DecoratedBox(
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: on ? Colors.white : Colors.transparent, width: 1.5)),
+            child: SgFlip(card: c, board: widget.board, compact: true),
+          ),
         ),
       ),
     );

@@ -131,33 +131,28 @@ class _SgPaneState extends State<SgPane> {
       message: tip,
       child: IconButton(
         onPressed: onTap,
-        icon: Icon(icon, color: color, size: 18),
-        padding: EdgeInsets.zero,
-        visualDensity: VisualDensity.compact,
-        constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+        icon: Icon(icon, color: color, size: 24),
+        padding: const EdgeInsets.all(8),
+        constraints: const BoxConstraints.tightFor(width: 44, height: 44),
       ),
     );
   }
 
+  /// Trello's board bar: the name, one star, and a "…" that holds the rest.
   Widget _header(SgBoard b) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 4, 0),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        TextField(
-          controller: TextEditingController(text: b.name),
-          style: appFont(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white),
-          decoration: const InputDecoration(isCollapsed: true, border: InputBorder.none),
-          onSubmitted: (v) => store.touch(() => b.name = v.trim().isEmpty ? b.name : v.trim()),
+      padding: const EdgeInsets.fromLTRB(16, 4, 4, 0),
+      child: Row(children: [
+        Expanded(
+          child: TextField(
+            controller: TextEditingController(text: b.name),
+            style: appFont(fontSize: 22, fontWeight: FontWeight.w700, color: Colors.white),
+            decoration: const InputDecoration(isCollapsed: true, border: InputBorder.none),
+            onSubmitted: (v) => store.touch(() => b.name = v.trim().isEmpty ? b.name : v.trim()),
+          ),
         ),
-        Row(children: [
-          _icon(b.starred ? 'Unstar board' : 'Star board', b.starred ? Icons.star_rounded : Icons.star_outline_rounded, () => store.touch(() => b.starred = !b.starred), color: const Color(0xFFFFD56A)),
-          _icon('Search', Icons.search_rounded, () => setState(() => _overlay = _overlay == 'search' ? '' : 'search')),
-          _icon('Statistics', Icons.bar_chart_rounded, () => setState(() => _overlay = _overlay == 'stats' ? '' : 'stats')),
-          _icon('Select cards', Icons.checklist_rounded, () => setState(() => _multi = !_multi)),
-          _icon('New card', Icons.add_rounded, () => setState(() => _overlay = 'create')),
-          _icon('Genie', Icons.auto_awesome_rounded, () => setState(() => _overlay = _overlay == 'genie' ? '' : 'genie')),
-          _icon('Board menu', Icons.tune_rounded, () => setState(() => _menu = !_menu)),
-        ]),
+        _icon(b.starred ? 'Unstar board' : 'Star board', b.starred ? Icons.star_rounded : Icons.star_outline_rounded, () => store.touch(() => b.starred = !b.starred), color: const Color(0xFFFFD56A)),
+        _icon('Board menu', Icons.more_horiz, () => setState(() => _menu = !_menu)),
       ]),
     );
   }
@@ -239,7 +234,15 @@ class _SgPaneState extends State<SgPane> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
         children: [
-          Text('Board menu', style: appFont(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+          Row(children: [
+            Expanded(child: Text('Board menu', style: appFont(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white))),
+            _icon('Close', Icons.close, () => setState(() => _menu = false)),
+          ]),
+          _menuAction(Icons.search_rounded, 'Search', () => setState(() { _menu = false; _overlay = 'search'; })),
+          _menuAction(Icons.bar_chart_rounded, 'Statistics', () => setState(() { _menu = false; _overlay = 'stats'; })),
+          _menuAction(Icons.checklist_rounded, _multi ? 'Stop selecting' : 'Select cards', () => setState(() { _menu = false; _multi = !_multi; })),
+          _menuAction(Icons.add_rounded, 'New card', () => setState(() { _menu = false; _overlay = 'create'; })),
+          _menuAction(Icons.auto_awesome_rounded, 'Genie', () => setState(() { _menu = false; _overlay = 'genie'; })),
           const SizedBox(height: 8),
           Text('Members', style: appFont(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
           Text(b.guests.join(', '), style: appFont(fontSize: 13, color: Colors.white)),
@@ -277,6 +280,20 @@ class _SgPaneState extends State<SgPane> {
               ChoiceChip(label: Text(k.name, style: appFont(fontSize: 10, color: Colors.white)), selected: b.statusKind == k, onSelected: (_) => store.touch(() => b.statusKind = k)),
           ]),
         ],
+      ),
+    );
+  }
+
+  Widget _menuAction(IconData icon, String label, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(children: [
+          Icon(icon, color: Colors.white, size: 22),
+          const SizedBox(width: 14),
+          Text(label, style: appFont(fontSize: 16, color: Colors.white)),
+        ]),
       ),
     );
   }
@@ -438,25 +455,16 @@ class _SgPaneState extends State<SgPane> {
     return ScrollConfiguration(
       behavior: const SgScroll(),
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 4, 12, 32),
+        padding: const EdgeInsets.fromLTRB(12, 4, 12, 80),
         children: [
           Row(children: [
             Tooltip(message: 'Back', child: IconButton(onPressed: () => setState(() => _openId = null), icon: const Icon(Icons.arrow_back_rounded, color: Colors.white))),
-            Expanded(child: Text(c.type.label, style: appFont(fontSize: 12, color: Colors.white70))),
+            Expanded(child: Text(c.type.label, style: appFont(fontSize: 16, color: Colors.white))),
             if (c.hasHidden)
               Tooltip(message: 'Hidden fields', child: IconButton(onPressed: () => setState(() => _forceFlip = !_forceFlip), icon: const Icon(Icons.flip_rounded, color: Colors.white))),
           ]),
-          if (_forceFlip) SgFace(card: c, board: b, back: true) else SgFace(card: c, board: b),
+          if (_forceFlip) SgFace(card: c, board: b, back: true),
           _field('Title', c.title, (v) => store.touch(() => c.title = v)),
-          _field('Description', c.description, (v) => store.touch(() => c.description = v), lines: 3),
-          Text('Type', style: appFont(fontSize: 11, color: Colors.white70)),
-          Wrap(spacing: 4, children: [
-            for (final t in SgType.values)
-              ChoiceChip(label: Text(t.label, style: appFont(fontSize: 10, color: Colors.white)), selected: c.type == t, onSelected: (_) => store.touch(() {
-                c.type = t;
-                c.color = t.argb;
-              })),
-          ]),
           _addNew('Column', b.orderedLists.map((l) => l.title).toList(), c.status, (name) {
             final list = b.lists.where((l) => l.title == name).firstOrNull;
             if (list != null) store.moveCard(c.id, list.id);
@@ -466,6 +474,24 @@ class _SgPaneState extends State<SgPane> {
             if (list != null) store.moveCard(c.id, list.id);
           }),
           _statusControl(b, c),
+          _field('Description', c.description, (v) => store.touch(() => c.description = v), lines: 3),
+          Text('Type', style: appFont(fontSize: 11, color: Colors.white70)),
+          SizedBox(
+            height: 40,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                for (final t in SgType.values)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: ChoiceChip(label: Text(t.label, style: appFont(fontSize: 12, color: Colors.white)), selected: c.type == t, onSelected: (_) => store.touch(() {
+                      c.type = t;
+                      c.color = t.argb;
+                    })),
+                  ),
+              ],
+            ),
+          ),
           _field('Assignee', c.assignee, (v) => store.touch(() => c.assignee = v)),
           _field('Due (ms is set by the clock; type a note)', c.dueMs == null ? '' : DateTime.fromMillisecondsSinceEpoch(c.dueMs!).toIso8601String(), (v) {
             final d = DateTime.tryParse(v);
@@ -697,12 +723,22 @@ class _OptionRowState extends State<_OptionRow> {
     return Padding(
       padding: const EdgeInsets.only(top: 6),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(widget.label, style: appFont(fontSize: 11, color: Colors.white70)),
+        Text(widget.label, style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
+        const SizedBox(height: 4),
         Wrap(spacing: 4, children: [
           for (final o in widget.options)
-            ChoiceChip(label: Text(o, style: appFont(fontSize: 10, color: Colors.white)), selected: o == widget.current, onSelected: (_) => widget.onPick(o)),
-          ActionChip(label: Text('+ Add new…', style: appFont(fontSize: 10, color: Colors.white)), onPressed: () => setState(() => adding = true)),
+            ChoiceChip(label: Text(o, style: appFont(fontSize: 13, color: Colors.white)), selected: o == widget.current, onSelected: (_) => widget.onPick(o)),
         ]),
+        TextButton(
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            minimumSize: const Size(double.infinity, 44),
+            alignment: Alignment.centerLeft,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          onPressed: () => setState(() => adding = true),
+          child: Text('+ Add new…', style: appFont(fontSize: 16, color: Colors.white)),
+        ),
         if (adding)
           TextField(
             controller: t,
