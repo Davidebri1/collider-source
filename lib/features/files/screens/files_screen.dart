@@ -165,10 +165,9 @@ class _FilesScreenState extends State<FilesScreen> {
                 ],
               );
             }
-            // Portrait keeps the v8.4 sidebar, grid and pill. Only the column
-            // count (5 → 2 or 3) and the thumbnail size come down, so the
-            // same content fits the centred pane without a hidden drawer.
-            return CPane(child: _phoneBody(title, files, all, cat));
+            // Portrait keeps the v8.4 sidebar, grid and pill, at phone
+            // proportions, and the pane is only as tall as that content.
+            return CPane(fit: CPaneFit.hug, child: _phoneBody(title, files, all, cat));
           })),
           if (_sel.active) Positioned(left: 0, right: 0, bottom: 40, child: Center(child: _selBar(files))),
           Positioned(top: MediaQuery.paddingOf(context).top + 8, right: 8, child: VCloseButton(onTap: widget.onClose)),
@@ -177,26 +176,28 @@ class _FilesScreenState extends State<FilesScreen> {
     );
   }
 
-  /// Portrait: the v8.4 sidebar stays on screen beside a 2- or 3-column grid
-  /// of small thumbnails. The pill sits under both, scaled to the pane.
+  /// Portrait: sidebar about 38% of the pane, a 2- or 3-column grid of
+  /// 64–72pt thumbs, and the pill under both. The column hugs its content.
   Widget _phoneBody(String title, List<StoredFile> files, List<StoredFile> all, String cat) {
-    return Column(
-      children: [
-        Expanded(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+    return LayoutBuilder(builder: (context, box) {
+      final side = box.maxWidth * 0.38;
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(width: 124, child: _phoneRail(all)),
+              SizedBox(width: side, child: _phoneRail(all)),
               Expanded(child: _phoneGrid(title, files, cat)),
             ],
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-          child: FittedBox(fit: BoxFit.scaleDown, child: _segments()),
-        ),
-      ],
-    );
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 4, 8, 10),
+            child: _phoneSegments(),
+          ),
+        ],
+      );
+    });
   }
 
   Widget _phoneRail(List<StoredFile> all) {
@@ -209,19 +210,14 @@ class _FilesScreenState extends State<FilesScreen> {
           behavior: HitTestBehavior.opaque,
           onTap: onTap,
           child: Container(
-            height: 30,
             margin: const EdgeInsets.only(bottom: 2),
-            padding: const EdgeInsets.symmetric(horizontal: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
             decoration: on ? BoxDecoration(color: const Color(0x33FFFFFF), borderRadius: BorderRadius.circular(10)) : null,
-            child: Row(children: [
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Icon(icon, size: 16, color: const Color(0xFFDDDBD6)),
               const SizedBox(width: 6),
               Expanded(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: FText(label, size: 15, height: 18, weight: on ? FontWeight.w600 : FontWeight.w500, color: on ? Colors.white : const Color(0xFFDDDBD6), ellipsis: false),
-                ),
+                child: FText(label, size: 13, height: 16, maxLines: 2, weight: on ? FontWeight.w600 : FontWeight.w500, color: on ? Colors.white : const Color(0xFFDDDBD6)),
               ),
             ]),
           ),
@@ -233,14 +229,17 @@ class _FilesScreenState extends State<FilesScreen> {
     final seedRecent = recent.isEmpty && Uri.base.queryParameters['fseed'] == '1'
         ? WallpaperCatalog.freeThemes.take(3).map((t) => '${t.name.replaceAll(RegExp(r'\s*4K$'), '').trim()}.jpg').toList()
         : const <String>[];
-    return ColoredBox(
-      color: const Color(0x14FFFFFF),
-      child: ScrollConfiguration(
-        behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(6, 10, 4, 8),
-          children: [
-            const FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: FText(_heading, size: 22, height: 26, weight: FontWeight.w700, color: Color(0xFFFAF9F5))),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 12, 4, 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+            const FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: FText(_heading, size: 20, height: 24, maxLines: 1, ellipsis: false, weight: FontWeight.w700, color: Color(0xFFFAF9F5)),
+            ),
             const SizedBox(height: 8),
             item('Recently Added', Icons.schedule_rounded, on: _type == 'All', onTap: () => setState(() => _type = 'All')),
             item('Images', Icons.image_outlined, on: _type == 'Image', onTap: () => setState(() => _type = 'Image')),
@@ -256,9 +255,9 @@ class _FilesScreenState extends State<FilesScreen> {
                 child: Padding(
                   padding: const EdgeInsets.only(left: 4, top: 4, bottom: 4),
                   child: Row(children: [
-                    Icon(_icon(f.type), size: 14, color: const Color(0xFFDDDBD6)),
+                    Icon(_icon(f.type), size: 16, color: const Color(0xFFDDDBD6)),
                     const SizedBox(width: 6),
-                    Expanded(child: FText(f.name, size: 12, height: 16, weight: FontWeight.w500, color: const Color(0xFFDDDBD6))),
+                    Expanded(child: FText(f.name, size: 13, height: 16, maxLines: 2, weight: FontWeight.w500, color: const Color(0xFFDDDBD6))),
                   ]),
                 ),
               ),
@@ -266,14 +265,43 @@ class _FilesScreenState extends State<FilesScreen> {
               Padding(
                 padding: const EdgeInsets.only(left: 4, top: 4, bottom: 4),
                 child: Row(children: [
-                  const Icon(Icons.image_outlined, size: 14, color: Color(0xFFDDDBD6)),
+                  const Icon(Icons.image_outlined, size: 16, color: Color(0xFFDDDBD6)),
                   const SizedBox(width: 6),
-                  Expanded(child: FText(name, size: 12, height: 16, weight: FontWeight.w500, color: const Color(0xFFDDDBD6))),
+                  Expanded(child: FText(name, size: 13, height: 16, maxLines: 2, weight: FontWeight.w500, color: const Color(0xFFDDDBD6))),
                 ]),
               ),
           ],
         ),
+      );
+  }
+
+  /// Phone-sized Year / Month / Today / All Files. The Figma pill is a
+  /// desktop ornament; scaled down, All Files fell off the end.
+  Widget _phoneSegments() {
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: const Color(0x33FFFFFF),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0x99FFFFFF)),
       ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        for (var i = 0; i < _spans.length; i++)
+          Semantics(
+            button: true,
+            selected: _span == i,
+            label: _spans[i],
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => setState(() => _span = i),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                decoration: _span == i ? BoxDecoration(color: const Color(0x66FFFFFF), borderRadius: BorderRadius.circular(14)) : null,
+                child: FText(_spans[i], size: 12, height: 14, weight: FontWeight.w600),
+              ),
+            ),
+          ),
+      ]),
     );
   }
 
@@ -281,94 +309,104 @@ class _FilesScreenState extends State<FilesScreen> {
     final seeded = files.isEmpty && cat != 'music' && Uri.base.queryParameters['fseed'] == '1';
     final themes = seeded ? WallpaperCatalog.freeThemes.take(6).toList() : const <WallpaperTheme>[];
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+      padding: const EdgeInsets.fromLTRB(8, 12, 8, 4),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(children: [
-            Expanded(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: FText(title, size: 22, height: 26, weight: FontWeight.w700, color: const Color(0xFFFAF9F5)),
-              ),
-            ),
+            Expanded(child: FText(title, size: 15, height: 18, weight: FontWeight.w700, color: const Color(0xFFFAF9F5))),
             Semantics(
               button: true,
               label: 'Add files',
               child: GestureDetector(
                 onTap: _pickFile,
-                child: const SizedBox(width: 28, height: 28, child: Icon(Icons.add_rounded, size: 22, color: Colors.white)),
+                child: const SizedBox(width: 28, height: 28, child: Icon(Icons.add_rounded, size: 20, color: Colors.white)),
               ),
             ),
           ]),
           const SizedBox(height: 8),
-          Expanded(
-            child: LayoutBuilder(builder: (context, box) {
-              final count = files.isNotEmpty ? files.length : themes.length;
-              if (count == 0 && cat != 'music') {
-                return Center(child: FText(files.isEmpty ? 'No files yet' : title, size: 15, height: 20, weight: FontWeight.w500, color: const Color(0xB3FAF9F5)));
-              }
-              // Portrait keeps the v8.4 tile, only smaller: 3 columns, each
-              // thumb capped near the Figma tile, name and size on their own
-              // lines underneath. Never stretch a tile to fill the pane.
-              const gap = 6.0;
-              const labelH = 32.0;
-              final cols = box.maxWidth >= 132 ? 3 : 2;
-              final cellW = (box.maxWidth - gap * (cols - 1)) / cols;
-              final aspect = cellW / (cellW + labelH);
-              return ScrollConfiguration(
-                behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
-                child: GridView.builder(
-                  physics: const BouncingScrollPhysics(),
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: cols, mainAxisSpacing: gap, crossAxisSpacing: gap, childAspectRatio: aspect),
-                  itemCount: count,
-                  itemBuilder: (_, i) {
-                    if (files.isNotEmpty) {
-                      final f = files[i];
-                      return _smallTile(
-                        art: FileStore.isImage(f.name) ? _Thumb(id: f.id, fallback: _icon(f.type)) : Icon(_icon(f.type), size: 18, color: const Color(0xCCFFFFFF)),
-                        name: f.name,
-                        meta: FileStore.sizeLabel(f.sizeBytes),
-                        onTap: () => _tapFile(f),
-                      );
-                    }
-                    final t = themes[i];
-                    final name = t.name.replaceAll(RegExp(r'\s*4K$'), '').trim();
-                    final kb = 18 + (i * 23) % 160;
-                    return _smallTile(
-                      art: ThemePosterImage(theme: t, fit: BoxFit.cover, filterQuality: FilterQuality.medium),
-                      name: name,
-                      meta: '$kb KB',
-                      onTap: () {},
-                    );
-                  },
-                ),
+          LayoutBuilder(builder: (context, box) {
+            final count = files.isNotEmpty ? files.length : themes.length;
+            if (count == 0 && cat != 'music') {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: FText(files.isEmpty ? 'No files yet' : title, size: 14, height: 18, weight: FontWeight.w500, color: const Color(0xB3FAF9F5)),
               );
-            }),
-          ),
+            }
+            const gap = 8.0;
+            final cols = box.maxWidth >= 64 * 3 + gap * 2 ? 3 : 2;
+            final thumb = ((box.maxWidth - gap * (cols - 1)) / cols).clamp(64.0, 72.0);
+            final rows = (count / cols).ceil();
+            Widget tileAt(int i) {
+              if (files.isNotEmpty) {
+                final f = files[i];
+                return _smallTile(
+                  thumb: thumb,
+                  art: FileStore.isImage(f.name) ? _Thumb(id: f.id, fallback: _icon(f.type)) : Icon(_icon(f.type), size: 18, color: const Color(0xCCFFFFFF)),
+                  name: f.name,
+                  meta: FileStore.sizeLabel(f.sizeBytes),
+                  onTap: () => _tapFile(f),
+                );
+              }
+              final t = themes[i];
+              final name = t.name.replaceAll(RegExp(r'\s*4K$'), '').trim();
+              final kb = 18 + (i * 23) % 160;
+              return _smallTile(
+                thumb: thumb,
+                art: ThemePosterImage(theme: t, fit: BoxFit.cover, filterQuality: FilterQuality.medium),
+                name: name,
+                meta: '$kb KB',
+                onTap: () {},
+              );
+            }
+
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (var r = 0; r < rows; r++)
+                  Padding(
+                    padding: EdgeInsets.only(bottom: r == rows - 1 ? 0 : gap),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (var c = 0; c < cols; c++) ...[
+                          if (c > 0) const SizedBox(width: gap),
+                          if (r * cols + c < count) tileAt(r * cols + c) else SizedBox(width: thumb),
+                        ],
+                      ],
+                    ),
+                  ),
+              ],
+            );
+          }),
         ],
       ),
     );
   }
 
-  Widget _smallTile({required Widget art, required String name, required String meta, required VoidCallback onTap}) {
+  Widget _smallTile({required double thumb, required Widget art, required String name, required String meta, required VoidCallback onTap}) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: ClipRRect(
+      child: SizedBox(
+        width: thumb,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: ColoredBox(color: const Color(0x22FFFFFF), child: SizedBox.expand(child: art)),
+              child: ColoredBox(
+                color: const Color(0x22FFFFFF),
+                child: SizedBox(width: thumb, height: thumb, child: FittedBox(fit: BoxFit.cover, clipBehavior: Clip.hardEdge, child: SizedBox(width: thumb, height: thumb, child: art))),
+              ),
             ),
-          ),
-          const SizedBox(height: 2),
-          FText(name, size: 12, height: 15, weight: FontWeight.w500, letterSpacing: -0.2),
-          FText(meta, size: 11, height: 13, opacity: 0.62, weight: FontWeight.w500, letterSpacing: -0.2),
-        ],
+            const SizedBox(height: 3),
+            FText(name, size: 11, height: 13, maxLines: 2, weight: FontWeight.w500, letterSpacing: -0.2),
+            FText(meta, size: 10, height: 12, opacity: 0.62, weight: FontWeight.w500, letterSpacing: -0.2),
+          ],
+        ),
       ),
     );
   }

@@ -335,7 +335,10 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     // Smart Gen's pane is centred and the rail would cover its left edge, so
     // the rail yields while that pane is open. Cards, canvases, boards and
     // Genie stay inside the pane.
-    const surfaces = {null, 'themes', 'market', 'files', 'music'};
+    // Files paints its own sidebar inside the pane. A second labelled rail
+    // (Recent / Images / Videos / …) sat on the wallpaper beside it and
+    // shoved the pane off centre.
+    const surfaces = {null, 'themes', 'market', 'music'};
     return surfaces.contains(_activeDrawer);
   }
 
@@ -1365,6 +1368,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           activeIds: _selectedModelIds.toSet(),
           onToggle: (id) => _toggleSelect(_activeCategory, id),
           categoryLabel: _activeCategory.label,
+          falloff: _otherSurfaceFocused,
           onCategorySwipe: (dir) {
             final i = order.indexOf(_activeCategory);
             setState(() {
@@ -1960,8 +1964,16 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   }
 
   bool get _otherSurfaceFocused => _settingsOpen || _browserOpen || (_activeDrawer != null) || _zoomedMessage != null || _localHistoryModel != null;
-  /// One blur for the ticker whenever something else has focus.
-  static const double _tickerBlur = 3;
+  /// Black 38% behind a modal. The gallery is not in this set: its wallpaper
+  /// preview stays sharp and undimmed (R32).
+  bool get _cinemaDim {
+    if (_activeDrawer == 'themes') return false;
+    return _settingsOpen || _browserOpen || _activeDrawer != null || _zoomedMessage != null || _localHistoryModel != null;
+  }
+  /// Floor for home rows behind a focused pane. Farther rows add more on top
+  /// (see GlmTickerColumn.falloff), so the blur grows with distance and the
+  /// words stop being readable.
+  static const double _tickerBlur = 26;
   /// The blur stays on the ticker rows only. Wrapping the whole column
   /// (including the spacer above the rows) builds a full-screen layer, and
   /// on web a pane's backdrop filter samples that layer. The spacer is
@@ -2186,11 +2198,15 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                         // closes. The wallpaper DOF plane already blurs; the rail just quiets.
                         // v9.1.7: the same blur the ticker gets under every pane (_tickerGate,
                         // sigma 3), so typing and panes push the rail back the same way.
-                        builder: (_, on, child) => ImageFiltered(
-                          enabled: _otherSurfaceFocused || (on && _isComposerSummoned),
-                          imageFilter: ui.ImageFilter.blur(sigmaX: _tickerBlur, sigmaY: _tickerBlur),
-                          child: AnimatedOpacity(duration: VMotion.base, opacity: on && _isComposerSummoned ? 0.6 : 1, child: child!),
-                        ),
+                        builder: (_, on, child) {
+                          final focused = _otherSurfaceFocused;
+                          final sigma = focused ? _tickerBlur : 3.0;
+                          return ImageFiltered(
+                            enabled: focused || (on && _isComposerSummoned),
+                            imageFilter: ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+                            child: AnimatedOpacity(duration: VMotion.base, opacity: on && _isComposerSummoned && !focused ? 0.6 : 1, child: child!),
+                          );
+                        },
                         child: _buildTickerWindow(),
                       ),
                       const SizedBox(height: _windowGap),
@@ -2211,6 +2227,11 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // v8.3.1: row 13 media gen window ported from v8.4 (Figma 2013:71).
           if (!_browserOpen && !(isMobile && _isMobileSideNavOpen) && !const {'premium', 'themes', 'apps', 'smartgen', 'market', 'files', 'consensus', 'music'}.contains(_activeDrawer) && _mediaStageOn)
             Positioned.fill(bottom: 210, child: _buildMediaStage()),
+
+          // Cinema dim behind a modal (black ~38%). The gallery is excluded so
+          // its wallpaper stays sharp. Home text is blurred separately.
+          if (_cinemaDim)
+            Positioned.fill(child: const IgnorePointer(child: ColoredBox(color: Color(0x61000000)))),
 
           // ================= PLANE 2: APPS POPUP PANE =================
           // Middle neutral area, no visible canvas, blurred background, clickaway + close icon
@@ -2416,7 +2437,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             if (_railVisible)
               Positioned(
                 left: 10,
-                bottom: 230, // v9.1.3: above the nav column
+                // Gallery: sit the rail on the wallpaper under the window, so
+                // the labels clear the strip and the Free / Premium pill.
+                bottom: _activeDrawer == 'themes' ? 86 : 230,
                 child: _buildSideNav(isMobile: true),
               ),
           ] else ...[

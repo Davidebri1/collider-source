@@ -284,13 +284,16 @@ class _SgKanbanState extends State<SgKanban> {
         final hot = candidate.isNotEmpty;
         return Padding(
           padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: hot ? const Color(0xFFFFFFFF) : const Color(0xF7FFFFFF),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: hot ? const Color(0xFF3D7A6A) : const Color(0x14000000), width: hot ? 1.5 : 1),
-            ),
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: hot ? const Color(0xFFFFFFFF) : const Color(0xF7FFFFFF),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: hot ? const Color(0xFF3D7A6A) : const Color(0x14000000), width: hot ? 1.5 : 1),
+              ),
               child: _KanbanColumn(store: widget.store, board: b, list: list, cards: cards, multi: widget.multi, selected: widget.selected, onOpen: widget.onOpen, onSelect: widget.onSelect),
+            ),
           ),
         );
       },
@@ -343,7 +346,7 @@ class _KanbanColumnState extends State<_KanbanColumn> {
   @override
   Widget build(BuildContext context) {
     const ink = Color(0xFF1C1B19);
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+    return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Padding(
         padding: const EdgeInsets.fromLTRB(12, 4, 0, 0),
         child: Row(children: [
@@ -364,13 +367,11 @@ class _KanbanColumnState extends State<_KanbanColumn> {
             child: Text('Add a card', style: appFont(fontSize: 15, color: ink)),
           ),
         ),
-      Expanded(
-        child: ScrollConfiguration(
-          behavior: const SgScroll(),
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-            children: [for (final c in widget.cards) _tile(c)],
-          ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [for (final c in widget.cards) _tile(c)],
         ),
       ),
       Padding(
@@ -469,7 +470,7 @@ class _SgFlipState extends State<SgFlip> with SingleTickerProviderStateMixin {
           );
         },
       ),
-      if (widget.card.hasHidden)
+      if (widget.card.hasHidden && !widget.compact)
         Align(
           alignment: Alignment.centerRight,
           child: Tooltip(

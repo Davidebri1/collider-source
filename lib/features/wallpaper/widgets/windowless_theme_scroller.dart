@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import '../../../core/figma/figma_stage.dart';
+import '../../../core/vision/depth_of_field.dart';
 import 'package:video_player/video_player.dart';
 import '../../../models/theme_def.dart';
 import '../../../core/vision/vision_kit.dart';
@@ -105,11 +106,10 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
       final t = themes[i];
       final left = k == 0 ? 921.6 : (k < 0 ? 904.6 - 50 - (-k - 1) * 60 : 1024.6 + (k - 1) * 60);
       final w = k == 0 ? 86.0 : 50.0;
-      // Blur is applied in Figma px, then the whole stage scales down to the
-      // phone (~0.4). Sigmas are sized so the outer tiles stay visibly soft
-      // after that scale, and the fade never drops them out of view.
-      final fade = k.abs() <= 2 ? 1.0 : (k.abs() == 3 ? 0.82 : (k.abs() == 4 ? 0.58 : 0.36));
-      final blur = k.abs() >= 5 ? 22.0 : (k.abs() == 4 ? 12.0 : (k.abs() == 3 ? 5.0 : 0.0));
+      // Distance from the focused thumb. The stage scales this down on a
+      // wide frame; the phone layout applies the same falloff in screen px.
+      final fade = k.abs() <= 1 ? 1.0 : (k.abs() == 2 ? 0.78 : (k.abs() == 3 ? 0.55 : 0.32));
+      final dist = (k.abs() / 5).clamp(0.0, 1.0);
       Widget tile = ClipRRect(
         borderRadius: BorderRadius.circular(10),
         child: Stack(
@@ -120,9 +120,7 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
           ],
         ),
       );
-      if (blur > 0) {
-        tile = ImageFiltered(imageFilter: ImageFilter.blur(sigmaX: blur, sigmaY: blur), child: tile);
-      }
+      tile = DepthOfField(distance: dist, nearSigma: 0, farSigma: 22, child: tile);
       out.add(Positioned(
         left: left,
         top: 845,
@@ -146,6 +144,90 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
       ));
     }
     return out;
+  }
+
+  /// Phone gallery. The window is centred, 16pt off each screen edge, and
+  /// stops above the side nav so the rail overlays the wallpaper only.
+  Widget _phoneGallery(List<WallpaperTheme> themes, EdgeInsets pad) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, pad.top + 12, 16, 278),
+      child: Column(
+        children: [
+          Expanded(
+            child: _PreviewWindow(
+              key: ValueKey('win-${_previewed.id}'),
+              theme: _previewed,
+              phone: true,
+              onBack: widget.onCancel,
+              onExpand: () => setState(() => _expanded = true),
+              onSet: () => widget.onConfirmTheme(_previewed),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 68,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                SizedBox(
+                  width: 148,
+                  height: 40,
+                  child: _ShelfPill(shelf: _shelf, onChanged: _setShelf, labelSize: 14),
+                ),
+                const SizedBox(width: 8),
+                Expanded(child: _phoneStrip(themes)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _phoneStrip(List<WallpaperTheme> themes) {
+    if (themes.isEmpty) return const SizedBox.shrink();
+    var sel = themes.indexWhere((t) => t.id == _previewed.id);
+    if (sel < 0) sel = 0;
+    final tiles = <Widget>[];
+    // Five thumbs, sized to sit in the slot beside the pill: the centre one
+    // larger, the outer pair visibly soft. Nothing is clipped off the screen.
+    for (var k = -2; k <= 2; k++) {
+      final i = sel + k;
+      if (i < 0 || i >= themes.length) continue;
+      final t = themes[i];
+      final centre = k == 0;
+      final w = centre ? 46.0 : (k.abs() == 1 ? 36.0 : 32.0);
+      final h = centre ? 64.0 : (k.abs() == 1 ? 52.0 : 46.0);
+      final dist = (k.abs() / 2).clamp(0.0, 1.0);
+      final fade = k.abs() == 0 ? 1.0 : (k.abs() == 1 ? 0.82 : 0.38);
+      Widget tile = ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Stack(fit: StackFit.expand, children: [
+          const ColoredBox(color: Color(0x33FFFFFF)),
+          ThemePosterImage(theme: t, fit: BoxFit.cover, filterQuality: FilterQuality.medium),
+        ]),
+      );
+      tile = DepthOfField(distance: dist, nearSigma: 0, farSigma: 16, child: tile);
+      tiles.add(Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 3),
+        child: Semantics(
+          button: true,
+          selected: centre,
+          label: t.name,
+          child: GestureDetector(
+            onTap: () => _select(t),
+            onHorizontalDragEnd: (d) {
+              final v = d.primaryVelocity ?? 0;
+              if (v.abs() < 80) return;
+              final j = (sel + (v < 0 ? 1 : -1)).clamp(0, themes.length - 1);
+              _select(themes[j]);
+            },
+            child: Opacity(opacity: fade, child: SizedBox(width: w, height: h, child: tile)),
+          ),
+        ),
+      ));
+    }
+    return Row(mainAxisAlignment: MainAxisAlignment.end, crossAxisAlignment: CrossAxisAlignment.end, children: tiles);
   }
 
   @override
@@ -188,13 +270,13 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                   top: pad.top + VSpace.sm,
                   child: VCircleButton(icon: Icons.fullscreen_exit_rounded, floating: true, tooltip: 'Back', onTap: () => setState(() => _expanded = false)),
                 ),
-              // v8.4: Photos - Memories 69:1926 (1920 x 1080) at its own
-              // geometry, scaled as one unit: window 725 x 730 at (597.5, 95),
-              // thumbnail strip at y 845, window controls at (855.6, 971);
-              // crop = the window's own width (725), centred, no margin.
+              // Phone: the window is centred with a 16pt margin, at phone
+              // sizes. Wide frames keep the v8.4 stage.
               if (!_expanded)
                 Positioned.fill(
-                  child: FigmaStage(
+                  child: LayoutBuilder(builder: (context, box) {
+                    if (box.maxWidth < 768) return _phoneGallery(themes, pad);
+                    return FigmaStage(
                     frame: const Size(1920, 1080),
                     cropWidth: 725,
                     center: const Offset(960, 540),
@@ -226,38 +308,9 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                         child: _ShelfPill(shelf: _shelf, onChanged: _setShelf),
                       ),
                       ..._strip(themes),
-                      // Window controls: dot = close, bar = swipe down to close.
-                      Positioned(
-                        left: 855.6,
-                        top: 966,
-                        width: 181,
-                        height: 24,
-                        child: Row(children: [
-                          Semantics(
-                            button: true,
-                            label: 'Close',
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTap: widget.onCancel,
-                              child: Container(
-                                width: 24,
-                                height: 24,
-                                alignment: Alignment.centerLeft,
-                                child: Container(width: 14, height: 14, decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0x99FFFFFF))),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          GestureDetector(
-                            onVerticalDragEnd: (d) {
-                              if ((d.primaryVelocity ?? 0) > 200) widget.onCancel();
-                            },
-                            child: Container(width: 143, height: 12, decoration: BoxDecoration(color: const Color(0x99FFFFFF), borderRadius: BorderRadius.circular(6))),
-                          ),
-                        ]),
-                      ),
                     ],
-                  ),
+                  );
+                  }),
                 ),
             ],
           ),
@@ -271,7 +324,8 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
 class _ShelfPill extends StatelessWidget {
   final ThemeShelf shelf;
   final ValueChanged<ThemeShelf> onChanged;
-  const _ShelfPill({required this.shelf, required this.onChanged});
+  final double labelSize;
+  const _ShelfPill({required this.shelf, required this.onChanged, this.labelSize = 15});
 
   Widget _half(ThemeShelf s, String label) {
     final on = shelf == s;
@@ -291,7 +345,7 @@ class _ShelfPill extends StatelessWidget {
               color: on ? const Color(0xF2F7F4EF) : const Color(0x00000000),
               borderRadius: BorderRadius.circular(22),
             ),
-            child: FText(label, size: 15, height: 20, weight: FontWeight.w600, letterSpacing: -0.4, color: on ? const Color(0xFF1C1B19) : Colors.white),
+            child: FText(label, size: labelSize, height: labelSize + 4, weight: FontWeight.w600, letterSpacing: -0.3, color: on ? const Color(0xFF1C1B19) : Colors.white),
           ),
         ),
       ),
@@ -330,7 +384,8 @@ class _PreviewWindow extends StatefulWidget {
   final VoidCallback onBack;
   final VoidCallback onExpand;
   final VoidCallback onSet;
-  const _PreviewWindow({super.key, required this.theme, required this.onBack, required this.onExpand, required this.onSet});
+  final bool phone;
+  const _PreviewWindow({super.key, required this.theme, required this.onBack, required this.onExpand, required this.onSet, this.phone = false});
 
   @override
   State<_PreviewWindow> createState() => _PreviewWindowState();
@@ -381,15 +436,15 @@ class _PreviewWindowState extends State<_PreviewWindow> {
         ),
       );
 
-  Widget _circle(IconData icon, String label, VoidCallback onTap, {double iconSize = 24}) => Semantics(
+  Widget _circle(IconData icon, String label, VoidCallback onTap, {double iconSize = 24, double side = 50}) => Semantics(
         button: true,
         label: label,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: onTap,
           child: Container(
-            width: 50,
-            height: 50,
+            width: side,
+            height: side,
             alignment: Alignment.center,
             decoration: const BoxDecoration(
               color: Color(0x4D808080),
@@ -408,45 +463,70 @@ class _PreviewWindowState extends State<_PreviewWindow> {
     final t = widget.theme;
     final c = _c;
     final ready = c != null && c.value.isInitialized;
+    final picture = Stack(
+      fit: StackFit.expand,
+      children: [
+        ThemePosterImage(theme: t, fit: BoxFit.cover, fullBleed: true),
+        if (ready)
+          FittedBox(
+            fit: BoxFit.cover,
+            clipBehavior: Clip.hardEdge,
+            child: SizedBox(width: c.value.size.width, height: c.value.size.height, child: VideoPlayer(c)),
+          ),
+      ],
+    );
+    final expand = Semantics(
+      button: true,
+      label: 'Expand View',
+      child: GestureDetector(
+        onTap: widget.onExpand,
+        child: Container(
+          height: widget.phone ? 36 : 46,
+          padding: EdgeInsets.symmetric(horizontal: widget.phone ? 12 : 0),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: const Color(0x4D808080),
+            borderRadius: BorderRadius.circular(widget.phone ? 18 : 23),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.open_in_full_rounded, size: widget.phone ? 16 : 20, color: Colors.white),
+            const SizedBox(width: 8),
+            FText('Expand View', size: widget.phone ? 15 : 16, height: 20, weight: FontWeight.w600),
+          ]),
+        ),
+      ),
+    );
+    if (widget.phone) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            picture,
+            Positioned(
+              left: 12,
+              right: 12,
+              top: 12,
+              child: Row(children: [
+                _circle(Icons.chevron_left_rounded, 'Back', widget.onBack, iconSize: 22, side: 36),
+                const Spacer(),
+                expand,
+                const Spacer(),
+                _circle(Icons.check_rounded, 'Set Wallpaper', widget.onSet, iconSize: 20, side: 36),
+              ]),
+            ),
+          ],
+        ),
+      );
+    }
     return ClipRRect(
       borderRadius: BorderRadius.circular(46),
       child: Stack(
         fit: StackFit.expand,
         children: [
-          ThemePosterImage(theme: t, fit: BoxFit.cover, fullBleed: true),
-          if (ready)
-            FittedBox(
-              fit: BoxFit.cover,
-              clipBehavior: Clip.hardEdge,
-              child: SizedBox(width: c.value.size.width, height: c.value.size.height, child: VideoPlayer(c)),
-            ),
+          picture,
           Positioned(left: 27.1, top: 29.5, child: _circle(Icons.chevron_left_rounded, 'Back', widget.onBack, iconSize: 28)),
-          Positioned(
-            left: 275.1,
-            top: 31.5,
-            width: 180,
-            height: 46,
-            child: Semantics(
-              button: true,
-              label: 'Expand View',
-              child: GestureDetector(
-                onTap: widget.onExpand,
-                child: Container(
-                  alignment: Alignment.centerLeft,
-                  decoration: BoxDecoration(
-                    color: const Color(0x4D808080),
-                    borderRadius: BorderRadius.circular(23),
-                  ),
-                  child: Row(children: const [
-                    SizedBox(width: 12),
-                    Icon(Icons.open_in_full_rounded, size: 20, color: Colors.white),
-                    SizedBox(width: 12),
-                    FText('Expand View', size: 16, height: 20, weight: FontWeight.w600),
-                  ]),
-                ),
-              ),
-            ),
-          ),
+          Positioned(left: 275.1, top: 31.5, height: 46, child: expand),
           Positioned(left: 653.1, top: 29.5, child: _circle(Icons.check_rounded, 'Set Wallpaper', widget.onSet)),
         ],
       ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_font.dart';
 import '../../../core/theme/edge_fade.dart';
+import '../../../core/vision/depth_of_field.dart';
 import '../../../models/ticker_item.dart';
 
 /// GLM ticker column (backup/glm-spatial-consistency). A bounded window:
@@ -22,6 +23,7 @@ class GlmTickerColumn extends StatefulWidget {
     required this.onToggle,
     required this.categoryLabel,
     required this.onCategorySwipe,
+    this.falloff = false,
   });
 
   final List<TickerItem> items;
@@ -34,6 +36,8 @@ class GlmTickerColumn extends StatefulWidget {
   final ValueChanged<String> onToggle;
   final String categoryLabel;
   final ValueChanged<int> onCategorySwipe;
+  /// Extra blur on home rows, growing toward the rows farthest from the pane.
+  final bool falloff;
 
   static const double rowExtent = 66;
   static const int visibleRows = 5;
@@ -131,7 +135,7 @@ class _GlmTickerColumnState extends State<GlmTickerColumn> {
                       itemBuilder: (c, i) {
                         final item = rows[i];
                         final split = i > 0 && item.isIsolated && !rows[i - 1].isIsolated;
-                        return _TickerRow(
+                        Widget row = _TickerRow(
                           item: item,
                           selected: item.modelDef.id == widget.openId,
                           active: widget.activeIds.contains(item.modelDef.id),
@@ -139,6 +143,10 @@ class _GlmTickerColumnState extends State<GlmTickerColumn> {
                           onToggle: () => widget.onToggle(item.modelDef.id),
                           onOpen: () => widget.onOpen(item.modelDef.id),
                         );
+                        if (widget.falloff && rows.length > 1) {
+                          row = DepthOfField(distance: i / (rows.length - 1), nearSigma: 0, farSigma: 10, child: row);
+                        }
+                        return row;
                       },
                     ),
                   ),
