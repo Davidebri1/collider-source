@@ -214,7 +214,7 @@ class ThemeCatalog extends ChangeNotifier {
     // v9.1.6g: full-resolution posters (qa/make_posters.py, frame at 1 s,
     // ffmpeg) live under posters/; they are covers, never themes.
     _posters = {for (final o in all) if ('${o['name']}'.startsWith('posters/')) '${o['name']}'.substring(8).replaceAll(RegExp(r'\.jpg$'), ''): o['url'] as String};
-    final maps = [for (final o in all) if (!'${o['name']}'.startsWith('posters/') && !'${o['name']}'.startsWith('thumbs/')) o];
+    final maps = [for (final o in all) if (!'${o['name']}'.startsWith('posters/') && !'${o['name']}'.startsWith('thumbs/') && !_blocked.any('${o['name']}'.contains)) o];
     final songs = [for (final o in maps) if (_kind(o) == 'audio') o];
     final themes = [for (final o in maps) if (_kind(o) != 'audio') _r2Theme(o, songs)];
     // v9.1: every R2 song is in the music library, with the art of the
@@ -288,6 +288,10 @@ class ThemeCatalog extends ChangeNotifier {
 
   Map<String, String> _posters = const {};
 
+  /// Hidden until the source is replaced in R2 (decode errors, every frame
+  /// streaked; checked with ffmpeg outside the app).
+  static const _blocked = ['0_Winter_Moon_3840x2160'];
+
   /// 48px placeholder (qa/make_thumbs.py) for any R2 image URL, or null.
   static String? thumbFor(String url) {
     if (!url.startsWith(mediaBaseUrl)) return null;
@@ -342,17 +346,20 @@ class ThemeCatalog extends ChangeNotifier {
     if (t.isEmpty) return;
     t.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     _themes = t;
-    // Playtest #8: preload every 48px placeholder, and the first covers in full.
-    var n = 0;
-    for (final x in t) {
-      final th = thumbFor(x.assetPath);
-      if (th != null) DefaultCacheManager().getSingleFile(th).ignore();
-      if (n++ < 12 && x.assetPath.startsWith('http')) DefaultCacheManager().getSingleFile(x.assetPath).ignore();
-    }
     _songThemes = t.where((x) => x.tracks.isNotEmpty).toList();
     // Default: a portrait ocean loop (fits the phone, decodes everywhere tested).
     WallpaperTheme? pick(String n) => t.where((x) => x.name.toLowerCase().contains(n)).firstOrNull;
     _defaultSlug = (pick('reflection lake') ?? pick('ocean reflection') ?? t.where((x) => x.isLive).firstOrNull ?? t.first).id;
+    // Playtest #8: preload every 48px placeholder, and the first covers in full.
+    // Lean first load: only the first screenful (the default theme and the
+    // first 8 covers) is preloaded; everything else loads lazily when shown,
+    // with its 48px blurred placeholder.
+    final first = [if (bySlug(_defaultSlug) case final d?) d, ...t.take(8)];
+    for (final x in first) {
+      final th = thumbFor(x.assetPath);
+      if (th != null) DefaultCacheManager().getSingleFile(th).ignore();
+      if (x.assetPath.startsWith('http')) DefaultCacheManager().getSingleFile(x.assetPath).ignore();
+    }
     _source = source;
     notifyListeners();
   }

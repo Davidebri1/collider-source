@@ -550,12 +550,14 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
               // SimpleBackgroundVideo: fixed 100vw x 100vh, overflow hidden;
               // the media is 200vw x 200vh centred. Always on (autoplay).
               if (selected != null)
+                // Ticker under Premium: the full-bleed ambient was opaque and
+                // hid the ticker entirely; at 45% the blurred ticker shows.
                 Positioned.fill(
-                  child: SimpleBackgroundVideoAmbient(
+                  child: Opacity(opacity: 0.45, child: SimpleBackgroundVideoAmbient(
                     theme: selected,
                     owned: kOwnedBrighterState && _owned(selected),
                     glass: kIsWeb ? glass : const [],
-                  ),
+                  )),
                 ),
 
               // No search results: an empty stage, no copy (v8.3, D45).

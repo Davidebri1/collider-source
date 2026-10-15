@@ -1,3 +1,4 @@
+import 'dart:ui' as ui;
 import 'dart:math' as math;
 import '../../../core/theme/edge_fade.dart';
 import 'dart:convert';
@@ -541,8 +542,13 @@ class _FilesScreenState extends State<FilesScreen> {
         context: context,
         barrierDismissible: false,
         barrierLabel: 'Close',
-        barrierColor: Colors.black.withValues(alpha: 0.55),
-        pageBuilder: (context, _, __) => Material(type: MaterialType.transparency, child: VideoPlayerView(file: f, bytes: bytes)),
+        barrierColor: Colors.transparent,
+        // A proper child layer: the Files pane and its controls are blurred
+        // out behind the Player, not merely dimmed.
+        pageBuilder: (context, _, __) => Material(type: MaterialType.transparency, child: Stack(fit: StackFit.expand, children: [
+          ClipRect(child: BackdropFilter(filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24), child: const ColoredBox(color: Color(0x66000000)))),
+          VideoPlayerView(file: f, bytes: bytes),
+        ])),
       );
       return;
     }

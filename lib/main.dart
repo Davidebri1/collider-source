@@ -388,6 +388,16 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     if (Uri.base.queryParameters['composer'] == '1') _isComposerSummoned = true;
     if (Uri.base.queryParameters['settings'] == '1') _settingsOpen = true;
     if (Uri.base.queryParameters['browser'] == '1') _browserOpen = true;
+    final rs = int.tryParse(Uri.base.queryParameters['restore'] ?? '');
+    if (rs != null) {
+      Future.delayed(const Duration(milliseconds: 2500), () {
+        if (!mounted) return;
+        setState(() => _activeDrawer = 'history');
+        Future.delayed(const Duration(milliseconds: 900), () {
+          if (mounted && rs < _globalHistorySessions.length) _loadAndExpandSession(_globalHistorySessions[rs]);
+        });
+      });
+    }
     final cq = Uri.base.queryParameters['cat'];
     if (cq != null) _activeCategory = ModelCategory.values.firstWhere((c) => c.name == cq, orElse: () => ModelCategory.general);
     if (Uri.base.queryParameters['genopts'] == '1' && _activeCategory.isMedia) _genOptionsOpen = true;
@@ -837,6 +847,13 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   /// Keeps the named category strip aligned with the paged ticker above it.
   late final ScrollController _catLabelCtl = ScrollController();
   final Map<ModelCategory, ScrollController> _tickerScroll = {for (final c in ModelCategory.values) c: ScrollController()};
+  // Grey-slab experiment switches (URL only, off by default):
+  // ?noguard=1 restores the old hasClients checks; ?freshsc=1 gives the
+  // ticker a fresh ScrollController per surface change.
+  static final bool _noGuard = Uri.base.queryParameters['noguard'] == '1';
+  static final bool _freshSc = Uri.base.queryParameters['freshsc'] == '1';
+  bool _one(ScrollController c) => _noGuard ? c.hasClients : c.positions.length == 1;
+  String _scSig = '';
 
   void _toggleSelect(ModelCategory c, String id) {
     setState(() {
@@ -951,6 +968,10 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   /// ticker, so this method has one job.
   Widget _tickerPage(ModelCategory c) {
     final rows = _tickerRows(c);
+    if (_freshSc && _scSig != _lastSurfaceSig) {
+      _scSig = _lastSurfaceSig;
+      _tickerScroll[c] = ScrollController();
+    }
     final sc = _tickerScroll[c]!;
     // v9: nothing has been asked in this category yet. Say so once, quietly,
     // instead of leaving the column as bare glass.
@@ -988,7 +1009,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             itemBuilder: (_, i) => _tickerRow(c, rows[i], rows.length <= 1 ? 1.0 : 1.0 - i / (rows.length - 1)),
           ),
           ),
-          if (rows.length > 3 && sc.positions.length == 1 && sc.position.maxScrollExtent > 0)
+          if (rows.length > 3 && _one(sc) && sc.position.maxScrollExtent > 0)
             Positioned(
               right: 2,
               bottom: 2,
@@ -996,7 +1017,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                 child: AnimatedBuilder(
                   animation: sc,
                   builder: (_, __) {
-                    final p = sc.positions.length == 1 && sc.position.maxScrollExtent > 0
+                    final p = _one(sc) && sc.position.maxScrollExtent > 0
                         ? (sc.offset / sc.position.maxScrollExtent).clamp(0.0, 1.0)
                         : 0.0;
                     final more = 1 - p;
@@ -1171,9 +1192,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
   Widget _buildTicker() {
     final idx = _tickerOrder.indexOf(_activeCategory);
-    if (_catPager.positions.length == 1 && _catPager.page != null && (_catPager.page!.round() != idx) && !_catPager.position.isScrollingNotifier.value) {
+    if (_one(_catPager) && _catPager.page != null && (_catPager.page!.round() != idx) && !_catPager.position.isScrollingNotifier.value) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_catPager.positions.length == 1) _catPager.animateToPage(idx, duration: VMotion.base, curve: Curves.easeOutCubic);
+        if (_one(_catPager)) _catPager.animateToPage(idx, duration: VMotion.base, curve: Curves.easeOutCubic);
       });
     }
     // The window owns the height (R08: 40% ceiling, one fixed height in every
@@ -1990,7 +2011,18 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => setState(_expandedModelIds.clear), child: const SizedBox.expand())),
           // The ticker is the core experience: ALWAYS present. When another
           // surface has focus it stays, blurred and non-interactive.
+          // v9.1.6g REAL root cause of the grey slab (reproduced every time
+          // with ?restore=0&noguard=1, traced with element ancestor chains):
+          // the conditional tap-outside Positioned just above is inserted or
+          // removed when a session opens or closes. This Stack is unkeyed, so
+          // Flutter matched that new Positioned to the ticker's old element and
+          // rebuilt the whole ticker as a fresh element below it. The new
+          // ListView/PageView attached to the shared ScrollControllers before
+          // the old (deactivated) ones detached: two positions, List.single
+          // threw in build, release painted the grey ErrorWidget. The key
+          // keeps the ticker's element, so it is never rebuilt or duplicated.
           Positioned.fill(
+            key: const ValueKey('ticker-layer'),
             bottom: 12 + 56 + 4, // docked on the bottom bar: one layer
             child: _tickerGate(SafeArea(
               bottom: false,
@@ -2021,6 +2053,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                       ],
                       // Bug 10: this one dims when the composer is summoned.
                       ValueListenableBuilder<bool>(
+                        key: const ValueKey('ticker-window'),
                         valueListenable: KeyboardDof.active,
                         // v9.1.6 (root cause of the grey slab): an ImageFiltered over rows that
                         // carry their own BackdropFilter renders as a flat grey block on web,

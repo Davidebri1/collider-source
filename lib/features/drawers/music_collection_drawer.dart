@@ -43,7 +43,7 @@ class MusicCollectionDrawer extends StatelessWidget {
               filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: const Color(0x4018181E), // lighter than workTint: the ticker reads through
+                  color: const Color(0x2618181E), // lighter than workTint: the ticker reads through
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: AnimatedBuilder(animation: p, builder: (context, _) => _body(p)),
