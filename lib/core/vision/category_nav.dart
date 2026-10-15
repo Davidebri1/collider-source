@@ -45,14 +45,24 @@ class CategoryTaxonomy {
   static bool matches(String key, List<String> tags) {
     if (key.isEmpty) return true;
     final low = tags.map((t) => t.toLowerCase()).toSet();
-    if (key.startsWith('t:')) return low.contains(key.substring(2));
+    // v9.1.7 (#26): 't:<group tag>|<format tag>' = a subcategory (all must match).
+    if (key.startsWith('t:')) return key.substring(2).split('|').every(low.contains);
     final g = groups.where((e) => 'g:${e.$1}' == key);
     if (g.isEmpty) return true;
     final e = g.first;
     return e.$3.isNotEmpty ? low.contains(e.$3) : e.$4.any(low.contains);
   }
 
-  static String labelOf(String key) => key.isEmpty ? 'All' : (key.startsWith('g:') ? key.substring(2) : (_names[key.substring(2)] ?? title(key.substring(2))));
+  static String labelOf(String key) {
+    if (key.isEmpty) return 'All';
+    if (key.startsWith('g:')) return key.substring(2);
+    final parts = key.substring(2).split('|');
+    return parts.map((t) => _names[t] ?? (t == '4k' ? '4K' : title(t))).join(' · ');
+  }
+
+  /// v9.1.7 (#26): the subcategories every group cascades into: its live and
+  /// still items, and its 4K items (the R2 objects carry these format tags).
+  static const List<(String, String)> _formats = [('live wallpaper', 'Live'), ('wallpaper', 'Stills'), ('4k', '4K')];
 
   static List<NavGroup> build(List<List<String>> allTags) {
     final out = <NavGroup>[];
@@ -61,6 +71,16 @@ class CategoryTaxonomy {
       for (final t in tags) {
         final n = allTags.where((ts) => ts.any((x) => x.toLowerCase() == t)).length;
         if (n > 0) leaves.add(NavLeaf(_names[t] ?? title(t), t, n));
+      }
+      final gt = groups.firstWhere((e) => e.$1 == label).$3;
+      if (gt.isNotEmpty) {
+        final sub = <NavLeaf>[];
+        for (final (f, name) in _formats) {
+          final n = allTags.where((ts) => matches('t:$gt|$f', ts)).length;
+          if (n > 0) sub.add(NavLeaf(name, '$gt|$f', n));
+        }
+        // Only a real split: one format alone is the whole group again.
+        if (sub.length > 1 || (sub.length == 1 && sub.first.count < allTags.where((ts) => matches('g:$label', ts)).length)) leaves.addAll(sub);
       }
       final total = allTags.where((ts) => matches('g:$label', ts)).length;
       if (total > 0) out.add(NavGroup(label, icon, leaves, total));
@@ -235,13 +255,17 @@ class CategoryBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // v9.1.7 (#26): subcategories cascade horizontally: the selected
+    // group's subcategories open inline, right after it, as smaller chips.
     final items = <(String, String, int)>[('', 'All', total)];
+    final subs = <String>{};
     for (final g in groups) {
-      if (g.leaves.isEmpty) {
-        items.add(('g:${g.label}', g.label, g.count));
-      } else {
+      items.add(('g:${g.label}', g.label, g.count));
+      final open = selected == 'g:${g.label}' || g.leaves.any((l) => selected == 't:${l.tag}');
+      if (open) {
         for (final l in g.leaves) {
           items.add(('t:${l.tag}', l.label, l.count));
+          subs.add('t:${l.tag}');
         }
       }
     }
@@ -273,10 +297,14 @@ class CategoryBar extends StatelessWidget {
                         onTap: () => onSelected(k),
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 180),
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          padding: EdgeInsets.symmetric(horizontal: subs.contains(k) ? 10 : 14),
+                          margin: EdgeInsets.symmetric(vertical: subs.contains(k) ? 4 : 0),
                           alignment: Alignment.center,
-                          decoration: BoxDecoration(color: selected == k ? const Color(0x40FFFFFF) : Colors.transparent, borderRadius: BorderRadius.circular(999)),
-                          child: Text(label, style: TextStyle(fontSize: 15, fontWeight: selected == k ? FontWeight.w600 : FontWeight.w500, color: Colors.white)),
+                          decoration: BoxDecoration(
+                            color: selected == k ? const Color(0x40FFFFFF) : (subs.contains(k) ? const Color(0x1AFFFFFF) : Colors.transparent),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(label, style: TextStyle(fontSize: subs.contains(k) ? 13 : 15, fontWeight: selected == k ? FontWeight.w600 : FontWeight.w500, color: Colors.white)),
                         ),
                       ),
                     ),

@@ -1806,6 +1806,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       children: [
         SideNavRail(
           surface: surface,
+          musicOpen: _activeDrawer == 'music',
           activeKey: railKey,
           compact: isMobile,
           onSelect: (key) {

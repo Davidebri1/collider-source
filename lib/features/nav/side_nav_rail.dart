@@ -16,7 +16,7 @@ class SideRailEntry {
 ///
 /// Labels are short on purpose. The rail is a 58pt column; anything longer
 /// ellipsised into mush, which is what made it look broken.
-List<SideRailEntry> sideRailEntries(ActiveWorkSurface s) => switch (s) {
+List<SideRailEntry> sideRailEntries(ActiveWorkSurface s, {bool musicOpen = false}) => switch (s) {
       ActiveWorkSurface.chat => const [
           SideRailEntry('new', Icons.add_rounded, 'New'),
           SideRailEntry('local', Icons.history_rounded, 'Local'),
@@ -48,7 +48,7 @@ List<SideRailEntry> sideRailEntries(ActiveWorkSurface s) => switch (s) {
           // No songs in the catalog: no Music entry (v8.3, D46).
           if (MusicPlayer.library.isNotEmpty) const SideRailEntry('music', Icons.library_music_rounded, 'Music'),
           // v9.1.7 (#24): Music's collections (pack songs, ambient tracks).
-          if (MusicPlayer.library.isNotEmpty) ...const [
+          if (musicOpen && MusicPlayer.library.isNotEmpty) ...const [
             SideRailEntry('music_themes', Icons.collections_bookmark_outlined, 'Packs'),
             SideRailEntry('music_ambient', Icons.waves_rounded, 'Ambient'),
           ],
@@ -90,14 +90,17 @@ class SideNavRail extends StatelessWidget {
     required this.activeKey,
     required this.onSelect,
     this.compact = true,
+    this.musicOpen = false,
   });
+  /// v9.1.7 (#24): Music's collections show only while Music is open.
+  final bool musicOpen;
 
   static const double _railWidth = 58;
   static const double _dot = 34;
 
   @override
   Widget build(BuildContext context) {
-    final entries = sideRailEntries(surface);
+    final entries = sideRailEntries(surface, musicOpen: musicOpen);
     final active = entries.indexWhere((e) => e.key == activeKey);
     return Recede(child: AnimatedSize(
       duration: VMotion.base,
