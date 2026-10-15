@@ -113,7 +113,20 @@ void main() {
       expect(rect.left, greaterThanOrEqualTo(0), reason: title);
       expect(rect.right, lessThanOrEqualTo(287), reason: '$title is clipped by the pane');
     }
-    expect(find.text('Doing'), findsNothing);
+    final todo = tester.getRect(find.text('To Do'));
+    final doing = tester.getRect(find.text('Doing'));
+    final slot = doing.left - todo.left;
+    final peek = (286 - slot) / slot;
+    expect(peek, inInclusiveRange(0.15, 0.20), reason: 'the next list should peek');
+    expect(doing.left, lessThan(286), reason: 'Doing is off screen');
+    expect(todo.right, lessThan(286));
+
+    final position = tester.state<ScrollableState>(find.byWidgetPredicate((w) => w is Scrollable && w.axis == Axis.horizontal)).position;
+    position.jumpTo(position.maxScrollExtent);
+    await tester.pump();
+    final add = tester.getRect(find.text('+ Add list'));
+    expect(add.left, greaterThanOrEqualTo(0));
+    expect(add.right, lessThanOrEqualTo(287));
   });
 
   testWidgets('every chip on the card sheet clears 4.5:1 and the actions are fully visible', (tester) async {

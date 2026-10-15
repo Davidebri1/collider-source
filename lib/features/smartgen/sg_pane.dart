@@ -29,6 +29,7 @@ class _SgPaneState extends State<SgPane> {
   Timer? _toastTimer;
   bool _forceFlip = false;
   String _overlay = '';
+  double _kanbanPage = 0;
   final GlobalKey _listKey = GlobalKey();
   final GlobalKey _labelsKey = GlobalKey();
   final GlobalKey _membersKey = GlobalKey();
@@ -59,6 +60,12 @@ class _SgPaneState extends State<SgPane> {
     if (sg == 'multi') {
       _multi = true;
       _selected.addAll(store.board!.cards.take(3).map((c) => c.id));
+    }
+    final kp = q['kpage'];
+    if (kp == 'last') {
+      _kanbanPage = store.board!.orderedLists.length.toDouble();
+    } else if (kp != null) {
+      _kanbanPage = double.tryParse(kp) ?? 0;
     }
     _checkNotes();
     _notes = Timer.periodic(const Duration(seconds: 30), (_) => _checkNotes());
@@ -350,7 +357,7 @@ class _SgPaneState extends State<SgPane> {
     if (_overlay == 'editor-bulk') return _bulkEdit(b);
     if (_menu) return _menuBody(b);
     if (open != null) return _editor(b, open);
-    return SgSurfaceView(store: store, onOpen: _open, multi: _multi, selected: _selected, forceFlip: _forceFlip, onSelect: (c) => setState(() => _selected.contains(c.id) ? _selected.remove(c.id) : _selected.add(c.id)));
+    return SgSurfaceView(store: store, onOpen: _open, multi: _multi, selected: _selected, forceFlip: _forceFlip, kanbanPage: _kanbanPage, onSelect: (c) => setState(() => _selected.contains(c.id) ? _selected.remove(c.id) : _selected.add(c.id)));
   }
 
   Widget _create() {

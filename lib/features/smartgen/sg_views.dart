@@ -183,43 +183,70 @@ Uint8List _bytes(String dataUrl) {
   }
 }
 
-class SgKanban extends StatelessWidget {
-  const SgKanban({super.key, required this.store, required this.onOpen, this.multi = false, this.selected = const {}, this.onSelect});
+class SgKanban extends StatefulWidget {
+  const SgKanban({super.key, required this.store, required this.onOpen, this.multi = false, this.selected = const {}, this.onSelect, this.initialPage = 0});
   final SgStore store;
   final void Function(SgCard) onOpen;
   final bool multi;
   final Set<String> selected;
   final void Function(SgCard)? onSelect;
+  /// Capture hook. 0 is the first list. A fraction such as 0.5 rests between
+  /// two snap points. `orderedLists.length` is the "+ Add list" column.
+  final double initialPage;
+
+  /// The column takes this share of the pane, so about 19% of the next list
+  /// stays on screen. (1 - 0.84) / 0.84 = 0.19.
+  static const double listFraction = 0.84;
+
+  @override
+  State<SgKanban> createState() => _SgKanbanState();
+}
+
+class _SgKanbanState extends State<SgKanban> {
+  late final PageController _pages = PageController(viewportFraction: SgKanban.listFraction);
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialPage != 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _showPage());
+    }
+  }
+
+  void _showPage() {
+    if (!mounted || !_pages.hasClients || _pages.position.viewportDimension == 0) return;
+    final target = widget.initialPage * _pages.position.viewportDimension * _pages.viewportFraction;
+    _pages.jumpTo(target.clamp(0, _pages.position.maxScrollExtent));
+  }
+
+  @override
+  void dispose() {
+    _pages.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final b = store.board!;
+    final b = widget.store.board!;
     final lists = b.orderedLists;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        return ScrollConfiguration(
-          behavior: const SgScroll(),
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: lists.length + 1,
-            itemBuilder: (context, i) {
-              return SizedBox(
-                width: width,
-                child: i == lists.length ? _addList() : _column(b, lists[i]),
-              );
-            },
-          ),
-        );
-      },
+    return ScrollConfiguration(
+      behavior: const SgScroll(),
+      child: PageView.builder(
+        controller: _pages,
+        padEnds: false,
+        itemCount: lists.length + 1,
+        itemBuilder: (context, i) {
+          return i == lists.length ? _addList() : _column(b, lists[i]);
+        },
+      ),
     );
   }
 
   Widget _column(SgBoard b, SgList list) {
     final cards = b.cardsIn(list.id);
     return DragTarget<String>(
-      onWillAcceptWithDetails: (d) => store.byId(d.data) != null,
-      onAcceptWithDetails: (d) => store.moveCard(d.data, list.id),
+      onWillAcceptWithDetails: (d) => widget.store.byId(d.data) != null,
+      onAcceptWithDetails: (d) => widget.store.moveCard(d.data, list.id),
       builder: (context, candidate, _) {
         final hot = candidate.isNotEmpty;
         return Padding(
@@ -230,7 +257,7 @@ class SgKanban extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: hot ? const Color(0xFF3D7A6A) : const Color(0x14000000), width: hot ? 1.5 : 1),
             ),
-              child: _KanbanColumn(store: store, board: b, list: list, cards: cards, multi: multi, selected: selected, onOpen: onOpen, onSelect: onSelect),
+              child: _KanbanColumn(store: widget.store, board: b, list: list, cards: cards, multi: widget.multi, selected: widget.selected, onOpen: widget.onOpen, onSelect: widget.onSelect),
           ),
         );
       },
@@ -243,8 +270,8 @@ class SgKanban extends StatelessWidget {
       child: Align(
         alignment: Alignment.topCenter,
         child: TextButton(
-          onPressed: () => store.addList('List ${store.board!.lists.length + 1}'),
-          child: Text('Add a list', style: appFont(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
+          onPressed: () => widget.store.addList('List ${widget.store.board!.lists.length + 1}'),
+          child: Text('+ Add list', style: appFont(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
         ),
       ),
     );
@@ -995,13 +1022,14 @@ class SgCanvasBoard extends StatelessWidget {
 }
 
 class SgSurfaceView extends StatelessWidget {
-  const SgSurfaceView({super.key, required this.store, required this.onOpen, this.multi = false, this.selected = const {}, this.onSelect, this.forceFlip = false});
+  const SgSurfaceView({super.key, required this.store, required this.onOpen, this.multi = false, this.selected = const {}, this.onSelect, this.forceFlip = false, this.kanbanPage = 0});
   final SgStore store;
   final void Function(SgCard) onOpen;
   final bool multi;
   final Set<String> selected;
   final void Function(SgCard)? onSelect;
   final bool forceFlip;
+  final double kanbanPage;
 
   @override
   Widget build(BuildContext context) {
@@ -1011,7 +1039,7 @@ class SgSurfaceView extends StatelessWidget {
     }
     final s = store.board!.surface;
     return switch (s) {
-      SgSurface.kanban => SgKanban(store: store, onOpen: onOpen, multi: multi, selected: selected, onSelect: onSelect),
+      SgSurface.kanban => SgKanban(store: store, onOpen: onOpen, multi: multi, selected: selected, onSelect: onSelect, initialPage: kanbanPage),
       SgSurface.calendar => SgCalendar(store: store, onOpen: onOpen),
       SgSurface.notebook => SgNotebook(store: store, onOpen: onOpen),
       SgSurface.album => SgAlbum(store: store, onOpen: onOpen),
