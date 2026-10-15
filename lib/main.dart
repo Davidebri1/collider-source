@@ -191,7 +191,10 @@ class ColliderApp extends StatelessWidget {
 }
 
 class ColliderHomeScreen extends StatefulWidget {
-  const ColliderHomeScreen({super.key});
+  /// Opens this drawer on the first frame. Screenshot links use `?app=`.
+  /// Tests pass it here because the test binding has no query string.
+  const ColliderHomeScreen({super.key, this.initialDrawer});
+  final String? initialDrawer;
 
   @override
   State<ColliderHomeScreen> createState() => _ColliderHomeScreenState();
@@ -418,6 +421,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     if (cq != null) _activeCategory = ModelCategory.values.firstWhere((c) => c.name == cq, orElse: () => ModelCategory.general);
     if (Uri.base.queryParameters['genopts'] == '1' && _activeCategory.isMedia) _genOptionsOpen = true;
     if (Uri.base.queryParameters['rail'] == '1') _isMobileSideNavOpen = true;
+    _activeDrawer ??= widget.initialDrawer;
     _initializeTickerItems();
     WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) _qaSeedAnswers(); });
     _initializeHistorySessions();
@@ -880,18 +884,19 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   }
   // v9.1.7 (CPane): the ticker docks under EVERY pane, built once here.
   bool get _tallPaneOpen => _browserOpen || _settingsOpen || _activeDrawer != null;
-  final GlobalKey _tickerWindowKey = GlobalKey();
-  /// Distance from the screen bottom to the top of the docked ticker (0 when
-  /// the ticker has no rows). Measured after layout.
+  final GlobalKey _composerKey = GlobalKey();
+  /// Distance from the screen bottom to just above the composer. Measured
+  /// after layout. The ticker may sit behind a pane; the composer may not.
   double _dockBand = 0;
-  // v9.1.7 (CPane): the one bottom reserve every pane inherits: the docked
-  // ticker band (which includes the composer), or the composer alone.
+  // v9.1.7 (CPane): the one bottom reserve every pane inherits. It is at
+  // least the composer, so a focused pane ends above the bar.
   double get _paneReserve => math.max(_dockBand, 110.0);
   void _measureDockBand() {
-    final ctx = _tickerWindowKey.currentContext;
-    final box = ctx?.findRenderObject() as RenderBox?;
+    final box = _composerKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.attached || !box.hasSize || box.size.height < 1) return;
     final h = MediaQuery.sizeOf(context).height;
-    final band = (box == null || !box.hasSize || box.size.height < 1) ? 0.0 : (h - box.localToGlobal(Offset.zero).dy + 8).clamp(0.0, h * 0.5);
+    // 12px of wallpaper between the pane's bottom edge and the composer.
+    final band = (h - box.localToGlobal(Offset.zero).dy + 12).clamp(0.0, h * 0.5);
     if ((band - _dockBand).abs() > 1) setState(() => _dockBand = band);
   }
   /// The composer needs more room than a ticker row, so it gets the full
@@ -1412,6 +1417,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   /// huge whenever an answer was expanded. It keeps one width now, in front of
   /// a frosted plane, and never inside the ticker's layout.
   Widget _buildComposer() => SizedBox(
+        key: _composerKey,
         width: _composerWidth,
         child: _windowSurface(
           bare: true,
@@ -1980,6 +1986,12 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     final surfaceSig = '$_activeDrawer|${_expandedModelIds.join(',')}|$_settingsOpen|$_browserOpen|$_zoomedMessage|$_localHistoryModel';
     if (surfaceSig != _lastSurfaceSig) { _lastSurfaceSig = surfaceSig; }
     _guardPreview();
+    // The composer is wider than a phone pane. Measure it after layout and
+    // keep the pane's bottom edge above it, or the + and send buttons sit on
+    // the pane's corners.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _measureDockBand();
+    });
     // Max 9 active model rows filtered by active category with fallback
     var categoryPills = _tickerItems
         .where((it) => it.modelDef.categories.contains(_activeCategory) && _selectedModelIds.contains(it.modelDef.id))

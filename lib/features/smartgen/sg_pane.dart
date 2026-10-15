@@ -185,17 +185,41 @@ class _SgPaneState extends State<SgPane> {
           for (final s in SgSurface.values)
             Padding(
               padding: const EdgeInsets.only(right: 4),
-              child: ChoiceChip(
-                label: Text(s.label, style: appFont(fontSize: 12, color: Colors.white)),
+              child: _glassChoice(
+                label: s.label,
                 selected: b.surface == s,
                 onSelected: (_) => store.touch(() => b.surface = s),
-                visualDensity: VisualDensity.compact,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             ),
         ],
         ),
       ),
+    );
+  }
+
+  /// Selected is the solid chip. The others are an outline on the glass,
+  /// the same reading as a settings section: the chosen one is the fill.
+  Widget _glassChoice({required String label, required bool selected, required ValueChanged<bool> onSelected, double size = 12}) {
+    final ink = selected ? const Color(0xFF1C1B19) : Colors.white;
+    final style = appFont(fontSize: size, fontWeight: selected ? FontWeight.w700 : FontWeight.w500, color: ink);
+    return ChoiceChip(
+      label: Text(label, style: style),
+      labelStyle: style,
+      selected: selected,
+      showCheckmark: false,
+      onSelected: onSelected,
+      visualDensity: VisualDensity.compact,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      elevation: 0,
+      pressElevation: 0,
+      surfaceTintColor: Colors.transparent,
+      shadowColor: Colors.transparent,
+      selectedShadowColor: Colors.transparent,
+      side: BorderSide(color: selected ? const Color(0xFFFFFFFF) : const Color(0xB3FFFFFF), width: 1),
+      color: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) return const Color(0xFFF7F4EF);
+        return const Color(0x14FFFFFF);
+      }),
     );
   }
 
@@ -210,9 +234,10 @@ class _SgPaneState extends State<SgPane> {
               for (var i = 0; i < b.canvases.length; i++)
                 Padding(
                   padding: const EdgeInsets.only(left: 4),
-                  child: ChoiceChip(
-                    label: Text('${i + 1} ${b.canvases[i].name}', style: appFont(fontSize: 11, color: Colors.white)),
+                  child: _glassChoice(
+                    label: '${i + 1} ${b.canvases[i].name}',
                     selected: b.canvasIndex == i,
+                    size: 11,
                     onSelected: (_) => store.touch(() => b.canvasIndex = i),
                   ),
                 ),
@@ -265,9 +290,10 @@ class _SgPaneState extends State<SgPane> {
           Text('Board kind', style: appFont(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
           Wrap(spacing: 4, children: [
             for (final k in SgBoardKind.values)
-              ChoiceChip(
-                label: Text(k.name, style: appFont(fontSize: 10, color: Colors.white)),
+              _glassChoice(
+                label: k.name,
                 selected: b.kind == k,
+                size: 10,
                 onSelected: (_) => store.touch(() {
                   b.kind = k;
                   final surface = SgSurface.values.asNameMap()[k.name];
@@ -282,7 +308,7 @@ class _SgPaneState extends State<SgPane> {
           Text('Status control', style: appFont(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
           Wrap(spacing: 4, children: [
             for (final k in SgStatusKind.values)
-              ChoiceChip(label: Text(_statusKindLabel(k), style: appFont(fontSize: 10, color: Colors.white)), selected: b.statusKind == k, onSelected: (_) => store.touch(() => b.statusKind = k)),
+              _glassChoice(label: _statusKindLabel(k), selected: b.statusKind == k, size: 10, onSelected: (_) => store.touch(() => b.statusKind = k)),
           ]),
         ],
       ),

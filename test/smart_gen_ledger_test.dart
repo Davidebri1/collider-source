@@ -171,6 +171,34 @@ void main() {
     expect(find.descendant(of: sheet, matching: find.text('Done')), findsWidgets);
   });
 
+  testWidgets('the selected view tab and board-kind chip are the strong fill', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    SgStore.instance.debugReset();
+    SgStore.instance.ensureStarter();
+    addTearDown(SgStore.instance.debugReset);
+    await tester.pumpWidget(MaterialApp(
+      theme: ThemeData(brightness: Brightness.dark, useMaterial3: true),
+      home: const Scaffold(body: SmartGenScreen(onClose: _noop)),
+    ));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    _expectStrongChip(tester, 'Kanban', 'Calendar');
+
+    // The overdue note covers the header for a moment. Wait it out, then open the menu.
+    await tester.pump(const Duration(milliseconds: 2700));
+    await tester.tap(find.byTooltip('Board menu'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    _expectStrongChip(tester, 'notebook', 'portfolio');
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 50));
+  });
+
   test('genie mass-edits and refactors without calling a provider', () {
     final s = SgStore()..ensureStarter();
     final reply = s.askGenie('set all priority to high');
@@ -184,6 +212,19 @@ void main() {
 }
 
 void _noop() {}
+
+void _expectStrongChip(WidgetTester tester, String selected, String idle) {
+  final selectedFill = _chipFill(find.widgetWithText(ChoiceChip, selected).evaluate().first);
+  final idleFill = _chipFill(find.widgetWithText(ChoiceChip, idle).evaluate().first);
+  expect(selectedFill, isNotNull, reason: '$selected has no fill');
+  expect(selectedFill!.a, greaterThan(0.85), reason: '$selected should be the solid chip');
+  expect(_luminance(selectedFill), greaterThan(0.7), reason: '$selected fill is faint');
+  expect(idleFill == null || idleFill.a < 0.45, isTrue, reason: '$idle is a solid chip (${idleFill?.a})');
+  final selectedInk = tester.renderObject<RenderParagraph>(find.text(selected)).text.style?.color;
+  final idleInk = tester.renderObject<RenderParagraph>(find.text(idle)).text.style?.color;
+  expect(_luminance(selectedInk!), lessThan(0.25), reason: '$selected label is light on the solid chip');
+  expect(_luminance(idleInk!), greaterThan(0.7), reason: '$idle label is dark on the outline chip');
+}
 
 double _channel(double s) => s <= 0.03928 ? s / 12.92 : math.pow((s + 0.055) / 1.055, 2.4).toDouble();
 

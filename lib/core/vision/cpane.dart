@@ -49,6 +49,8 @@ class CPane extends StatelessWidget {
   final Widget child;
   final CLayer layer;
   final CPaneFit fit;
+  /// The glass body, not the top gap. Layout tests use this rect.
+  static const Key bodyKey = ValueKey<String>('cpane-body');
   const CPane({super.key, required this.child, this.layer = CLayer.floating, this.fit = CPaneFit.fill});
 
   /// The rectangle a pane occupies, for screens that must lay out inside it.
@@ -83,6 +85,7 @@ class CPane extends StatelessWidget {
       child: Align(
         alignment: Alignment.topCenter,
         child: SizedBox(
+          key: bodyKey,
           width: w,
           height: fit == CPaneFit.fill ? maxH : null,
           child: fit == CPaneFit.fill ? glass : ConstrainedBox(constraints: BoxConstraints(maxHeight: maxH), child: glass),
