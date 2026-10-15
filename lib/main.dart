@@ -1539,7 +1539,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       _tickerItems[i] = cur.copyWith(isStreaming: false, relativeTime: _clock(now), summary: text.split('\n').first,
           conversation: [...cur.conversation, TickerMessage(id: 'm$id${now.microsecondsSinceEpoch}', sender: 'model', text: text, timestamp: now)]);
     });
-    if (!error) _summarise(id, text);
+    if (!error && !_qaAnswers) _summarise(id, text);
   }
 
   /// The ticker line is a real one-line summary from the Consensus Agent
@@ -1564,6 +1564,16 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   }
 
   static String _clock(DateTime t) => '${(t.hour % 12 == 0 ? 12 : t.hour % 12)}:${t.minute.toString().padLeft(2, '0')} ${t.hour < 12 ? 'AM' : 'PM'}';
+
+  /// QA builds only (COLLIDER_QA_UNLOCK + ?qa_answers=1): a test-only answer
+  /// source, so threads and History can be checked without model calls.
+  /// Compiled out of the live build.
+  static bool get _qaAnswers => ThemePackStore.qaUnlockAll && Uri.base.queryParameters['qa_answers'] == '1';
+  int _qaTurn = 0;
+  Future<String> _qaReply(String id, String prompt) async {
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    return 'QA reply ${++_qaTurn} from ${ModelRoster.byId(id)?.label ?? id}: "$prompt"';
+  }
 
   Future<void> _onSendDirect(String prompt, List<String> models) async {
     final now = DateTime.now();
@@ -1593,6 +1603,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     });
     await Future.wait([
       for (final id in models)
+        if (_qaAnswers) _qaReply(id, prompt).then((text) => _answer(id, text, false)) else
         MediaGen.instance.chat(id, [
           // No shared system prompt. Each model answers with its own house
           // behaviour; a single persona here flattened them into one voice.
@@ -1621,7 +1632,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         }
       }
     });
-    await _directConsensus(prompt);
+    if (!_qaAnswers) await _directConsensus(prompt);
+    if (_qaAnswers && mounted) setState(() => _isConsensusGenerating = false);
   }
 
   Future<void> _onSendPrompt(String prompt, [List<String> files = const []]) async {
@@ -1631,7 +1643,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       return d != null && !d.isMedia;
     }).toList();
     if (models.isEmpty) return;
-    if (!ColliderApi.instance.online) {
+    if (!ColliderApi.instance.online || _qaAnswers) {
       // v8.3.1: every selected model is asked directly; one that cannot
       // answer shows its real error in its bubble.
       return _onSendDirect(prompt, models);
@@ -2080,12 +2092,14 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // any more, so navigating cannot snap the layout into a different
           // full-width arrangement. Nothing touches an edge.
           // v9.1.4 (playtest #6): a tap outside the opened answer closes it.
-          if (_expandedModelIds.isNotEmpty && _activeDrawer == null && !_settingsOpen && !_browserOpen)
+          // v9.1.7 (#16): a tap on the wallpaper also tucks a summoned composer,
+          // so after sending, the rows (quiet while writing) can be opened.
+          if ((_expandedModelIds.isNotEmpty || _isComposerSummoned) && _activeDrawer == null && !_settingsOpen && !_browserOpen)
             // v9.1.6c ROOT CAUSE of the grey slab: a blurring scrim painted beneath
             // the ticker turns the rows into a flat grey block on web (bisected
             // with ?dbg: removing only this scrim cleared it). Tap-outside layers
             // under the ticker only catch taps and dim; they never blur.
-            Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => setState(_expandedModelIds.clear), child: const SizedBox.expand())),
+            Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => setState(() { _expandedModelIds.clear(); _isComposerSummoned = false; FocusManager.instance.primaryFocus?.unfocus(); }), child: const SizedBox.expand())),
           // The ticker is the core experience: ALWAYS present. When another
           // surface has focus it stays, blurred and non-interactive.
           // v9.1.6g REAL root cause of the grey slab (reproduced every time

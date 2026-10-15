@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """shot.py URL OUT.png [wait_s] [port] [actions-json]: phone shot (390x844 DPR 3).
-actions: [["tap",x,y],["long",x,y],["wait",s],["shot","path"],["drag",x1,y1,x2,y2]]"""
+actions: [["tap",x,y],["long",x,y],["wait",s],["shot","path"],["drag",x1,y1,x2,y2],["type",text],["enter"]]"""
 import json, sys, time, base64, urllib.request, websocket
 url, out = sys.argv[1], sys.argv[2]
 wait = float(sys.argv[3]) if len(sys.argv) > 3 else 6
@@ -33,6 +33,10 @@ for a in acts:
         touch("touchEnd", a[3], a[4]); time.sleep(0.8)
     elif k == "wait": time.sleep(a[1])
     elif k == "shot": snap(a[1])
+    elif k == "type": cmd("Input.insertText", {"text": a[1]}); time.sleep(0.4)
+    elif k == "enter":
+        for t in ("keyDown", "keyUp"): cmd("Input.dispatchKeyEvent", {"type": t, "key": "Enter", "code": "Enter", "windowsVirtualKeyCode": 13, "text": "\r" if t == "keyDown" else ""})
+        time.sleep(0.4)
     elif k == "eval": print(cmd("Runtime.evaluate", {"expression": a[1], "returnByValue": True}).get("result", {}).get("value"))
 snap(out)
 cmd("Target.closeTarget", {"targetId": tab["id"]}) if False else None
