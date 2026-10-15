@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -91,19 +92,21 @@ class SgFace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const paper = Color(0xFFFAF7F2);
+    const ink = Color(0xFF1C1B19);
     final accent = Color(card.color);
-    final wash = LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [accent.withValues(alpha: 0.55), accent.withValues(alpha: 0.16)]);
+    final wash = LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color.alphaBlend(accent.withValues(alpha: 0.22), paper), paper]);
     if (back) {
       return Container(
         padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(color: const Color(0xFF2A2622), borderRadius: BorderRadius.circular(12)),
-        child: Text(card.hiddenNotes.isEmpty ? 'Hidden fields' : card.hiddenNotes, style: appFont(fontSize: 12, color: const Color(0xFFE6E0D6))),
+        decoration: BoxDecoration(color: paper, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFE4DDD4))),
+        child: Text(card.hiddenNotes.isEmpty ? 'Hidden fields' : card.hiddenNotes, style: appFont(fontSize: 12, color: ink)),
       );
     }
     final labels = [for (final id in card.labelIds) ...board.labels.where((l) => l.id == id)];
     return Container(
       padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(gradient: wash, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white24)),
+      decoration: BoxDecoration(gradient: wash, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFE4DDD4))),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
         if (card.files.isNotEmpty)
           ClipRRect(
@@ -115,11 +118,11 @@ class SgFace extends StatelessWidget {
           Wrap(spacing: 4, children: [for (final l in labels) Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1), decoration: BoxDecoration(color: Color(l.color), borderRadius: BorderRadius.circular(4)), child: Text(l.title, style: appFont(fontSize: 9, color: Colors.white, fontWeight: FontWeight.w700)))]),
         ],
         const SizedBox(height: 4),
-        Text(card.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
+        Text(card.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: ink)),
         if (!compact && card.description.isNotEmpty)
-          Text(card.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 11, color: const Color(0xE6FFFFFF))),
+          Text(card.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 11, color: const Color(0xFF4A453E))),
         if (card.type == SgType.job && card.company.isNotEmpty)
-          Text('${card.company} · ${card.positionTitle}', maxLines: 1, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 10, color: const Color(0xCCFFFFFF))),
+          Text('${card.company} · ${card.positionTitle}', maxLines: 1, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 10, color: const Color(0xFF4A453E))),
         const SizedBox(height: 4),
         Row(children: [
           if (card.urgent && card.dueMs != null) SgClock(dueMs: card.dueMs!),
@@ -171,15 +174,24 @@ class SgKanban extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final b = store.board!;
-    return sgScroll(
-      axis: Axis.horizontal,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (final list in b.orderedLists) _column(b, list),
-          _addList(),
-        ],
-      ),
+    final lists = b.orderedLists;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        return ScrollConfiguration(
+          behavior: const SgScroll(),
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: lists.length + 1,
+            itemBuilder: (context, i) {
+              return SizedBox(
+                width: width,
+                child: i == lists.length ? _addList() : _column(b, lists[i]),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 
@@ -190,34 +202,45 @@ class SgKanban extends StatelessWidget {
       onAcceptWithDetails: (d) => store.moveCard(d.data, list.id),
       builder: (context, candidate, _) {
         final hot = candidate.isNotEmpty;
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          width: 168,
-          margin: const EdgeInsets.only(right: 8),
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            color: hot ? const Color(0x44FFFFFF) : const Color(0x22000000),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: hot ? Colors.white : Colors.white24, width: hot ? 1.5 : 0.6),
-          ),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Text('${list.title}  ${cards.length}', style: appFont(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
-            const SizedBox(height: 6),
-            for (final c in cards) _tile(b, c),
-            TextButton(
-              onPressed: () {
-                final made = store.addCard(SgType.task);
-                if (made != null) {
-                  store.touch(() {
-                    made.listId = list.id;
-                    made.status = list.title;
-                  });
-                  onOpen(made);
-                }
-              },
-              child: Text('Add a card', style: appFont(fontSize: 12, color: Colors.white)),
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: hot ? const Color(0xFFFFFFFF) : const Color(0xF7FFFFFF),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: hot ? const Color(0xFF3D7A6A) : const Color(0x14000000), width: hot ? 1.5 : 1),
             ),
-          ]),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+                child: Text(list.title, style: appFont(fontSize: 16, fontWeight: FontWeight.w700, color: const Color(0xFF1C1B19))),
+              ),
+              Expanded(
+                child: ScrollConfiguration(
+                  behavior: const SgScroll(),
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                    children: [
+                      for (final c in cards) _tile(b, c),
+                      TextButton(
+                        onPressed: () {
+                          final made = store.addCard(SgType.task);
+                          if (made != null) {
+                            store.touch(() {
+                              made.listId = list.id;
+                              made.status = list.title;
+                            });
+                            onOpen(made);
+                          }
+                        },
+                        child: Align(alignment: Alignment.centerLeft, child: Text('Add a card', style: appFont(fontSize: 14, color: const Color(0xFF5C564E)))),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ]),
+          ),
         );
       },
     );
@@ -243,11 +266,14 @@ class SgKanban extends StatelessWidget {
   }
 
   Widget _addList() {
-    return SizedBox(
-      width: 140,
-      child: TextButton(
-        onPressed: () => store.addList('List ${store.board!.lists.length + 1}'),
-        child: Text('Add a list', style: appFont(fontSize: 12, color: Colors.white)),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: TextButton(
+          onPressed: () => store.addList('List ${store.board!.lists.length + 1}'),
+          child: Text('Add a list', style: appFont(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
+        ),
       ),
     );
   }
@@ -263,40 +289,69 @@ class SgFlip extends StatefulWidget {
   State<SgFlip> createState() => _SgFlipState();
 }
 
-class _SgFlipState extends State<SgFlip> {
-  late bool back = widget.forceBack;
+class _SgFlipState extends State<SgFlip> with SingleTickerProviderStateMixin {
+  late final AnimationController _turn = AnimationController(vsync: this, duration: const Duration(milliseconds: 280), value: widget.forceBack ? 1 : 0);
+  late bool _back = widget.forceBack;
+
+  @override
+  void didUpdateWidget(SgFlip old) {
+    super.didUpdateWidget(old);
+    if (widget.forceBack == _back) return;
+    _back = widget.forceBack;
+    _turn.value = _back ? 1 : 0;
+  }
+
+  @override
+  void dispose() {
+    _turn.dispose();
+    super.dispose();
+  }
+
+  void _toggle() {
+    setState(() => _back = !_back);
+    if (_back) {
+      _turn.forward();
+    } else {
+      _turn.reverse();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      AnimatedSwitcher(
-        duration: const Duration(milliseconds: 280),
-        transitionBuilder: (child, anim) => AnimatedBuilder(
-          animation: anim,
-          builder: (_, __) {
-            final turns = (back ? 1 - anim.value : anim.value) * 3.1416;
-            return Transform(
-              alignment: Alignment.center,
-              transform: Matrix4.identity()
-                ..setEntry(3, 2, 0.0012)
-                ..rotateY(turns),
-              child: child,
-            );
-          },
-          child: child,
-        ),
-        child: KeyedSubtree(
-          key: ValueKey(back),
-          child: SgFace(card: widget.card, board: widget.board, compact: widget.compact, back: back),
-        ),
+      AnimatedBuilder(
+        animation: _turn,
+        builder: (context, _) {
+          final angle = _turn.value * math.pi;
+          final front = SgFace(card: widget.card, board: widget.board, compact: widget.compact);
+          // A resting front has no transform. The old switcher left every
+          // front at rotateY(pi), which mirrors the title.
+          if (angle < 0.001) return front;
+          final showBack = angle > math.pi / 2;
+          final face = showBack
+              ? Transform(
+                  alignment: Alignment.center,
+                  transform: Matrix4.identity()..rotateY(math.pi),
+                  child: SgFace(card: widget.card, board: widget.board, compact: widget.compact, back: true),
+                )
+              : front;
+          return Transform(
+            alignment: Alignment.center,
+            transform: Matrix4.identity()
+              ..setEntry(3, 2, 0.0012)
+              ..rotateY(angle),
+            child: face,
+          );
+        },
       ),
       if (widget.card.hasHidden)
         Align(
           alignment: Alignment.centerRight,
           child: Tooltip(
-            message: back ? 'Flip back' : 'Hidden fields',
+            message: _back ? 'Flip back' : 'Hidden fields',
             child: IconButton(
-              onPressed: () => setState(() => back = !back),
-              icon: Icon(back ? Icons.flip_to_front_rounded : Icons.flip_rounded, size: 16, color: Colors.white),
+              onPressed: _toggle,
+              icon: Icon(_back ? Icons.flip_to_front_rounded : Icons.flip_rounded, size: 16, color: const Color(0xFF5C564E)),
             ),
           ),
         ),
@@ -331,15 +386,18 @@ class _SgCalendarState extends State<SgCalendar> {
             Expanded(child: Text('${_months[month.month - 1]} ${month.year}', textAlign: TextAlign.center, style: appFont(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white))),
             Tooltip(message: 'Next month', child: IconButton(onPressed: () => setState(() => month = DateTime(month.year, month.month + 1)), icon: const Icon(Icons.chevron_right, color: Colors.white))),
           ]),
-          GridView.count(
-            crossAxisCount: 7,
+          GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            children: [
-              for (final n in ['S', 'M', 'T', 'W', 'T', 'F', 'S']) Center(child: Text(n, style: appFont(fontSize: 10, color: Colors.white70))),
-              for (var i = 0; i < lead; i++) const SizedBox.shrink(),
-              for (var d = 1; d <= days; d++) _day(b, DateTime(month.year, month.month, d), today),
-            ],
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 7, mainAxisExtent: 64),
+            itemCount: 7 + lead + days,
+            itemBuilder: (context, i) {
+              const names = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+              if (i < 7) return Center(child: Text(names[i], style: appFont(fontSize: 10, color: Colors.white70)));
+              if (i < 7 + lead) return const SizedBox.shrink();
+              final d = i - 6 - lead;
+              return _day(b, DateTime(month.year, month.month, d), today);
+            },
           ),
           if (picked != null) _dayPanel(b, picked!),
         ]),
@@ -358,9 +416,18 @@ class _SgCalendarState extends State<SgCalendar> {
       child: Container(
         margin: const EdgeInsets.all(1),
         decoration: BoxDecoration(color: isToday ? const Color(0x33FFFFFF) : const Color(0x11000000), borderRadius: BorderRadius.circular(4)),
-        child: Column(children: [
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Text('${day.day}', style: appFont(fontSize: 10, color: Colors.white)),
-          if (cards.isNotEmpty) Container(width: 6, height: 6, decoration: BoxDecoration(color: Color(cards.first.color), shape: BoxShape.circle)),
+          for (final c in cards.take(2))
+            GestureDetector(
+              onTap: () => widget.onOpen(c),
+              child: Container(
+                margin: const EdgeInsets.only(top: 1),
+                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+                decoration: BoxDecoration(color: Color(c.color), borderRadius: BorderRadius.circular(3)),
+                child: Text(c.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 8, fontWeight: FontWeight.w700, color: Colors.white)),
+              ),
+            ),
         ]),
       ),
     );
@@ -393,42 +460,84 @@ class _SgCalendarState extends State<SgCalendar> {
 
 const _months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-class SgNotebook extends StatelessWidget {
+class SgNotebook extends StatefulWidget {
   const SgNotebook({super.key, required this.store, required this.onOpen});
   final SgStore store;
   final void Function(SgCard) onOpen;
   @override
-  Widget build(BuildContext context) {
-    final cards = store.board!.cards.where((c) => c.type == SgType.memory || c.type == SgType.journal || c.notebook.contains('---') || c.pages.isNotEmpty).toList();
-    return sgScroll(
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Column(children: [
-          for (final c in cards) _book(c),
-          if (cards.isEmpty) Text('No notebook pages yet', style: appFont(color: Colors.white70, fontSize: 13)),
-        ]),
-      ),
-    );
+  State<SgNotebook> createState() => _SgNotebookState();
+}
+
+class _SgNotebookState extends State<SgNotebook> {
+  final PageController _pages = PageController();
+  int _index = 0;
+
+  @override
+  void dispose() {
+    _pages.dispose();
+    super.dispose();
   }
 
-  Widget _book(SgCard c) {
-    final pages = c.pages.isEmpty ? [c.description.isEmpty ? c.title : c.description] : c.pages;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(color: const Color(0xFFF3E6C8), borderRadius: BorderRadius.circular(8), border: const Border(left: BorderSide(color: Color(0xFF6B3A2A), width: 10))),
+  @override
+  Widget build(BuildContext context) {
+    final cards = widget.store.board!.cards.where((c) => c.type == SgType.memory || c.type == SgType.journal || c.notebook.contains('---') || c.pages.isNotEmpty).toList();
+    final sheets = <(SgCard, String)>[
+      for (final c in cards)
+        for (final p in (c.pages.isEmpty ? [c.description.isEmpty ? c.title : c.description] : c.pages)) (c, p),
+    ];
+    if (sheets.isEmpty) {
+      return Center(child: Text('No notebook pages yet', style: appFont(color: Colors.white70, fontSize: 13)));
+    }
+    final title = sheets[_index.clamp(0, sheets.length - 1)].$1.title;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Padding(padding: const EdgeInsets.fromLTRB(12, 8, 8, 0), child: Text(c.title, style: appFont(fontSize: 14, fontWeight: FontWeight.w700, color: const Color(0xFF3A2A1A)))),
-        SizedBox(
-          height: 88,
-          child: PageView(
-            children: [
-              for (final p in pages)
-                Padding(padding: const EdgeInsets.all(12), child: Text(p, style: appFont(fontSize: 12, color: const Color(0xFF3A2A1A)))),
-            ],
-          ),
+        Text(title, style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
+        const SizedBox(height: 8),
+        Expanded(
+          child: Stack(children: [
+            Positioned(left: 10, right: 0, top: 8, bottom: 0, child: DecoratedBox(decoration: BoxDecoration(color: const Color(0xFFE4D3B4), borderRadius: BorderRadius.circular(4)))),
+            Positioned(left: 6, right: 4, top: 4, bottom: 4, child: DecoratedBox(decoration: BoxDecoration(color: const Color(0xFFEFE0C4), borderRadius: BorderRadius.circular(4)))),
+            Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Container(
+                width: 22,
+                decoration: const BoxDecoration(color: Color(0xFF6B3A2A), borderRadius: BorderRadius.horizontal(left: Radius.circular(6))),
+                child: Column(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+                  for (var i = 0; i < 7; i++) Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFFC4A574), shape: BoxShape.circle)),
+                ]),
+              ),
+              Expanded(
+                child: DecoratedBox(
+                  decoration: const BoxDecoration(color: Color(0xFFF6EBD4), borderRadius: BorderRadius.horizontal(right: Radius.circular(4))),
+                  child: PageView(
+                    controller: _pages,
+                    onPageChanged: (i) => setState(() => _index = i),
+                    children: [
+                      for (final sheet in sheets)
+                        GestureDetector(
+                          onTap: () => widget.onOpen(sheet.$1),
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 18, 14, 16),
+                            child: Text(sheet.$2, style: appFont(fontSize: 16, height: 1.45, color: const Color(0xFF3A2A1A))),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ]),
+          ]),
         ),
-        Row(mainAxisAlignment: MainAxisAlignment.center, children: [for (var i = 0; i < pages.length; i++) Container(width: 5, height: 5, margin: const EdgeInsets.all(2), decoration: const BoxDecoration(color: Color(0xFF6B3A2A), shape: BoxShape.circle))]),
-        TextButton(onPressed: () => onOpen(c), child: Text('Open page', style: appFont(fontSize: 12, color: const Color(0xFF6B3A2A)))),
+        const SizedBox(height: 8),
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          for (var i = 0; i < sheets.length; i++)
+            Container(
+              width: i == _index ? 8 : 5,
+              height: i == _index ? 8 : 5,
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              decoration: BoxDecoration(color: i == _index ? Colors.white : const Color(0x88FFFFFF), shape: BoxShape.circle),
+            ),
+        ]),
       ]),
     );
   }

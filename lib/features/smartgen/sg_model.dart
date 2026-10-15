@@ -32,7 +32,24 @@ enum SgSurface {
   canvas,
 }
 
-enum SgFieldKind { string, number, boolean, date, time, datetime }
+/// David's clone `FieldTypeEnum` / `FIELD_TYPES`.
+enum SgFieldKind { text, textarea, richtext, number, date, datetime, checkbox, select, multi, person, url, file }
+
+/// David's clone `BoardKindEnum`.
+enum SgBoardKind { notebook, portfolio, corkboard, clipboard, ledger, desk, binder, slate }
+
+/// David's clone `HoldKindEnum`.
+enum SgHoldKind { tray, shelf, table, wall, spread, rack }
+
+SgFieldKind sgFieldKind(Object? raw) {
+  return switch (raw) {
+    'string' || 'text' => SgFieldKind.text,
+    'boolean' => SgFieldKind.checkbox,
+    'time' => SgFieldKind.datetime,
+    final String name => SgFieldKind.values.asNameMap()[name] ?? SgFieldKind.text,
+    _ => SgFieldKind.text,
+  };
+}
 
 enum SgStatusKind { dropdown, toggle, input, color }
 
@@ -95,14 +112,7 @@ extension SgSurfaceX on SgSurface {
 }
 
 extension SgFieldKindX on SgFieldKind {
-  String get label => switch (this) {
-        SgFieldKind.string => 'string',
-        SgFieldKind.number => 'number',
-        SgFieldKind.boolean => 'boolean',
-        SgFieldKind.date => 'date',
-        SgFieldKind.time => 'time',
-        SgFieldKind.datetime => 'datetime',
-      };
+  String get label => name;
 }
 
 const List<(String, String)> kUsStates = [
@@ -211,7 +221,7 @@ class SgFieldDef {
   static SgFieldDef fromJson(Map<String, Object?> j) => SgFieldDef(
         id: j['id']! as String,
         name: j['name'] as String? ?? '',
-        kind: SgFieldKind.values.asNameMap()[j['kind']] ?? SgFieldKind.string,
+        kind: sgFieldKind(j['kind']),
       );
 }
 
@@ -407,13 +417,20 @@ class SgCard {
 }
 
 class SgCanvas {
-  SgCanvas({required this.id, required this.name, this.kind = 'Glass', this.color = 0xFF8AA0B8});
+  SgCanvas({required this.id, required this.name, this.kind = 'Glass', this.color = 0xFF2F6FED, this.hold = SgHoldKind.tray});
   final String id;
   String name;
   String kind;
   int color;
-  Map<String, Object?> toJson() => {'id': id, 'name': name, 'kind': kind, 'color': color};
-  static SgCanvas fromJson(Map<String, Object?> j) => SgCanvas(id: j['id']! as String, name: j['name'] as String? ?? 'Canvas', kind: j['kind'] as String? ?? 'Glass', color: (j['color'] as num?)?.toInt() ?? 0xFF8AA0B8);
+  SgHoldKind hold;
+  Map<String, Object?> toJson() => {'id': id, 'name': name, 'kind': kind, 'color': color, 'hold': hold.name};
+  static SgCanvas fromJson(Map<String, Object?> j) => SgCanvas(
+        id: j['id']! as String,
+        name: j['name'] as String? ?? 'Canvas',
+        kind: j['kind'] as String? ?? 'Glass',
+        color: (j['color'] as num?)?.toInt() ?? 0xFF2F6FED,
+        hold: SgHoldKind.values.asNameMap()[j['hold']] ?? SgHoldKind.tray,
+      );
 }
 
 class SgBoard {
@@ -429,6 +446,7 @@ class SgBoard {
     this.autoFilterComplete = false,
     this.inheritColumnStatus = true,
     this.urgentAutoCalendar = true,
+    this.kind = SgBoardKind.notebook,
     List<String>? guests,
     List<SgList>? lists,
     List<SgLabel>? labels,
@@ -458,6 +476,7 @@ class SgBoard {
   bool autoFilterComplete;
   bool inheritColumnStatus;
   bool urgentAutoCalendar;
+  SgBoardKind kind;
   final List<String> guests;
   final List<SgList> lists;
   final List<SgLabel> labels;
@@ -497,6 +516,7 @@ class SgBoard {
         'autoFilterComplete': autoFilterComplete,
         'inheritColumnStatus': inheritColumnStatus,
         'urgentAutoCalendar': urgentAutoCalendar,
+        'kind': kind.name,
         'guests': guests,
         'lists': [for (final l in lists) l.toJson()],
         'labels': [for (final l in labels) l.toJson()],
@@ -520,6 +540,7 @@ class SgBoard {
         autoFilterComplete: j['autoFilterComplete'] == true,
         inheritColumnStatus: j['inheritColumnStatus'] != false,
         urgentAutoCalendar: j['urgentAutoCalendar'] != false,
+        kind: SgBoardKind.values.asNameMap()[j['kind']] ?? SgBoardKind.notebook,
         guests: [for (final g in (j['guests'] as List?) ?? const []) g.toString()],
         lists: [for (final l in (j['lists'] as List?) ?? const []) if (l is Map) SgList.fromJson(l.cast<String, Object?>())],
         labels: [for (final l in (j['labels'] as List?) ?? const []) if (l is Map) SgLabel.fromJson(l.cast<String, Object?>())],
@@ -994,5 +1015,73 @@ class SgStore extends ChangeNotifier {
       for (final c in b.cards)
         if ('${c.title} ${c.description} ${c.tags.join(' ')} ${c.assignee} ${c.company}'.toLowerCase().contains(s)) c,
     ];
+  }
+}
+
+/// David's clone `HOOK_TRIGGERS` / `HOOK_ACTIONS` and `runHooks`.
+enum SgHookTrigger { fieldChange, listEnter, listLeave, cardCreate, typeReparent }
+
+enum SgHookAction { setField, moveToList, addLabel, createCard }
+
+class SgHook {
+  SgHook({required this.id, required this.name, this.enabled = true, required this.trigger, this.fieldKey, this.equals, this.listId, this.typeId, required this.action, this.thenField, this.thenValue, this.thenList, this.thenLabel, this.thenTitle});
+  final String id;
+  final String name;
+  final bool enabled;
+  final SgHookTrigger trigger;
+  final String? fieldKey;
+  final String? equals;
+  final String? listId;
+  final String? typeId;
+  final SgHookAction action;
+  final String? thenField;
+  final String? thenValue;
+  final String? thenList;
+  final String? thenLabel;
+  final String? thenTitle;
+}
+
+class SgHookEvent {
+  SgHookEvent({required this.trigger, required this.cardId, this.fieldKey, this.value, this.listId, this.typeId});
+  final SgHookTrigger trigger;
+  final String cardId;
+  final String? fieldKey;
+  final Object? value;
+  final String? listId;
+  final String? typeId;
+}
+
+class SgHookMutations {
+  SgHookMutations({required this.setField, required this.moveToList, required this.addLabel, required this.createCard});
+  final void Function(String cardId, String fieldKey, String value) setField;
+  final void Function(String cardId, String listId) moveToList;
+  final void Function(String cardId, String labelId) addLabel;
+  final void Function(String listId, String title) createCard;
+}
+
+const List<String> kFieldTypes = ['text', 'textarea', 'richtext', 'number', 'date', 'datetime', 'checkbox', 'select', 'multi', 'person', 'url', 'file'];
+
+final List<SgHook> kDefaultHooks = [
+  SgHook(id: 'h-done', name: 'Done', trigger: SgHookTrigger.fieldChange, fieldKey: 'done', equals: 'true', action: SgHookAction.setField, thenField: 'status', thenValue: 'done'),
+];
+
+void runHooks(List<SgHook> hooks, SgHookEvent event, SgHookMutations mut) {
+  for (final hook in hooks) {
+    if (!hook.enabled) continue;
+    if (hook.trigger != event.trigger) continue;
+    if (hook.fieldKey != null && hook.fieldKey != event.fieldKey) continue;
+    if (hook.listId != null && hook.listId != event.listId) continue;
+    if (hook.typeId != null && hook.typeId != event.typeId) continue;
+    if (hook.equals != null && '${event.value ?? ''}' != hook.equals) continue;
+    switch (hook.action) {
+      case SgHookAction.setField:
+        if (hook.thenField != null) mut.setField(event.cardId, hook.thenField!, hook.thenValue ?? '');
+      case SgHookAction.moveToList:
+        if (hook.thenList != null) mut.moveToList(event.cardId, hook.thenList!);
+      case SgHookAction.addLabel:
+        if (hook.thenLabel != null) mut.addLabel(event.cardId, hook.thenLabel!);
+      case SgHookAction.createCard:
+        if (hook.thenList != null) mut.createCard(hook.thenList!, hook.thenTitle ?? '');
+    }
   }
 }

@@ -1,6 +1,6 @@
 # Smart Gen parity
 
-The pane is the shared centred glass window from `collider-latest-wip` at `435e06f` (`lib/core/vision/cpane.dart`). It is not full width. The side rail is hidden while Smart Gen is open, because on a phone that rail covers the left edge of the centred pane. Cards, canvases, boards and Genie sit inside the pane. Scrollbars are hidden.
+The pane is the shared centred glass window from `collider-latest-wip` at `435e06f` (`lib/core/vision/cpane.dart`). It is not full width. The side rail is hidden while Smart Gen is open, because on a phone that rail covers the left edge of the centred pane. Cards, canvases, boards and Genie sit inside the pane. Scrollbars are hidden. Card fronts rest with no flip transform (`before-mirror.png` is the rejected mirrored board; `r01-kanban.png` is the upright board). One list fills the pane and the next list is a horizontal scroll away (`r01-doing.png`). The overdue notice floats and dismisses; it is not in the resting shots. Notebook pages turn with a binding and page dots. A calendar day shows the card title. Field types, board kinds, hold kinds, and hooks are the ones in David's clone.
 
 The attached `smart-gen-trello-clone.tar.gz` was not on disk. The public `Davidebri1/trello-clone` tree is the unmodified 0l1v3rr schema (boards, lists, cards, labels, a description string, an empty Activity stub, guests, stars, a color or image background). The Smart Gen behaviour past that schema is taken from the three binding specs: `spec-unformatted.txt` section 9, `summary.txt`, and `SMART_GEN_REQUIREMENTS.md` R1–R25. `smart-gen-ui.md` was not used.
 
@@ -36,8 +36,8 @@ Photos are 390×844 phone captures under `docs/branch-review/smartgen/`. A start
 | R7 | Pass | Opening the board toasts the overdue urgent card. A card due inside an hour toasts once. `r24-desk.png` |
 | R8 | Pass | Search, statistics, select, new, Genie, board menu, flip, calendar arrows and close use `Tooltip` (hover, and long-press on a phone). `r01-kanban.png` |
 | R9a | Pass | Kanban columns and a highlighted drop target. `r01-kanban.png` |
-| R9b | Pass | October 2026 month grid and month arrows. Undated urgent cards land on today when that behavior is on. `r09-calendar.png` |
-| R9c | Pass | Trip notes is a bound page, split on `---`, with page dots. `r09-notebook.png` |
+| R9b | Pass | October 2026 month grid. A due card is a title chip on its day. `r09-calendar.png` |
+| R9c | Pass | Trip notes is a bound page you swipe, split on `---`, with a page dot for the open page. `r09-notebook.png` |
 | R9d | Pass | Covers in a grid with the title on the tile. `r09-album.png` |
 | R9e | Pass | Numbered horizontal scenes with a color bar. `r09-storyboard.png` |
 | R9f | Pass | Alternating tall and short cards. `r09-vision.png` |

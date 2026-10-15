@@ -26,6 +26,7 @@ class _SgPaneState extends State<SgPane> {
   final Set<String> _selected = {};
   String _toast = '';
   bool _toastRed = false;
+  Timer? _toastTimer;
   bool _forceFlip = false;
   String _overlay = '';
   final Set<String> _toasted = {};
@@ -69,7 +70,18 @@ class _SgPaneState extends State<SgPane> {
     store.removeListener(_onStore);
     _notes?.cancel();
     _hour?.cancel();
+    _toastTimer?.cancel();
     super.dispose();
+  }
+
+  void _showToast(String text, {required bool red}) {
+    _toastTimer?.cancel();
+    _toast = text;
+    _toastRed = red;
+    _toastTimer = Timer(const Duration(milliseconds: 2600), () {
+      if (!mounted) return;
+      setState(() => _toast = '');
+    });
   }
 
   void _checkNotes() {
@@ -80,11 +92,9 @@ class _SgPaneState extends State<SgPane> {
       if (!c.urgent || c.dueMs == null) continue;
       final left = c.dueMs! - now;
       if (left <= 0 && _toasted.add('o${c.id}')) {
-        _toast = '${c.title} is overdue';
-        _toastRed = true;
+        _showToast('${c.title} is overdue', red: true);
       } else if (left > 0 && left < const Duration(hours: 1).inMilliseconds && _toasted.add('s${c.id}')) {
-        _toast = '${c.title} is due within the hour';
-        _toastRed = false;
+        _showToast('${c.title} is due within the hour', red: false);
       }
     }
     if (mounted) setState(() {});
@@ -102,77 +112,96 @@ class _SgPaneState extends State<SgPane> {
     return CPane(
       child: b == null
           ? const SizedBox.shrink()
-          : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              _header(b),
-              if (_toast.isNotEmpty) _toastBar(),
-              _viewChips(b),
-              if (b.surface == SgSurface.canvas) _canvasChips(b),
-              if (_menu) _menuBody(b),
-              Expanded(child: _body(b)),
-              if (_multi) _bulkBar(b),
+          : Stack(children: [
+              Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                _header(b),
+                _viewChips(b),
+                if (b.surface == SgSurface.canvas) _canvasChips(b),
+                Expanded(child: _body(b)),
+                if (_multi) _bulkBar(b),
+              ]),
+              if (_toast.isNotEmpty)
+                Positioned(top: 8, left: 8, right: 8, child: _toastBar()),
             ]),
+    );
+  }
+
+  Widget _icon(String tip, IconData icon, VoidCallback onTap, {Color color = Colors.white}) {
+    return Tooltip(
+      message: tip,
+      child: IconButton(
+        onPressed: onTap,
+        icon: Icon(icon, color: color, size: 18),
+        padding: EdgeInsets.zero,
+        visualDensity: VisualDensity.compact,
+        constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+      ),
     );
   }
 
   Widget _header(SgBoard b) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 8, 4, 0),
-      child: Row(children: [
-        Expanded(
-          child: TextField(
-            controller: TextEditingController(text: b.name),
-            style: appFont(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
-            decoration: const InputDecoration(isCollapsed: true, border: InputBorder.none),
-            onSubmitted: (v) => store.touch(() => b.name = v.trim().isEmpty ? b.name : v.trim()),
-          ),
+      padding: const EdgeInsets.fromLTRB(12, 8, 4, 0),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        TextField(
+          controller: TextEditingController(text: b.name),
+          style: appFont(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white),
+          decoration: const InputDecoration(isCollapsed: true, border: InputBorder.none),
+          onSubmitted: (v) => store.touch(() => b.name = v.trim().isEmpty ? b.name : v.trim()),
         ),
-        Tooltip(message: b.starred ? 'Unstar board' : 'Star board', child: IconButton(onPressed: () => store.touch(() => b.starred = !b.starred), icon: Icon(b.starred ? Icons.star_rounded : Icons.star_outline_rounded, color: const Color(0xFFFFD56A), size: 20))),
-        Tooltip(message: 'Search', child: IconButton(onPressed: () => setState(() => _overlay = _overlay == 'search' ? '' : 'search'), icon: const Icon(Icons.search_rounded, color: Colors.white, size: 20))),
-        Tooltip(message: 'Statistics', child: IconButton(onPressed: () => setState(() => _overlay = _overlay == 'stats' ? '' : 'stats'), icon: const Icon(Icons.bar_chart_rounded, color: Colors.white, size: 20))),
-        Tooltip(message: 'Select cards', child: IconButton(onPressed: () => setState(() => _multi = !_multi), icon: const Icon(Icons.checklist_rounded, color: Colors.white, size: 20))),
-        Tooltip(message: 'New card', child: IconButton(onPressed: () => setState(() => _overlay = 'create'), icon: const Icon(Icons.add_rounded, color: Colors.white, size: 20))),
-        Tooltip(message: 'Genie', child: IconButton(onPressed: () => setState(() => _overlay = _overlay == 'genie' ? '' : 'genie'), icon: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 20))),
-        Tooltip(message: 'Board menu', child: IconButton(onPressed: () => setState(() => _menu = !_menu), icon: const Icon(Icons.tune_rounded, color: Colors.white, size: 20))),
+        Row(children: [
+          _icon(b.starred ? 'Unstar board' : 'Star board', b.starred ? Icons.star_rounded : Icons.star_outline_rounded, () => store.touch(() => b.starred = !b.starred), color: const Color(0xFFFFD56A)),
+          _icon('Search', Icons.search_rounded, () => setState(() => _overlay = _overlay == 'search' ? '' : 'search')),
+          _icon('Statistics', Icons.bar_chart_rounded, () => setState(() => _overlay = _overlay == 'stats' ? '' : 'stats')),
+          _icon('Select cards', Icons.checklist_rounded, () => setState(() => _multi = !_multi)),
+          _icon('New card', Icons.add_rounded, () => setState(() => _overlay = 'create')),
+          _icon('Genie', Icons.auto_awesome_rounded, () => setState(() => _overlay = _overlay == 'genie' ? '' : 'genie')),
+          _icon('Board menu', Icons.tune_rounded, () => setState(() => _menu = !_menu)),
+        ]),
       ]),
     );
   }
 
   Widget _toastBar() {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(8, 4, 8, 0),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+    return Material(
       color: _toastRed ? const Color(0xFF8A2A22) : const Color(0xFF3D5A40),
-      child: Row(children: [
-        Expanded(child: Text(_toast, style: appFont(fontSize: 12, color: Colors.white))),
-        Tooltip(message: 'Close', child: IconButton(onPressed: () => setState(() => _toast = ''), icon: const Icon(Icons.close, size: 16, color: Colors.white))),
-      ]),
+      borderRadius: BorderRadius.circular(10),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        child: Text(_toast, style: appFont(fontSize: 12, color: Colors.white)),
+      ),
     );
   }
 
   Widget _viewChips(SgBoard b) {
     return SizedBox(
-      height: 32,
-      child: sgScroll(
-        axis: Axis.horizontal,
-        child: Row(children: [
+      height: 40,
+      child: ScrollConfiguration(
+        behavior: const SgScroll(),
+        child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        children: [
           for (final s in SgSurface.values)
             Padding(
-              padding: const EdgeInsets.only(left: 4),
+              padding: const EdgeInsets.only(right: 4),
               child: ChoiceChip(
-                label: Text(s.label, style: appFont(fontSize: 11, color: Colors.white)),
+                label: Text(s.label, style: appFont(fontSize: 12, color: Colors.white)),
                 selected: b.surface == s,
                 onSelected: (_) => store.touch(() => b.surface = s),
                 visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             ),
-        ]),
+        ],
+        ),
       ),
     );
   }
 
   Widget _canvasChips(SgBoard b) {
     return SizedBox(
-      height: 32,
+      height: 40,
       child: Row(children: [
         Expanded(
           child: sgScroll(
@@ -195,7 +224,7 @@ class _SgPaneState extends State<SgPane> {
           child: IconButton(
             onPressed: () {
               final ok = store.addCanvas('Canvas ${b.canvases.length + 1}', 'Glass');
-              if (!ok) setState(() => _toast = store.notice);
+              if (!ok) setState(() => _showToast(store.notice, red: false));
             },
             icon: const Icon(Icons.add, size: 16, color: Colors.white),
           ),
@@ -205,24 +234,50 @@ class _SgPaneState extends State<SgPane> {
   }
 
   Widget _menuBody(SgBoard b) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Wrap(spacing: 4, children: [
-          for (final color in [0x66302824, 0x663A4A38, 0x66384858, 0x66504038])
-            GestureDetector(onTap: () => store.touch(() => b.background = color), child: Container(width: 18, height: 18, color: Color(color))),
-        ]),
-        Text('Guests: ${b.guests.join(', ')}', style: appFont(fontSize: 11, color: Colors.white70)),
-        _toggle('Auto sort', b.autoSort, (v) => store.touch(() => b.autoSort = v)),
-        _toggle('Hide complete', b.autoFilterComplete, (v) => store.touch(() => b.autoFilterComplete = v)),
-        _toggle('Inherit column status', b.inheritColumnStatus, (v) => store.touch(() => b.inheritColumnStatus = v)),
-        _toggle('Urgent on today', b.urgentAutoCalendar, (v) => store.touch(() => b.urgentAutoCalendar = v)),
-        Text('Status control', style: appFont(fontSize: 11, color: Colors.white70)),
-        Wrap(spacing: 4, children: [
-          for (final k in SgStatusKind.values)
-            ChoiceChip(label: Text(k.name, style: appFont(fontSize: 10, color: Colors.white)), selected: b.statusKind == k, onSelected: (_) => store.touch(() => b.statusKind = k)),
-        ]),
-      ]),
+    return ScrollConfiguration(
+      behavior: const SgScroll(),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
+        children: [
+          Text('Board menu', style: appFont(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+          const SizedBox(height: 8),
+          Text('Members', style: appFont(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
+          Text(b.guests.join(', '), style: appFont(fontSize: 13, color: Colors.white)),
+          const SizedBox(height: 10),
+          Text('Background', style: appFont(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
+          const SizedBox(height: 4),
+          Wrap(spacing: 6, children: [
+            for (final color in [0xFF0079BF, 0xFF519839, 0xFFB04632, 0xFF89609E])
+              GestureDetector(
+                onTap: () => store.touch(() => b.background = color),
+                child: Container(width: 36, height: 24, decoration: BoxDecoration(color: Color(color), borderRadius: BorderRadius.circular(4), border: Border.all(color: b.background == color ? Colors.white : Colors.transparent))),
+              ),
+          ]),
+          const SizedBox(height: 10),
+          Text('Board kind', style: appFont(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
+          Wrap(spacing: 4, children: [
+            for (final k in SgBoardKind.values)
+              ChoiceChip(
+                label: Text(k.name, style: appFont(fontSize: 10, color: Colors.white)),
+                selected: b.kind == k,
+                onSelected: (_) => store.touch(() {
+                  b.kind = k;
+                  final surface = SgSurface.values.asNameMap()[k.name];
+                  if (surface != null) b.surface = surface;
+                }),
+              ),
+          ]),
+          _toggle('Auto sort', b.autoSort, (v) => store.touch(() => b.autoSort = v)),
+          _toggle('Hide complete', b.autoFilterComplete, (v) => store.touch(() => b.autoFilterComplete = v)),
+          _toggle('Inherit column status', b.inheritColumnStatus, (v) => store.touch(() => b.inheritColumnStatus = v)),
+          _toggle('Urgent on today', b.urgentAutoCalendar, (v) => store.touch(() => b.urgentAutoCalendar = v)),
+          Text('Status control', style: appFont(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
+          Wrap(spacing: 4, children: [
+            for (final k in SgStatusKind.values)
+              ChoiceChip(label: Text(k.name, style: appFont(fontSize: 10, color: Colors.white)), selected: b.statusKind == k, onSelected: (_) => store.touch(() => b.statusKind = k)),
+          ]),
+        ],
+      ),
     );
   }
 
@@ -240,11 +295,9 @@ class _SgPaneState extends State<SgPane> {
     if (_overlay == 'stats') return _stats(b);
     if (_overlay == 'genie') return _genie();
     if (_overlay == 'editor-bulk') return _bulkEdit(b);
+    if (_menu) return _menuBody(b);
     if (open != null) return _editor(b, open);
-    return ColoredBox(
-      color: Color(b.background),
-      child: SgSurfaceView(store: store, onOpen: _open, multi: _multi, selected: _selected, forceFlip: _forceFlip, onSelect: (c) => setState(() => _selected.contains(c.id) ? _selected.remove(c.id) : _selected.add(c.id))),
-    );
+    return SgSurfaceView(store: store, onOpen: _open, multi: _multi, selected: _selected, forceFlip: _forceFlip, onSelect: (c) => setState(() => _selected.contains(c.id) ? _selected.remove(c.id) : _selected.add(c.id)));
   }
 
   Widget _create() {
@@ -257,7 +310,7 @@ class _SgPaneState extends State<SgPane> {
               onTap: () {
                 final c = store.addCard(t);
                 if (c == null) {
-                  setState(() => _toast = store.notice);
+                  setState(() => _showToast(store.notice, red: false));
                   return;
                 }
                 setState(() {
@@ -382,10 +435,11 @@ class _SgPaneState extends State<SgPane> {
   }
 
   Widget _editor(SgBoard b, SgCard c) {
-    return sgScroll(
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+    return ScrollConfiguration(
+      behavior: const SgScroll(),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(12, 4, 12, 32),
+        children: [
           Row(children: [
             Tooltip(message: 'Back', child: IconButton(onPressed: () => setState(() => _openId = null), icon: const Icon(Icons.arrow_back_rounded, color: Colors.white))),
             Expanded(child: Text(c.type.label, style: appFont(fontSize: 12, color: Colors.white70))),
@@ -466,7 +520,7 @@ class _SgPaneState extends State<SgPane> {
           Text('Custom fields', style: appFont(fontSize: 11, color: Colors.white70)),
           for (final f in b.fields) _custom(c, f),
           _field('New field name', '', (v) {
-            if (v.trim().isNotEmpty) store.addField(v.trim(), SgFieldKind.string);
+            if (v.trim().isNotEmpty) store.addField(v.trim(), SgFieldKind.text);
           }),
           Text('Embeds', style: appFont(fontSize: 11, color: Colors.white70)),
           for (final id in c.embeds)
@@ -491,7 +545,7 @@ class _SgPaneState extends State<SgPane> {
             },
             child: Text('Delete card', style: appFont(color: const Color(0xFFFF8A80))),
           ),
-        ]),
+        ],
       ),
     );
   }
@@ -517,8 +571,9 @@ class _SgPaneState extends State<SgPane> {
   Widget _custom(SgCard c, SgFieldDef f) {
     final value = c.custom[f.id] ?? '';
     return switch (f.kind) {
-      SgFieldKind.string || SgFieldKind.number || SgFieldKind.date || SgFieldKind.time || SgFieldKind.datetime => _field('${f.name} (${f.kind.label})', value, (v) => store.touch(() => c.custom[f.id] = v)),
-      SgFieldKind.boolean => _toggle(f.name, value == 'true', (v) => store.touch(() => c.custom[f.id] = v.toString())),
+      SgFieldKind.checkbox => _toggle(f.name, value == 'true', (v) => store.touch(() => c.custom[f.id] = v.toString())),
+      SgFieldKind.select || SgFieldKind.multi => _addNew(f.name, const ['open', 'doing', 'done'], value, (name) => store.touch(() => c.custom[f.id] = name), (name) => store.touch(() => c.custom[f.id] = name)),
+      SgFieldKind.text || SgFieldKind.textarea || SgFieldKind.richtext || SgFieldKind.number || SgFieldKind.date || SgFieldKind.datetime || SgFieldKind.person || SgFieldKind.url || SgFieldKind.file => _field('${f.name} (${f.kind.label})', value, (v) => store.touch(() => c.custom[f.id] = v), lines: f.kind == SgFieldKind.textarea || f.kind == SgFieldKind.richtext ? 3 : 1),
     };
   }
 

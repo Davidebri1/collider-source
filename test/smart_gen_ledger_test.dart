@@ -1,5 +1,8 @@
 import 'package:collider_flutter/features/smartgen/screens/smartgen_screen.dart';
 import 'package:collider_flutter/features/smartgen/sg_model.dart';
+import 'package:collider_flutter/features/smartgen/sg_views.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -66,6 +69,49 @@ void main() {
     s.removeCards(ids);
     expect(s.board!.cards.length, before - 3);
     expect(s.board!.cards.where((c) => ids.contains(c.id)), isEmpty);
+  });
+
+  test('field types and the done hook match the clone', () {
+    expect(kFieldTypes, ['text', 'textarea', 'richtext', 'number', 'date', 'datetime', 'checkbox', 'select', 'multi', 'person', 'url', 'file']);
+    expect(SgBoardKind.values.map((k) => k.name), ['notebook', 'portfolio', 'corkboard', 'clipboard', 'ledger', 'desk', 'binder', 'slate']);
+    expect(SgHoldKind.values.map((k) => k.name), ['tray', 'shelf', 'table', 'wall', 'spread', 'rack']);
+    final status = <String, String>{};
+    runHooks(
+      kDefaultHooks,
+      SgHookEvent(trigger: SgHookTrigger.fieldChange, cardId: 'c1', fieldKey: 'done', value: true),
+      SgHookMutations(
+        setField: (id, key, value) => status['$id.$key'] = value,
+        moveToList: (_, __) {},
+        addLabel: (_, __) {},
+        createCard: (_, __) {},
+      ),
+    );
+    expect(status['c1.status'], 'done');
+  });
+
+  testWidgets('card fronts are upright and a column fits the pane', (tester) async {
+    final store = SgStore()..ensureStarter();
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SizedBox(
+          width: 286,
+          height: 520,
+          child: SgKanban(store: store, onOpen: (_) {}),
+        ),
+      ),
+    ));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    for (final title in ['Draft launch post', 'California', 'Japan', 'Trip notes']) {
+      final finder = find.text(title);
+      expect(finder, findsOneWidget, reason: title);
+      final text = tester.renderObject<RenderParagraph>(finder);
+      expect(text.getTransformTo(null).storage[0], greaterThan(0), reason: '$title is mirrored');
+      final rect = tester.getRect(finder);
+      expect(rect.left, greaterThanOrEqualTo(0), reason: title);
+      expect(rect.right, lessThanOrEqualTo(287), reason: '$title is clipped by the pane');
+    }
+    expect(find.text('Doing'), findsNothing);
   });
 
   test('genie mass-edits and refactors without calling a provider', () {
