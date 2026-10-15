@@ -1,12 +1,10 @@
-import 'dart:ui' show ImageFilter;
-
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_font.dart';
 import '../../../core/theme/edge_fade.dart';
 import '../../../models/ticker_item.dart';
 
-/// GLM ticker column (backup/glm-spatial-consistency). A bounded glass window:
+/// GLM ticker column (backup/glm-spatial-consistency). A bounded window:
 /// press a row to toggle that model with a graduated decay, the chevron opens
 /// the conversation, a sideways swipe changes category, and page dots mark the
 /// scroll. Isolated models (R41) stay fully lit under a hairline, with a left
@@ -84,9 +82,7 @@ class _GlmTickerColumnState extends State<GlmTickerColumn> {
       },
       child: ClipRRect(
         borderRadius: BorderRadius.circular(28),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-          child: Container(
+        child: Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(28),
               color: const Color(0x14FFFFFF),
@@ -170,7 +166,6 @@ class _GlmTickerColumnState extends State<GlmTickerColumn> {
               ],
             ),
           ),
-        ),
       ),
     );
     });

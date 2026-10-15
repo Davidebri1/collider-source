@@ -1,8 +1,8 @@
 # Collider branch review
 
-Base: `collider-latest-wip` at `f4cd3fc` (v9.1.7, ticker docked above the composer under tall panes). The earlier review tip was `23f3610`. `f4cd3fc` is that tree plus the seven v9.1.7 commits through the dock. Commits on `collider-latest-wip` after `f4cd3fc` (through `435e06f`, the CPane pass) are not in this branch.
-Compared branches are left untouched. `main` was not updated.
-`v9.1` and `collider-9.1.6h-live` are the same commit (`cf0d986`), which is exactly the live app.
+This branch is `integration/best-of-branches`, rebased on `collider-latest-wip` at `435e06f`. That tip is the shared centred pane (`lib/core/vision/cpane.dart`) and the pane guard. Glyph's full-bleed Smart Gen, browser, and music shells failed the guard and are not mounted. Settings is the glyph glass menu: no room fade, a faded menu edge, Google Sans Flex. Smart Gen is the port in [SMART-GEN-PARITY.md](SMART-GEN-PARITY.md): the trello-clone board and the binding ledger, inside that centred pane. The word Workspace is not in the pane. `feat/ticker-isolation-and-budget` compiles after `6a98cf5`. That fix stays on that branch.
+
+The comparison below was written against earlier tips (`f4cd3fc`, then `4304d58`). It is the record of what each branch contained. The verdict that still governs the other screens is [BRANCH-TABLE.md](BRANCH-TABLE.md). Compared branches are left untouched. `main` was not updated. `v9.1` and `collider-9.1.6h-live` are the same commit (`cf0d986`), which is exactly the live app.
 
 ## How the comparison was made
 
@@ -130,16 +130,18 @@ The spring in `lib/core/vision/materialize.dart` (scale, blur, and opacity on on
 
 ## Brought into `integration/best-of-branches`
 
-The branch is cut from `collider-latest-wip` at `4304d58`. David's later verdict is the source table in `docs/BRANCH-TABLE.md`: GLM for the home ticker, history, and gallery; glyph (which has market-row21) for Smart Gen, settings, browser, and music; Files, Premium, and Discover stay off GLM. The consensus view is off the rail (R14, R16). CoverFlow is skipped. The 40% ticker cap was already here (R08). The earlier feature ports that still hold: search-first ticker rail (R14), Discover as a centred window around the Grok feed (R36), at least five tracks on each sold live pack (R30), and the isolation hairline plus left edge (R41, after `6a98cf5`).
+The branch is rebased on `collider-latest-wip` at `435e06f`. CPane is the only pane host, and CShell reserves the dock band under it. David's screen verdict is the table in `docs/BRANCH-TABLE.md`, with these corrections from the pane guard: the glyph Smart Gen, browser, and music shells are not mounted, and those three stay the tip's centred panes. Smart Gen is then the port in `docs/SMART-GEN-PARITY.md`. Settings stays the glyph glass menu. The consensus view is off the rail (R14, R16). CoverFlow is skipped. The 40% ticker cap was already here (R08). The earlier feature ports that still hold: search-first ticker rail (R14), Discover as a centred window around the Grok feed (R36), at least five tracks on each sold live pack (R30), and the isolation hairline plus left edge (R41, after `6a98cf5`).
 
 Also on this tree:
 
-- the v9 ticker, gallery, premium market, Discover grid, Smart Gen workspace, Files, Music, browser, and History from `v9.1` (`cf0d986`)
+- the v9 ticker, gallery, premium market, Discover grid, Files, Music, browser, and History from the `435e06f` tip, each on CPane
 - the playtest fixes from `23f3610` (ticker key, blocked Winter Moon, preload, music glass, Files player blur, premium ambient opacity)
-- the v9.1.7 dock from `39dbf15` and `f4cd3fc`: under Gallery, Premium, Music, and Browser the pane stops above the ticker, two rows show, and the window is only as tall as those rows
-- the same materialise spring those fixes sit on
+- the v9.1.7 dock: the ticker sits in the reserved band under the panes
+- the materialise spring
+- the GLM ticker column, with the extra blur removed so the pane guard stays green
+- the GLM gallery layout, with the room unblurred
 
-The visionOS Smart Gen board won the opened shot (R21, R24) and was not copied. It is a different window, and it still does not show Genie locked until Pro. Discover (R27) and the row selector (R09) have no winner to copy.
+Discover (R27) and the row selector (R09) have no winner to copy.
 
 ## Rejected
 
@@ -164,4 +166,4 @@ The visionOS Smart Gen board won the opened shot (R21, R24) and was not copied. 
 - The home loop on this branch has a seam every 4.1s. `qa`’s Beach Waves loop does not, and it was left in place because it is a different wallpaper.
 - Music is the collection. The floating player is off unless Settings turns it on, so the shot is the list, not a transport bar.
 - The side-by-side columns `best-of` and `latest-wip` were shot from `23f3610`. This branch is now `f4cd3fc`, plus Search as the first side-nav item. The dock is in the tree and is not yet in those two columns. Smart Gen, Files, and History for `glyph` and `visionos` were retaken with the feature actually open.
-- `collider-latest-wip` has commits after `f4cd3fc` (Discover rebuild, CPane, through `435e06f`). They were left on that branch.
+- `collider-latest-wip` at `435e06f` is the parent of this branch. CPane and the pane guard are in the tree. Smart Gen photos are under `docs/branch-review/smartgen/`.

@@ -411,12 +411,14 @@ class _PreviewWindowState extends State<_PreviewWindow> {
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: onTap,
-          child: FGlass(
+          child: Container(
             width: 50,
             height: 50,
-            radius: BorderRadius.circular(25),
-            fill: const Color(0x4D808080),
-            blur: 50,
+            alignment: Alignment.center,
+            decoration: const BoxDecoration(
+              color: Color(0x4D808080),
+              shape: BoxShape.circle,
+            ),
             child: Icon(icon, size: iconSize, color: Colors.white),
           ),
         ),
@@ -466,10 +468,12 @@ class _PreviewWindowState extends State<_PreviewWindow> {
               label: 'Expand View',
               child: GestureDetector(
                 onTap: widget.onExpand,
-                child: FGlass(
-                  radius: BorderRadius.circular(23),
-                  fill: const Color(0x4D808080),
-                  blur: 50,
+                child: Container(
+                  alignment: Alignment.centerLeft,
+                  decoration: BoxDecoration(
+                    color: const Color(0x4D808080),
+                    borderRadius: BorderRadius.circular(23),
+                  ),
                   child: Row(children: const [
                     SizedBox(width: 12),
                     Icon(Icons.open_in_full_rounded, size: 20, color: Colors.white),

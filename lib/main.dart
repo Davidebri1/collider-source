@@ -1,7 +1,7 @@
 import 'package:dio/dio.dart';
 import 'dart:math' as math;
 import 'core/theme/app_font.dart';
-import 'features/smartgen/kanban_store.dart';
+import 'features/smartgen/sg_model.dart';
 import 'core/files/file_store.dart';
 import 'dart:typed_data';
 import 'dart:convert';
@@ -331,7 +331,10 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     if (_activeDrawer == null && MediaQuery.of(context).size.width < 768 && _openPill(_tickerItems) != null) return false;
     // Home (chat) and themes only: the Smart Gen, Market and Files rails
     // selected nothing (no surface read their keys), so they are gone (D31).
-    const surfaces = {null, 'themes', 'market', 'files', 'smartgen', 'music'}; // v9.1.7 (#24): every sectioned screen
+    // Smart Gen's pane is centred and the rail would cover its left edge, so
+    // the rail yields while that pane is open. Cards, canvases, boards and
+    // Genie stay inside the pane.
+    const surfaces = {null, 'themes', 'market', 'files', 'music'};
     return surfaces.contains(_activeDrawer);
   }
 
@@ -657,13 +660,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         await fs.addBytes(n, Uint8List.fromList(utf8.encode('Sample: $n')), 'files');
       }
     }
-    final ks = KanbanStore.instance;
+    final ks = SgStore.instance;
     await ks.init();
-    if (ks.allCards.isEmpty) {
-      for (final (t, n) in [('Draft launch post', 'Two lines, one image'), ('Book venue', 'Call Friday'), ('Pick font', 'Instrument Sans vs Satoshi'), ('Shoot b-roll', 'Golden hour'), ('Fix invoice', 'Send by Monday')]) {
-        await ks.edit(ks.add(0), title: t, notes: n);
-      }
-    }
     if (!mounted) return;
     final now = DateTime.now();
     setState(() {
