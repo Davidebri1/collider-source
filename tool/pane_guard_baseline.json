@@ -10,13 +10,8 @@
     "glass": 1,
     "width": 3
   },
-  "lib/features/drawers/settings_drawer.dart": {
-    "blur": 6,
-    "width": 2
-  },
   "lib/features/files/screens/files_screen.dart": {
-    "blur": 2,
-    "shadow": 2,
+    "shadow": 4,
     "glass": 4,
     "width": 1
   },
@@ -57,8 +52,8 @@
     "blur": 1
   },
   "lib/features/theme/premium_theme_market_view.dart": {
-    "blur": 15,
-    "shadow": 3
+    "blur": 7,
+    "shadow": 1
   },
   "lib/features/theme/theme_living_media.dart": {
     "blur": 1,
@@ -78,7 +73,7 @@
     "shadow": 3
   },
   "lib/features/wallpaper/widgets/windowless_theme_scroller.dart": {
-    "blur": 4,
+    "blur": 2,
     "shadow": 1,
     "width": 2
   }

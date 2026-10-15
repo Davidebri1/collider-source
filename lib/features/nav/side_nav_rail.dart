@@ -40,11 +40,11 @@ List<SideRailEntry> sideRailEntries(ActiveWorkSurface s, {bool musicOpen = false
       // visuals / video / audio / gallery shelves were a prompt shelf, clips
       // and songs, which R27 and X5 both exclude.
       // v9.1.7 (#24): the side nav carries the Discover feeds.
-      // PRD Surfaces (Discover Market): Search, Library, Looks. Images only.
+      // PRD Surfaces (Discover Market): Search, Library. 'Looks' is held
+      // back until David confirms it (Oct 15).
       ActiveWorkSurface.market => const [
           SideRailEntry('search', Icons.search_rounded, 'Search'),
           SideRailEntry('library', Icons.photo_library_outlined, 'Library'),
-          SideRailEntry('looks', Icons.style_outlined, 'Looks'),
         ],
       ActiveWorkSurface.themes => [
           const SideRailEntry('premium', Icons.workspace_premium_rounded, 'Market'),

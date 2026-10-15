@@ -1,6 +1,3 @@
-import 'dart:ui' as ui;
-import 'dart:math' as math;
-import '../../../core/theme/edge_fade.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -11,12 +8,10 @@ import '../../../core/audio/music_player.dart';
 import '../../../core/files/file_store.dart';
 import '../../../core/media/theme_catalog.dart';
 import '../../../core/vision/vision_kit.dart';
-import '../../../core/vision/selection.dart';
 import '../../../core/figma/figma_stage.dart';
 import '../../music/song_row_parts.dart';
 import '../../theme/theme_living_media.dart';
 import '../widgets/video_player_view.dart';
-import '../../../core/vision/cpane.dart';
 
 /// Map row 7 — Files. v8.4: a straight copy of Vision Pro Spatial UI Kit
 /// 71:7502 ("Albums", group 1336 x 835) at its own size, scaled as one unit
@@ -29,18 +24,12 @@ class FilesScreen extends StatefulWidget {
   /// Rail selection (source filter / 'music' / 'search').
   final String category;
 
-  /// v9.1.7 (#24): the type picked on the overlaying side nav.
-  final String? type;
-  const FilesScreen({super.key, required this.onClose, this.category = 'all', this.type});
+  const FilesScreen({super.key, required this.onClose, this.category = 'all'});
 
   static const frame = Size(1336.4, 835.2);
   // The group's own width (rail at 0 .. main panel right 1336.4), no margin.
   static const cropWidth = 1336.4;
   static const center = Offset(668.2, 417.6);
-  /// v9.1.6: portrait composition width (Figma px) on phones.
-  // v9.1.7 (CPane): composed 420 wide so it reads at ~0.68x inside the
-  // shared pane width (it was 560 scaled to the full phone width).
-  static const double phoneWidth = 420;
 
   @override
   State<FilesScreen> createState() => _FilesScreenState();
@@ -51,23 +40,15 @@ class _FilesScreenState extends State<FilesScreen> {
   final FileStore _store = FileStore.instance;
   String _q = '';
   // Sidebar type filter.
-  String _type = Uri.base.queryParameters['ftype'] ?? 'All';
-  static const _railTypes = {'all': 'All', 'image': 'Image', 'video': 'Video', 'document': 'Document', 'writing': 'Writing', 'data': 'Data'};
-  @override
-  void didUpdateWidget(covariant FilesScreen old) {
-    super.didUpdateWidget(old);
-    if (widget.type != old.type && widget.type != null) _type = _railTypes[widget.type] ?? _type;
-  }
+  String _type = 'All';
   // Segmented ornament (Years / Months / Days / All Photos -> time added).
   int _span = 3;
-  bool _side = false;
   static const _spans = ['Year', 'Month', 'Today', 'All Files'];
 
   @override
   void initState() {
     super.initState();
     _store.init();
-    if (widget.type != null && Uri.base.queryParameters['ftype'] == null) _type = _railTypes[widget.type] ?? _type;
   }
 
   @override
@@ -75,29 +56,6 @@ class _FilesScreenState extends State<FilesScreen> {
     _searchCtrl.dispose();
     super.dispose();
   }
-
-  final Selection<String> _sel = Selection<String>();
-  void _tapFile(StoredFile f) => _sel.active ? _sel.toggle(f.id) : _open(f);
-  Widget _check(StoredFile f) => _sel.has(f.id)
-      ? Positioned(right: 8, top: 8, child: Container(width: 40, height: 40, decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF0A84FF)), child: const Icon(Icons.check_rounded, color: Colors.white, size: 22)))
-      : const SizedBox.shrink();
-
-  Widget _selBar(List<StoredFile> files) => SelectionBar(
-        count: _sel.count,
-        onSelectAll: () => _sel.all(files.map((f) => f.id)),
-        onDone: _sel.clear,
-        actions: [
-          SelectionAction(Icons.edit_rounded, 'Rename', () async {
-            final t = await askName(context, title: 'Rename ${_sel.count} files');
-            if (t != null) await _store.renameMany(_sel.ids.toList(), t);
-            _sel.clear();
-          }),
-          SelectionAction(Icons.delete_outline_rounded, 'Delete', () async {
-            await _store.removeMany(_sel.ids);
-            _sel.clear();
-          }, destructive: true),
-        ],
-      );
 
   Future<void> _pickFile() async {
     try {
@@ -132,7 +90,7 @@ class _FilesScreenState extends State<FilesScreen> {
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: Listenable.merge([_store, ThemeCatalog.instance, MusicPlayer.instance, _sel]),
+      animation: Listenable.merge([_store, ThemeCatalog.instance, MusicPlayer.instance]),
       builder: (context, _) {
         final cat = widget.category;
         final q = _q.toLowerCase();
@@ -147,87 +105,54 @@ class _FilesScreenState extends State<FilesScreen> {
                     (q.isEmpty || f.name.toLowerCase().contains(q)))
                 .toList();
         final title = cat == 'music' ? 'Music' : (_typeLabel[_type] ?? _type);
-        return Stack(children: [
-          Positioned.fill(child: LayoutBuilder(builder: (context, c) {
-            // v9.1.6: on a phone the same Figma parts (main panel 3004, sidebar
-            // 4253, ornament 3231, built at Figma px) are composed in a
-            // portrait frame 560 px wide and scaled as one unit to the phone
-            // width (~0.7x, readable), instead of shrinking the whole 1336 px
-            // landscape window to 0.29x. The sidebar slides in from its button.
-            if (c.maxWidth >= 768) {
-              return FigmaStage(
-                frame: FilesScreen.frame,
-                cropWidth: FilesScreen.cropWidth,
-                center: FilesScreen.center,
-                children: [
-                  Positioned(left: 95.4, top: 0, width: 295, height: 740, child: _sidebar(all)),
-                  Positioned(left: 390.4, top: 0, width: 946, height: 740, child: _main(title, files, cat)),
-                  Positioned(left: 518.8, top: 721, width: 394.1, height: 60.2, child: _segments()),
-                ],
-              );
-            }
-            // v9.1.7: on CPane (centred, same width as every pane, one glass,
-            // shell reserve); the Figma parts are laid out inside it.
-            // Batch 4: the pane hugs what it holds (one file = a short pane,
-            // as in the approved v8.4 Files screen), centred on the screen,
-            // up to the CPane height; it grows to fit the sidebar when open.
-            return CPane(fit: CPaneFit.hug, child: LayoutBuilder(builder: (context, c) {
-            const pw = FilesScreen.phoneWidth;
-            final s = c.maxWidth / pw;
-            final ph = _phoneHeight(files, cat).clamp(252.0, c.maxHeight / s);
-            const top = 0.0;
-            final panelH = ph - 36;
-            return SizedBox(height: ph * s, child: FigmaStage(
-              frame: Size(pw, ph),
-              cropWidth: pw,
-              center: Offset(pw / 2, ph / 2),
-              children: [
-                Positioned(left: 0, top: top, width: pw, height: panelH, child: _main(title, files, cat, phone: true)),
-                Positioned(left: (pw - 394.1) / 2, top: ph - 64, width: 394.1, height: 60.2, child: _segments()),
-                Positioned.fill(child: IgnorePointer(ignoring: !_side, child: AnimatedOpacity(
-                  duration: VMotion.base, opacity: _side ? 1 : 0,
-                  child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => setState(() => _side = false), child: const ColoredBox(color: Color(0x33000000))),
-                ))),
-                AnimatedPositioned(
-                  duration: VMotion.base, curve: Curves.easeOutCubic,
-                  left: _side ? 14 : -320, top: top, width: 295, height: math.min(740.0, panelH),
-                  child: NotificationListener<Notification>(child: _sidebar(all, onPicked: () => setState(() => _side = false))),
+        return FigmaStage(
+          frame: FilesScreen.frame,
+          cropWidth: FilesScreen.cropWidth,
+          center: FilesScreen.center,
+          children: [
+            // Sidebar 4253_frame at (95.4, 0), 295 x 740.
+            Positioned(left: 95.4, top: 0, width: 295, height: 740, child: _sidebar(all)),
+            // Main panel 3004_frame at (390.4, 0), 946 x 740.
+            Positioned(left: 390.4, top: 0, width: 946, height: 740, child: _main(title, files, cat)),
+            // Segmented ornament 3231_frame at (518.8, 721), 394.1 x 60.2.
+            Positioned(left: 518.8, top: 721, width: 394.1, height: 60.2, child: _segments()),
+            // Window controls 2686_frame at (625.4, 821.2): dot (close) + bar.
+            Positioned(
+              left: 625.4,
+              top: 815,
+              width: 181,
+              height: 26,
+              child: Row(children: [
+                Semantics(
+                  button: true,
+                  label: 'Close',
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: widget.onClose,
+                    child: Container(
+                      width: 26,
+                      height: 26,
+                      alignment: Alignment.center,
+                      child: Container(width: 14, height: 14, decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0x99FFFFFF))),
+                    ),
+                  ),
                 ),
-              ],
-            ));
-            }));
-          })),
-          if (_sel.active) Positioned(left: 0, right: 0, bottom: 40, child: Center(child: _selBar(files))),
-          Positioned(top: MediaQuery.paddingOf(context).top + 8, right: 8, child: VCloseButton(onTap: widget.onClose)),
-        ]);
+                const SizedBox(width: 26),
+                GestureDetector(
+                  onVerticalDragEnd: (d) {
+                    if ((d.primaryVelocity ?? 0) > 200) widget.onClose();
+                  },
+                  child: Container(width: 143, height: 12, decoration: BoxDecoration(color: const Color(0x99FFFFFF), borderRadius: BorderRadius.circular(6))),
+                ),
+              ]),
+            ),
+          ],
+        );
       },
     );
   }
 
-  /// Batch 4: the phone pane's height in Figma px for what it shows:
-  /// title row 75, the grid rows, the 60 px end space and the 36 px band
-  /// the segmented control sits in. With the sidebar open it is tall enough
-  /// for the sidebar (776).
-  double _phoneHeight(List<StoredFile> files, String cat) {
-    const inner = FilesScreen.phoneWidth - 48;
-    double grid;
-    if (cat == 'music' && MusicPlayer.library.isNotEmpty) return 4000; // the song list fills the pane
-    if (files.isEmpty) {
-      grid = 230; // the empty state
-    } else if (_type == 'Image' || _type == 'Video') {
-      const tw = (inner - 8) / 2;
-      final rows = (files.length + 1) ~/ 2;
-      grid = rows * tw * 126 / 214 + (rows - 1) * 8;
-    } else {
-      const tw = (inner - 4) / 2;
-      final rows = (files.length + 1) ~/ 2;
-      grid = rows * tw * 217 / 170 + (rows - 1) * 13;
-    }
-    final h = 75 + grid + 60 + 36;
-    return _side ? math.max(h, 776) : h;
-  }
-
-  Widget _sidebar(List<StoredFile> all, {VoidCallback? onPicked}) {
+  Widget _sidebar(List<StoredFile> all) {
     Widget menuRow(String type, IconData icon, double top) {
       final on = _type == type;
       return Positioned(
@@ -239,7 +164,7 @@ class _FilesScreenState extends State<FilesScreen> {
           label: _typeLabel[type],
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: () { setState(() => _type = type); onPicked?.call(); },
+            onTap: () => setState(() => _type = type),
             child: Row(children: [
               Container(
                 width: 42.24,
@@ -268,7 +193,7 @@ class _FilesScreenState extends State<FilesScreen> {
           label: _typeLabel[type],
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: () { setState(() => _type = type); onPicked?.call(); },
+            onTap: () => setState(() => _type = type),
             child: Row(children: [
               FText(_typeLabel[type]!, size: 23.17, weight: FontWeight.w600, color: on ? Colors.white : const Color(0xE6FAF9F5)),
               const Spacer(),
@@ -283,14 +208,14 @@ class _FilesScreenState extends State<FilesScreen> {
     // "All Albums" highlight + album rows -> the newest files.
     final recent = all.take(3).toList();
     return Container(
-      decoration: BoxDecoration(
-        borderRadius: onPicked != null ? const BorderRadius.all(Radius.circular(52.8)) : const BorderRadius.only(topLeft: Radius.circular(52.8), bottomLeft: Radius.circular(52.8)),
-        boxShadow: VElev.e6,
+      decoration: const BoxDecoration(
+        borderRadius: BorderRadius.only(topLeft: Radius.circular(52.8), bottomLeft: Radius.circular(52.8)),
+        boxShadow: [BoxShadow(color: Color(0x2E000000), offset: Offset(0, 0.85), blurRadius: 20.5)],
       ),
       child: FGlass(
-        radius: onPicked != null ? const BorderRadius.all(Radius.circular(52.8)) : const BorderRadius.only(topLeft: Radius.circular(52.8), bottomLeft: Radius.circular(52.8)),
-        blur: 6,
-        gradient: const LinearGradient(begin: Alignment(-0.9, -1), end: Alignment(0.9, 1), colors: [Color(0x66393939), Color(0x66616161)]),
+        radius: const BorderRadius.only(topLeft: Radius.circular(52.8), bottomLeft: Radius.circular(52.8)),
+        blur: 24.5,
+        gradient: const LinearGradient(begin: Alignment(-0.9, -1), end: Alignment(0.9, 1), colors: [Color(0x99393939), Color(0x99616161)]),
         child: Stack(children: [
           const Positioned(left: 25, top: 23, child: FText('Files', size: 29.8, weight: FontWeight.w700, color: Color(0xFFFAF9F5))),
           menuRow('All', Icons.schedule_rounded, 0),
@@ -360,35 +285,20 @@ class _FilesScreenState extends State<FilesScreen> {
     );
   }
 
-  Widget _main(String title, List<StoredFile> files, String cat, {bool phone = false}) {
-    final mw = phone ? FilesScreen.phoneWidth : 946.0;
-    final tl = phone ? 96.0 : 40.0;
-    final lib = cat == 'music' ? MusicPlayer.library : const <MusicTrack>[];
+  Widget _main(String title, List<StoredFile> files, String cat) {
+    final lib = cat == 'music' || (cat == 'all' && _type == 'All') ? MusicPlayer.library : const <MusicTrack>[];
     final p = MusicPlayer.instance;
     final cur = p.current;
-    // v9.1.7: on a phone the surface is the CPane around it (one glass).
-    Widget surface({required BorderRadius radius, required double blur, required Gradient gradient, required Widget child}) =>
-        phone ? child : FGlass(radius: radius, blur: blur, gradient: gradient, child: child);
-    return surface(
-      radius: phone ? const BorderRadius.all(Radius.circular(52.8)) : const BorderRadius.only(topRight: Radius.circular(52.8), bottomRight: Radius.circular(52.8)),
-      blur: 6, // ticker stays visible, blurred, behind Files
-      gradient: const LinearGradient(begin: Alignment(-0.9, -1), end: Alignment(0.9, 1), colors: [Color(0x80262626), Color(0x80404040)]),
-      // overlay-ok: panel chrome; the thumbnails sit in the grid below, nothing over them
+    return FGlass(
+      radius: const BorderRadius.only(topRight: Radius.circular(52.8), bottomRight: Radius.circular(52.8)),
+      blur: 24.5,
+      gradient: const LinearGradient(begin: Alignment(-0.9, -1), end: Alignment(0.9, 1), colors: [Color(0x8C262626), Color(0x8C404040)]),
       child: Stack(children: [
-        if (phone)
-          Positioned(
-            left: 28, top: 17, width: 52, height: 44,
-            child: Semantics(button: true, label: 'Show sidebar', child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => setState(() => _side = true),
-              child: Container(decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0x4DFFFFFF)), child: const Icon(Icons.view_sidebar_outlined, size: 26, color: Colors.white)),
-            )),
-          ),
         // Title 3120_text at (40, 22), 146 x 34 (search field when searching).
         Positioned(
-          left: tl,
+          left: 40,
           top: 22,
-          width: mw - tl - 136,
+          width: 760,
           height: 34,
           child: cat == 'search'
               ? TextField(
@@ -399,15 +309,15 @@ class _FilesScreenState extends State<FilesScreen> {
                   style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: Colors.white),
                   decoration: const InputDecoration(border: InputBorder.none, isCollapsed: true, hintText: 'Search', hintStyle: TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: Color(0x66FFFFFF))),
                 )
-              : FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: FText(title, size: 28.6, weight: FontWeight.w700, color: const Color(0xFFFAF9F5))), // never cut off in the pane
+              : FText(title, size: 28.6, weight: FontWeight.w700, color: const Color(0xFFFAF9F5)),
         ),
         // Adding files is the real storage path (D22/D32); Figma has no add
         // control, so it sits on the title row's end (v8.4 note in D22).
         Positioned(
-          left: mw - 128,
-          top: 19,
-          width: 100,
-          height: 40,
+          left: 862,
+          top: 17,
+          width: 44,
+          height: 44,
           child: Semantics(
             button: true,
             label: 'Add files',
@@ -415,33 +325,23 @@ class _FilesScreenState extends State<FilesScreen> {
               behavior: HitTestBehavior.opaque,
               onTap: _pickFile,
               child: Container(
-                // Playtest: a clear, labelled standard action, not a bare +.
-                alignment: Alignment.center,
-                decoration: BoxDecoration(borderRadius: BorderRadius.circular(999), color: const Color(0x4DFFFFFF)),
-                child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.upload_rounded, size: 20, color: Colors.white), SizedBox(width: 6), Text('Upload', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600))]),
+                decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0x4DFFFFFF)),
+                child: const Icon(Icons.add_rounded, size: 28, color: Colors.white),
               ),
             ),
           ),
         ),
         // Grid 3011/3047/3083: rows at y 75 + 230 i, tiles 170 x 217, 174 apart.
         Positioned(
-          left: phone ? 24 : 40,
+          left: 40,
           top: 75,
-          width: mw - (phone ? 48 : 80),
+          width: 866,
           bottom: 0,
-          child: EdgeFade(fadeHeight: 24, child: CustomScrollView(
+          child: CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
-              // v8.6: Images / Videos use the Photos browser (Figma 8:1352,
-              // 2004:340): 3 columns of rounded landscape tiles, label top-left.
-              if (_type == 'Image' || _type == 'Video')
-                SliverGrid(
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: phone ? 2 : 3, mainAxisSpacing: 8, crossAxisSpacing: 8, childAspectRatio: 214 / 126),
-                  delegate: SliverChildBuilderDelegate((_, i) => _photoTile(files[i]), childCount: files.length),
-                )
-              else
               SliverGrid(
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: phone ? 2 : 5, mainAxisSpacing: 13, crossAxisSpacing: 4, childAspectRatio: 170 / 217),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 5, mainAxisSpacing: 13, crossAxisSpacing: 4, childAspectRatio: 170 / 217),
                 delegate: SliverChildBuilderDelegate((_, i) => _tile(files[i]), childCount: files.length),
               ),
               if (lib.isNotEmpty)
@@ -462,24 +362,9 @@ class _FilesScreenState extends State<FilesScreen> {
                     }, childCount: lib.length),
                   ),
                 ),
-              // v9.1.7: an empty pane says so, once, instead of bare glass.
-              if (files.isEmpty && lib.isEmpty)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 90),
-                    child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(_q.isNotEmpty ? Icons.search_off_rounded : Icons.folder_open_rounded, size: 44, color: const Color(0xB3FFFFFF)),
-                      const SizedBox(height: 12),
-                      FText(_q.isNotEmpty ? 'No matches' : 'No files yet', size: 22, weight: FontWeight.w700, color: const Color(0xFFFAF9F5)),
-                      const SizedBox(height: 6),
-                      FText(_q.isNotEmpty ? 'Try another name' : 'Upload adds photos, videos and documents', size: 16, weight: FontWeight.w500, color: const Color(0xB3FAF9F5)),
-                    ])),
-                  ),
-                ),
               const SliverToBoxAdapter(child: SizedBox(height: 60)),
             ],
-          )),
+          ),
         ),
       ]),
     );
@@ -488,7 +373,7 @@ class _FilesScreenState extends State<FilesScreen> {
   Widget _segments() => Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(765),
-          boxShadow: VElev.e12,
+          boxShadow: const [BoxShadow(color: Color(0x2E000000), offset: Offset(0, 1.53), blurRadius: 36.7)],
         ),
         child: FGlass(
           radius: BorderRadius.circular(765),
@@ -523,23 +408,6 @@ class _FilesScreenState extends State<FilesScreen> {
         ),
       );
 
-  Widget _photoTile(StoredFile f) => GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => _tapFile(f),
-        onLongPress: () => _sel.toggle(f.id),
-        onSecondaryTap: () => _confirmRemove(f),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: Stack(fit: StackFit.expand, children: [
-            ColoredBox(color: const Color(0x33FFFFFF), child: _Thumb(id: f.id, fallback: f.type == 'Video' ? Icons.play_circle_outline_rounded : Icons.image_outlined)),
-            const DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment(0, -0.2), colors: [Color(0x66000000), Color(0x00000000)]))),
-            Positioned(left: 12, top: 10, right: 12, child: Text(f.name, maxLines: 2, softWrap: true, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700))),
-            if (f.type == 'Video') const Positioned(right: 10, bottom: 8, child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: 22)),
-            _check(f),
-          ]),
-        ),
-      );
-
   Widget _tile(StoredFile f) {
     final meta = [FileStore.sizeLabel(f.sizeBytes), FileStore.ago(f.addedAt)].where((s) => s.isNotEmpty).join(' · ');
     return Semantics(
@@ -547,8 +415,8 @@ class _FilesScreenState extends State<FilesScreen> {
       label: f.name,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () => _tapFile(f),
-        onLongPress: () => _sel.toggle(f.id),
+        onTap: () => _open(f),
+        onLongPress: () => _confirmRemove(f),
         onSecondaryTap: () => _confirmRemove(f),
         child: Padding(
           padding: const EdgeInsets.all(9),
@@ -564,7 +432,6 @@ class _FilesScreenState extends State<FilesScreen> {
                     : Icon(_icon(f.type), size: 52, color: const Color(0xCCFFFFFF)),
               ),
             ),
-            if (_sel.has(f.id)) const Padding(padding: EdgeInsets.only(top: 4), child: Icon(Icons.check_circle_rounded, color: Color(0xFF0A84FF), size: 34)),
             const SizedBox(height: 3),
             FText(f.name, size: 22, weight: FontWeight.w500),
             FText(meta, size: 16, opacity: 0.6, weight: FontWeight.w500),
@@ -601,15 +468,8 @@ class _FilesScreenState extends State<FilesScreen> {
         context: context,
         barrierDismissible: false,
         barrierLabel: 'Close',
-        barrierColor: Colors.transparent,
-        // A proper child layer: the Files pane and its controls are blurred
-        // out behind the Player, not merely dimmed.
-        pageBuilder: (context, _, __) => Material(type: MaterialType.transparency, child: Stack(fit: StackFit.expand, children: [
-          // v9.1.7: the wallpaper video is a DOM layer, so a Flutter blur cannot reach the
-          // Files pane drawn over it; a 75% dim makes the Files controls recede.
-          ClipRect(child: BackdropFilter(filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24), child: const ColoredBox(color: Color(0xBF000000)))),
-          VideoPlayerView(file: f, bytes: bytes),
-        ])),
+        barrierColor: Colors.black.withValues(alpha: 0.55),
+        pageBuilder: (context, _, __) => Material(type: MaterialType.transparency, child: VideoPlayerView(file: f, bytes: bytes)),
       );
       return;
     }
@@ -691,13 +551,13 @@ class _FileViewer extends StatelessWidget {
       var text = utf8.decode(bytes, allowMalformed: true);
       final cut = text.length > _maxChars;
       if (cut) text = text.substring(0, _maxChars);
-      content = EdgeFade(fadeHeight: 24, child: SingleChildScrollView(
+      content = SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(VSpace.md, VSpace.xs, VSpace.md, VSpace.md),
         child: SelectableText(
           cut ? '$text\n…' : text,
           style: VType.callout(weight: FontWeight.w400).copyWith(fontFamily: 'monospace', fontSize: 13, height: 1.45),
         ),
-      ));
+      );
     }
     return SafeArea(
       child: Center(

@@ -2343,7 +2343,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               ))),
 
           // v9.1.4 (playtest #14): dissolves out instead of a hard cut.
-            Positioned.fill(bottom: _activeDrawer == 'themes' ? _dockBand : 0, child: MaterializeSwitch(show: _activeDrawer == 'themes', builder: (_) => WindowlessThemeScroller(
+            Positioned.fill(child: MaterializeSwitch(show: _activeDrawer == 'themes', builder: (_) => WindowlessThemeScroller(
                 currentTheme: _currentTheme,
                 // v8.3.1: browsing never changes the app background (only Set does).
                 onLivePreview: (_) {},
@@ -2360,7 +2360,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               ))),
 
           // v9.1.4 (playtest #14): dissolves out instead of a hard cut.
-            Positioned.fill(bottom: _activeDrawer == 'premium' ? _dockBand : 0, child: MaterializeSwitch(show: _activeDrawer == 'premium', builder: (_) => GestureDetector(
+            Positioned.fill(child: MaterializeSwitch(show: _activeDrawer == 'premium', builder: (_) => GestureDetector(
                 behavior: HitTestBehavior.translucent,
                 child: PremiumThemeMarketView(
                 // v9.1.4 (playtest #2): rebuild once the catalog arrives, so a
@@ -2383,7 +2383,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                   });
                 },
                 onClose: () => setState(() => _activeDrawer = null),
-                onFree: () => setState(() => _activeDrawer = 'themes'),
               ),
               ))),
 
@@ -2427,8 +2426,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
           if (_activeDrawer == 'files')
             Positioned.fill(
+              // Restored v8.4 Files screen (David, Oct 15): its own sidebar.
               child: FilesScreen(
-                type: _filesCategory,
                 onClose: () => _requestSwitchSurface(null),
               ),
             ),

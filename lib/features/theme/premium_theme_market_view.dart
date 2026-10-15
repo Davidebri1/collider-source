@@ -5,7 +5,6 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/foundation.dart' show kIsWeb, setEquals;
 import 'package:flutter/material.dart';
-import '../../core/vision/category_nav.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -53,8 +52,6 @@ class PremiumThemeMarketView extends StatefulWidget {
   final ValueChanged<WallpaperTheme> onApplyTheme;
   final ValueChanged<WallpaperTheme> onPreviewTheme;
   final VoidCallback onClose;
-  /// v9.1.6: the central tier button switches back to the Free gallery.
-  final VoidCallback? onFree;
 
   const PremiumThemeMarketView({
     super.key,
@@ -62,7 +59,6 @@ class PremiumThemeMarketView extends StatefulWidget {
     required this.onApplyTheme,
     required this.onPreviewTheme,
     required this.onClose,
-    this.onFree,
   });
 
   /// Height the market keeps free for the app shell's bottom bar.
@@ -79,10 +75,8 @@ class PremiumThemeMarketView extends StatefulWidget {
 
 // hooks/useResponsive.ts
 const double _kMobileBreakpoint = 768; // width < 768
-const double _kCoverSizeMobile = 128;
-/// Device portrait aspect (height / width), set from the screen each build.
-double kPhoneAspect = 19.5 / 9;
-const double _kCoverSizeDesktop = 150;
+const double _kCoverSizeMobile = 170;
+const double _kCoverSizeDesktop = 200;
 
 // CoverFlow.tsx getTransform()
 const double _kSpacingMobile = 120;
@@ -111,10 +105,22 @@ const double _kHighVelocityThreshold = 2.0;
 // Card chrome: rounded-lg = --radius .625rem
 const double _kRadius = 10;
 // border border-gray-800/30  (#1E2939 @ 30%)
-const Color _kCoverBorder = Color(0x00000000); // no outline
-// v9.1.7 (#40): the source's CSS cover shadows (and the 1px white ring that
-// read as a light outline, #37) were unused hand-made shadows; covers use
-// VElev.e6 / e12 (below).
+const Color _kCoverBorder = Color.fromRGBO(30, 41, 57, 0.3);
+// img boxShadow: 0 25px 50px -12px rgba(0,0,0,0.9), 0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.1)
+const List<_CssShadow> _kCoverShadows = [
+  _CssShadow(0, 25, 50, -12, Color.fromRGBO(0, 0, 0, 0.9)),
+  _CssShadow(0, 8, 32, 0, Color.fromRGBO(0, 0, 0, 0.6)),
+  _CssShadow(0, 0, 0, 1, Color.fromRGBO(255, 255, 255, 0.1)),
+];
+// The two blurred layers (cached as one image) and the crisp 1px ring.
+const List<_CssShadow> _kCoverShadowsBlurred = [
+  _CssShadow(0, 25, 50, -12, Color.fromRGBO(0, 0, 0, 0.9)),
+  _CssShadow(0, 8, 32, 0, Color.fromRGBO(0, 0, 0, 0.6)),
+];
+// center border overlay: border-white/30 shadow-2xl (0 25px 50px -12px #00000040)
+const List<_CssShadow> _kShadow2xl = [
+  _CssShadow(0, 25, 50, -12, Color.fromRGBO(0, 0, 0, 0.25)),
+];
 
 // ReflectionComponent
 const double _kReflectionOpacityCenter = 0.9;
@@ -199,134 +205,8 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
   /// themes first, then the stills: no names, counts or gate in the code.
   List<WallpaperTheme> get _catalog => [
         ...WallpaperCatalog.premiumThemes,
-      ].where(_inCategory).toList();
-
-  // v8.7 side nav: categories + a search button (popup search with DOF).
-  // Categories = the bucket's top-level folders (theme.collection).
-  List<String> get _categories => [
-        'All',
-        // v8.7: the ghost menu filters by tag (most used first).
-        ...(() {
-          final n = <String, int>{};
-          for (final t in [...WallpaperCatalog.premiumThemes]) {
-            for (final g in t.tags) {
-              n[g] = (n[g] ?? 0) + 1;
-            }
-          }
-          return n.keys.toList()..sort((a, b) => n[b]!.compareTo(n[a]!));
-        })(),
+        ...WallpaperCatalog.freeThemes,
       ];
-  String _category = '';
-  bool _navOpen = false;
-  bool _searchOpen = false;
-  bool _exploded = false;
-  bool _inCategory(WallpaperTheme t) => CategoryTaxonomy.matches(_category, t.tags);
-  void _setCategory(String c) {
-    if (c == _category) return;
-    _category = c;
-    _fetchThemes(_searchQuery, keepId: _selected?.id);
-  }
-  void _openSearch(bool open) {
-    setState(() => _searchOpen = open);
-    if (open) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _searchFocus.requestFocus());
-    } else {
-      _searchFocus.unfocus();
-    }
-  }
-
-  Widget _sideNav() {
-    Widget item(IconData icon, String label, bool on, VoidCallback tap) => GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: tap,
-          child: SizedBox(
-            width: 56,
-            height: 52,
-            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Icon(icon, size: 20, color: Colors.white.withValues(alpha: on ? 1 : 0.55)),
-              const SizedBox(height: 2),
-              Text(label,
-                  style: TextStyle(fontSize: 10, color: Colors.white.withValues(alpha: on ? 1 : 0.55))),
-            ]),
-          ),
-        );
-    final cats = _categories;
-    // v9.1.6: a row above the carousel, so no neighbouring cover peeks
-    // under the buttons.
-    return Row(mainAxisSize: MainAxisSize.min, children: [
-      SuspendedFrost(
-        edge: 0.15,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(28),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-            child: ColoredBox(
-              color: const Color(0x14FFFFFF),
-              child: item(Icons.search_rounded, 'Search', _searchOpen || _searchQuery.isNotEmpty,
-                  () => _openSearch(true)),
-            ),
-          ),
-        ),
-      ),
-    ]);
-  }
-
-  /// Exploded asset view: the cover lifted forward, a context menu under it.
-  Widget _explodedView(WallpaperTheme t, double w, double h) {
-    final cw = math.min(math.min(w * 0.62, 300.0), h * 0.6 / kPhoneAspect);
-    final owned = _owned(t);
-    // v9.1.6 (Visual Playtest / CONVENTIONS): one action, one centred
-    // button: the price to buy, "Set as wallpaper" once owned. Tap outside
-    // closes (no Preview / Close rows).
-    final price = _store.priceLabelFor(t.id, catalogPrice: t.priceLabel);
-    final menu = VPress(
-      onTap: () {
-        setState(() => _exploded = false);
-        owned ? widget.onApplyTheme(t) : _confirmBuy(t, price);
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 12),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(999)),
-        child: Text(owned ? 'Set as wallpaper' : price, style: const TextStyle(color: Color(0xFF111111), fontSize: 16, fontWeight: FontWeight.w600)),
-      ),
-    );
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => setState(() => _exploded = false),
-      child: TweenAnimationBuilder<double>(
-        tween: Tween(begin: 0, end: 1),
-        duration: const Duration(milliseconds: 260),
-        curve: Curves.easeOutCubic,
-        builder: (context, v, child) => BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 14 * v, sigmaY: 14 * v),
-          child: ColoredBox(
-            color: Color.fromRGBO(0, 0, 0, 0.25 * v),
-            child: Opacity(opacity: v, child: Transform.scale(scale: 0.9 + 0.1 * v, child: child)),
-          ),
-        ),
-        child: Center(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(22),
-              child: SizedBox(
-                width: cw,
-                height: cw * kPhoneAspect, // phone-shaped
-                // Live themes play their own video here (sharp), not the upscaled frame.
-                child: t.isLive && t.videoUrl != null
-                    ? Stack(fit: StackFit.expand, children: [ThemeImage(t.assetPath, fit: BoxFit.cover, filterQuality: FilterQuality.high), LiveCoverVideo(key: ValueKey('detail-${t.id}'), url: t.videoUrl!)])
-                    : ThemeImage(t.assetPath, fit: BoxFit.cover, filterQuality: FilterQuality.high),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(_displayName(t),
-                style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w300)),
-            const SizedBox(height: 14),
-            GestureDetector(onTap: () {}, child: menu),
-          ]),
-        ),
-      ),
-    );
-  }
 
   /// A still (not premium) is free: it applies straight away.
   bool _owned(WallpaperTheme t) => !t.isPremium || _store.isUnlocked(t.id);
@@ -359,18 +239,6 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
   }
 
   // App.tsx fetchSongs(): list, then centre on Math.floor(length / 2)
-  /// v9.1.6 (root cause of the black cover): the store used to open on the
-  /// middle item. With every live loop now premium (117, not 19) the middle
-  /// was a near-black sparkle clip (mean luma 16/255), so the cover looked
-  /// empty. It opens on a featured, well-lit theme instead.
-  static int _heroIndex(List<WallpaperTheme> r) {
-    for (final re in [RegExp('neon shopfront', caseSensitive: false), RegExp('neon|alley|sanctuary|lantern', caseSensitive: false)]) {
-      final i = r.indexWhere((t) => re.hasMatch(t.name));
-      if (i >= 0) return i;
-    }
-    return r.length ~/ 2;
-  }
-
   void _fetchThemes(String query, {String? keepId}) {
     final q = query.trim().toLowerCase();
     final catalog = _catalog;
@@ -381,8 +249,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
                 t.collection.toLowerCase().contains(q) ||
                 t.creator.toLowerCase().contains(q) ||
                 t.tier.toLowerCase().contains(q) ||
-                t.id.toLowerCase().contains(q) ||
-                t.tags.any((g) => g.toLowerCase().contains(q));
+                t.id.toLowerCase().contains(q);
           }).toList();
     final prevId = _selected?.id;
     setState(() {
@@ -390,7 +257,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
       _themes = results;
       final kept = keepId == null ? -1 : results.indexWhere((t) => t.id == keepId);
       _currentIndex =
-          results.isEmpty ? 0 : (kept >= 0 ? kept : _heroIndex(results));
+          results.isEmpty ? 0 : (kept >= 0 ? kept : results.length ~/ 2);
       _selected = results.isEmpty ? null : results[_currentIndex];
     });
     final s = _selected;
@@ -451,29 +318,20 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
       // label form, fixed height) is centred between it and the bottom bar.
       const mainTop =
           _kHeaderHeight + _kSearchPad + _kSearchHeight + _kSearchHintGap + _kSearchPad;
-      // v9.1.7 (#6/#7): docked mode. The shell ends this pane above the
-      // ticker band, so the bottom bar is no longer inside it and the stage
-      // scales down (as one unit) until the name, song and action still fit.
-      final docked = h < MediaQuery.sizeOf(context).height - 1;
-      final reserve = docked ? 0.0 : barReserve;
-      final mainHeight = math.max(0.0, h - mainTop - reserve);
-      const labelsDocked = 8 + 28 + 8 + _kSongRowExtent + 16 + _kActionHeight + 8;
-      final stageH = docked
-          ? (mainHeight - _kLabelsMarginTop - labelsDocked).clamp(_kStageHeight * 0.55, _kStageHeight).toDouble()
-          : _kStageHeight;
-      final contentHeight =
-          stageH + _kLabelsMarginTop + (docked ? labelsDocked : _kLabelsBlockHeight);
+      final mainHeight = math.max(0.0, h - mainTop - barReserve);
+      const contentHeight =
+          _kStageHeight + _kLabelsMarginTop + _kLabelsBlockHeight;
       final contentTop =
           mainTop + math.max(0.0, (mainHeight - contentHeight) / 2);
       final stageTop = contentTop;
-      final labelsTop = stageTop + stageH + _kLabelsMarginTop;
+      final labelsTop = stageTop + _kStageHeight + _kLabelsMarginTop;
       final contentWidth = w - _kMainPadX * 2;
       final searchWidth = math.min(w - _kSearchPad * 2, _kSearchMaxWidth);
 
       // Search input (backdrop-blur-sm 8px) blur element, hosted by the
       // ambient on web (the empty header strip no longer paints; see below).
       final glass = <AmbientGlass>[
-        if (_searchOpen) AmbientGlass(
+        AmbientGlass(
             Rect.fromLTWH((w - searchWidth) / 2, _kHeaderHeight + _kSearchPad,
                 searchWidth, _kSearchHeight),
             _kSearchHeight / 2,
@@ -481,7 +339,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
         // The app shell's bottom bar (PermanentNavBar: VOrnament, elevated
         // glass, 3 x 44 circles) and the Buy / Apply / Subscribe capsule:
         // same material blur, applied to the video behind them.
-        if (!docked) AmbientGlass(
+        AmbientGlass(
             Rect.fromLTWH((w - _kBarWidth) / 2,
                 h - _kBarBottom - MediaQuery.paddingOf(context).bottom - _kBarHeight,
                 _kBarWidth, _kBarHeight),
@@ -500,18 +358,12 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
             fit: StackFit.expand,
             children: [
               // App root: background linear-gradient(to bottom, #000000 0%, #111111 100%)
-              // Tap on the empty room closes the Market (tap outside). The
-              // room is near-opaque so the ticker reads through it, blurred.
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: _exploded ? () => setState(() => _exploded = false) : widget.onClose,
-                child: const DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Color(0x59000000), Color(0x59111111)], // ticker shows through, blurred
-                    ),
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0xFF000000), Color(0xFF111111)],
                   ),
                 ),
               ),
@@ -547,14 +399,12 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
               // SimpleBackgroundVideo: fixed 100vw x 100vh, overflow hidden;
               // the media is 200vw x 200vh centred. Always on (autoplay).
               if (selected != null)
-                // Ticker under Premium: the full-bleed ambient was opaque and
-                // hid the ticker entirely; at 45% the blurred ticker shows.
                 Positioned.fill(
-                  child: Opacity(opacity: 0.45, child: SimpleBackgroundVideoAmbient(
+                  child: SimpleBackgroundVideoAmbient(
                     theme: selected,
                     owned: kOwnedBrighterState && _owned(selected),
                     glass: kIsWeb ? glass : const [],
-                  )),
+                  ),
                 ),
 
               // No search results: an empty stage, no copy (v8.3, D45).
@@ -567,23 +417,18 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
                   height: _kLabelsBlockHeight,
                   // Top-aligned: with songs the column fills the block exactly
                   // (as before); without songs it ends under the name.
-                  // Hidden under the detail view so the name shows once.
-                  child: Opacity(opacity: _exploded ? 0 : 1, child: Align(
+                  child: Align(
                     alignment: Alignment.topCenter,
                     child: _buildLabels(selected, contentWidth),
-                  )),
+                  ),
                 ),
                 // CoverFlow wrapper
                 Positioned(
-                  // v9.1.6: dead centre; the old side-nav offset (76 px) is gone
-                  // with the side nav (now the top category bar).
                   left: _kMainPadX,
                   right: _kMainPadX,
                   top: stageTop,
-                  height: stageH,
-                  child: FittedBox(
-                    fit: BoxFit.contain,
-                    alignment: Alignment.topCenter,
+                  height: _kStageHeight,
+                  child: Center(
                     child: SizedBox(
                       width: math.min(contentWidth, _kStageMaxWidth),
                       height: _kStageHeight,
@@ -597,108 +442,27 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
                             if (_owned(t)) t.id,
                         },
                         onSelect: _select,
-                        onTapCover: (i) {
-                          if (i % _themes.length == _currentIndex) {
-                            setState(() => _exploded = true);
-                          } else {
-                            _select(i);
-                          }
-                        },
+                        onTapCover: _select,
                       ),
                     ),
                   ),
                 ),
               ],
 
-              // v8.7 side nav (categories + search), left edge.
+              // SearchBar wrapper (z 450): p-4
               Positioned(
-                left: 12,
-                top: MediaQuery.paddingOf(context).top + 12,
-                child: _sideNav(),
+                left: _kSearchPad,
+                right: _kSearchPad,
+                top: _kHeaderHeight + _kSearchPad,
+                height: _kSearchHeight,
+                child: Center(
+                  child: SizedBox(
+                    width: searchWidth,
+                    height: _kSearchHeight,
+                    child: _buildSearchBar(),
+                  ),
+                ),
               ),
-              // v9.1.6c: category bar pinned along the top, always visible.
-              Positioned(
-                left: 12, right: 12,
-                top: MediaQuery.paddingOf(context).top + 66,
-                child: Builder(builder: (_) {
-                  final pool = [...WallpaperCatalog.premiumThemes];
-                  return CategoryBar(
-                    groups: CategoryTaxonomy.build([for (final t in pool) t.tags]),
-                    total: pool.length,
-                    selected: _category,
-                    onSelected: (k) => setState(() => _setCategory(k)),
-                  );
-                }),
-              ),
-              if (widget.onFree != null)
-                Positioned(
-                  left: 0, right: 0,
-                  top: MediaQuery.paddingOf(context).top + 16,
-                  child: Center(child: TierSwitchPill(label: 'Premium', onSwitch: widget.onFree!)),
-                ),
-
-              // Category sidebar (visionOS browser, Figma 1:101). A temporary
-              // panel: tap outside or pick a category to close it.
-              if (_navOpen) ...[
-                Positioned.fill(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => setState(() => _navOpen = false),
-                    onHorizontalDragEnd: (_) => setState(() => _navOpen = false),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-                      child: const ColoredBox(color: Color(0x47000000)),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  left: 8,
-                  top: mainTop,
-                  child: Builder(builder: (_) {
-                    final pool = [...WallpaperCatalog.premiumThemes];
-                    return CategorySideNav(
-                      width: 200,
-                      maxHeight: MediaQuery.of(context).size.height - mainTop - 110,
-                      groups: CategoryTaxonomy.build([for (final t in pool) t.tags]),
-                      total: pool.length,
-                      selected: _category,
-                      onSelected: (k) {
-                        setState(() => _navOpen = false);
-                        _setCategory(k);
-                      },
-                    );
-                  }),
-                ),
-              ],
-              // Search popup (was the always-on SearchBar): DOF blur behind.
-              if (_searchOpen) ...[
-                Positioned.fill(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => _openSearch(false),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-                      child: const ColoredBox(color: Color(0x33000000)),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  left: _kSearchPad,
-                  right: _kSearchPad,
-                  top: _kHeaderHeight + _kSearchPad,
-                  height: _kSearchHeight,
-                  child: Center(
-                    child: SizedBox(
-                      width: searchWidth,
-                      height: _kSearchHeight,
-                      child: _buildSearchBar(),
-                    ),
-                  ),
-                ),
-              ],
-
-              if (_exploded && selected != null)
-                Positioned.fill(child: _explodedView(selected, w, h)),
 
               // Header (z 500): the export's empty p-4 strip keeps its 32px in
               // the layout (mainTop) but paints nothing. Its bg-black/20 +
@@ -736,9 +500,10 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
             // h2 text-xl font-light mb-2 text-white drop-shadow-lg
             SizedBox(
               height: 28,
-              child: FittedBox(fit: BoxFit.scaleDown, child: Text( // never truncated
+              child: Text(
                 _displayName(t),
                 maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 style: _inter(TextStyle(
                   fontSize: 20,
@@ -747,7 +512,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
                   color: const Color(0xFFFFFFFF),
                   shadows: [_cssDropShadow(0, 4, 4, const Color(0x26000000))],
                 )),
-              )),
+              ),
             ),
             if (tracks.isNotEmpty) ...[
               const SizedBox(height: 8),
@@ -802,14 +567,14 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
     if (_owned(t)) {
       return _GlassCapsule(
         key: _capsuleKey,
-        label: 'Set as wallpaper',
+        label: 'Apply',
         onTap: () => widget.onApplyTheme(t),
       );
     }
     final price = _store.priceLabelFor(t.id, catalogPrice: t.priceLabel);
     return _GlassCapsule(
       key: _capsuleKey,
-      label: price,
+      label: price, // David: the price is the button, no 'Buy'
       onTap: () => _confirmBuy(t, price),
     );
   }
@@ -821,7 +586,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
       context,
       icon: Icons.diamond_outlined,
       title: _displayName(t),
-      actions: [VAlertChoice('Buy · $price'), const VAlertChoice('Cancel')],
+      actions: [VAlertChoice(price), const VAlertChoice('Cancel')],
     );
     if (i != 0 || !mounted) return;
     // No store on this link: the purchase fails honestly instead of granting
@@ -1267,11 +1032,7 @@ class _CoverFlowState extends State<_CoverFlow> {
 
   @override
   Widget build(BuildContext context) {
-    final ms = MediaQuery.sizeOf(context);
-    kPhoneAspect = (ms.height / ms.width).clamp(1.78, 2.17);
-    // Phone-shaped cover sized to the stage height so it never overlaps the
-    // category bar or the title.
-    final coverSize = math.min(widget.isMobile ? _kCoverSizeMobile : _kCoverSizeDesktop, 250 / kPhoneAspect);
+    final coverSize = widget.isMobile ? _kCoverSizeMobile : _kCoverSizeDesktop;
     final themes = widget.themes;
     // Paint order = CSS z-index (getZIndex + 1000), ties in DOM order.
     final visible = <int>[
@@ -1293,7 +1054,7 @@ class _CoverFlowState extends State<_CoverFlow> {
       onHorizontalDragCancel: _dragEnd,
       child: LayoutBuilder(builder: (context, c) {
         final left = (c.maxWidth - coverSize) / 2;
-        final top = (c.maxHeight - coverSize * kPhoneAspect) / 2;
+        final top = (c.maxHeight - coverSize) / 2;
         return ListenableBuilder(
           listenable: _drag,
           builder: (context, _) => MouseRegion(
@@ -1309,7 +1070,7 @@ class _CoverFlowState extends State<_CoverFlow> {
                     left: left,
                     top: top,
                     width: coverSize,
-                    height: coverSize * kPhoneAspect * 2, // cover + ReflectionComponent (top-full, h-full)
+                    height: coverSize * 2, // cover + ReflectionComponent (top-full, h-full)
                     child: TweenAnimationBuilder<_CardPose>(
                       tween: _CardPoseTween(end: _poseFor(i)),
                       duration: _drag.dragging ? Duration.zero : _kCardTransition,
@@ -1365,35 +1126,44 @@ class _CoverCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // David: covers are phone-shaped (device portrait aspect), never square.
-    final h = size * kPhoneAspect;
     // ReflectionComponent opacity: index === currentIndex ? 0.9 : 0.75
     final reflectionOpacity =
         isCurrent ? _kReflectionOpacityCenter : _kReflectionOpacitySide;
     return SizedBox(
       width: size,
-      height: h * 2,
+      height: size * 2,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          // Elevation level 6 (floating), downward Material shadow, no halo.
+          // img boxShadow (two blurred layers, cached) + the 1px white ring
           Positioned(
-            left: 0, top: 0, width: size, height: h,
-            child: DecoratedBox(decoration: BoxDecoration(borderRadius: BorderRadius.circular(_kRadius), boxShadow: VElev.e6)),
+            left: -_shadowPad,
+            top: -_shadowPad,
+            width: size + _shadowPad * 2,
+            height: size + _shadowPad * 2,
+            child: _CachedPaint(
+              cacheKey: 'cover-shadow|$size',
+              size: Size(size + _shadowPad * 2, size + _shadowPad * 2),
+              painter: _OffsetPainter(
+                const Offset(_shadowPad, _shadowPad),
+                Size(size, size),
+                const _CssShadowPainter(_kCoverShadowsBlurred, _kRadius),
+              ),
+            ),
           ),
           Positioned(
             left: 0,
             top: 0,
             width: size,
-            height: h,
-            child: const SizedBox.shrink(), // no light outline round the cover
+            height: size,
+            child: CustomPaint(painter: _RingPainter(_kRadius, 1, _kCoverShadows[2].color)),
           ),
           // <img> object-cover rounded-lg border border-gray-800/30
           Positioned(
             left: 0,
             top: 0,
             width: size,
-            height: h,
+            height: size,
             child: Stack(
               fit: StackFit.expand,
               children: [
@@ -1424,13 +1194,13 @@ class _CoverCard extends StatelessWidget {
             left: 0,
             top: 0,
             width: size,
-            height: h,
+            height: size,
             child: DecoratedBox(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(_kRadius),
                 gradient: _cssLinearGradient(
                   135,
-                  Size(size, h),
+                  Size(size, size),
                   const [
                     Color.fromRGBO(255, 255, 255, 0.12),
                     Color.fromRGBO(255, 255, 255, 0.04),
@@ -1449,10 +1219,10 @@ class _CoverCard extends StatelessWidget {
             left: 0,
             top: 0,
             width: size,
-            height: h,
+            height: size,
             child: TweenAnimationBuilder<double>(
               tween: Tween<double>(end: dimmed ? _kUnownedCardDim : 0),
-              duration: Duration.zero, // v8.6: no per-item animation
+              duration: const Duration(milliseconds: 600),
               curve: _kTwEase,
               builder: (context, a, _) => a <= 0.001
                   ? const SizedBox.shrink()
@@ -1469,46 +1239,72 @@ class _CoverCard extends StatelessWidget {
           // to-top, filter blur(0.5px) brightness(0.6) contrast(1.3) — cached image.
           Positioned(
             left: 0,
-            top: h,
+            top: size,
             width: size,
-            height: h * 0.32, // ends above the title
-            child: ClipRect(child: OverflowBox(alignment: Alignment.topCenter, minHeight: h, maxHeight: h, child: _Reflection(
+            height: size,
+            child: _Reflection(
               theme: theme,
               size: size,
               opacity: reflectionOpacity,
               dim: dimmed ? _kUnownedCardDim : 0,
-            ))),
+            ),
           ),
           // Floor highlight: top-full h-3 rounded-lg translateY(6px), opacity 0.6 / 0.35 (duration-1000)
           // linear-gradient(to bottom, rgba(255,255,255,0.06) 0%, 0.12 40%, transparent 100%)
           Positioned(
             left: 0,
-            top: h + _kFloorOffset,
+            top: size + _kFloorOffset,
             width: size,
             height: _kFloorHeight,
             child: TweenAnimationBuilder<double>(
               tween: Tween<double>(end: isCurrent ? 0.6 : 0.35),
-              duration: Duration.zero, // v8.6: no per-item animation
+              duration: const Duration(milliseconds: 1000),
               curve: _kTwEase,
               builder: (context, o, _) => CustomPaint(painter: _FloorPainter(o)),
             ),
           ),
           if (isCurrent) ...[
-            // Centre cover: elevation 12 (modal level), downward only.
-            Positioned(left: 0, top: 0, width: size, height: h, child: DecoratedBox(decoration: BoxDecoration(borderRadius: BorderRadius.circular(_kRadius), boxShadow: VElev.e12))),
+            // absolute inset-0 rounded-lg border border-white/30 shadow-2xl
+            Positioned(
+              left: -_shadowPad,
+              top: -_shadowPad,
+              width: size + _shadowPad * 2,
+              height: size + _shadowPad * 2,
+              child: _CachedPaint(
+                cacheKey: 'center-shadow|$size',
+                size: Size(size + _shadowPad * 2, size + _shadowPad * 2),
+                painter: _OffsetPainter(
+                  const Offset(_shadowPad, _shadowPad),
+                  Size(size, size),
+                  const _CssShadowPainter(_kShadow2xl, _kRadius),
+                ),
+              ),
+            ),
             Positioned(
               left: 0,
               top: 0,
               width: size,
-              height: h,
+              height: size,
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(_kRadius),
-                  // no light outline round the cover
+                  border: Border.all(
+                      color: const Color.fromRGBO(255, 255, 255, 0.3), width: 1),
                 ),
               ),
             ),
-            // (top glow removed: elevation only, per shadows-fix-collider-app.md)
+            // top-0 left-1/4 right-1/4 h-1 bg-white/20 rounded-full blur-sm (8px)
+            Positioned(
+              top: -_glowPad,
+              left: size / 4 - _glowPad,
+              width: size / 2 + _glowPad * 2,
+              height: 4 + _glowPad * 2,
+              child: _CachedPaint(
+                cacheKey: 'center-glow|$size',
+                size: Size(size / 2 + _glowPad * 2, 4 + _glowPad * 2),
+                painter: _GlowPainter(_glowPad, Size(size / 2, 4)),
+              ),
+            ),
           ],
         ],
       ),
@@ -1720,40 +1516,14 @@ class _ReflectionState extends State<_Reflection> {
         _rasterScale(context), () {
       if (mounted) setState(() {});
     });
-    // The raster path can't read cross-origin / first-frame posters on web, so
-    // the reflection was empty. Fall back to the cover's own image widget,
-    // mirrored and faded (same look: flipped poster under a fading mask).
-    if (img == null) {
-      return IgnorePointer(
-        child: Opacity(
-          opacity: (widget.opacity * (1 - widget.dim)).clamp(0.0, 1.0),
-          child: ShaderMask(
-            blendMode: BlendMode.dstIn,
-            shaderCallback: (r) => const LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Color(0x66FFFFFF), Color(0x00FFFFFF)],
-              stops: [0.0, 0.6],
-            ).createShader(r),
-            child: Transform(
-              alignment: Alignment.center,
-              transform: Matrix4.diagonal3Values(1, -1, 1),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(_kRadius),
-                child: SizedBox(width: widget.size, height: widget.size, child: ThemePosterImage(theme: widget.theme, fit: BoxFit.cover)),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
+    if (img == null) return const SizedBox.shrink();
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(end: widget.opacity),
-      duration: Duration.zero, // v8.6: no per-item animation
+      duration: const Duration(milliseconds: 500),
       curve: _kTwEase,
       builder: (context, o, _) => TweenAnimationBuilder<double>(
         tween: Tween<double>(end: widget.dim),
-        duration: Duration.zero, // v8.6: no per-item animation
+        duration: const Duration(milliseconds: 600),
         curve: _kTwEase,
         builder: (context, d, _) {
           final k = (255 * (1 - d)).round();
@@ -2073,7 +1843,7 @@ LinearGradient _cssLinearGradient(
 
 /// Export font is `ui-sans-serif, system-ui, sans-serif`; the platform
 /// substitute on web/Android/Windows is Inter (AUTHORITY S-C13).
-TextStyle _inter(TextStyle s) => s.copyWith(fontFamily: 'GoogleSansFlex');
+TextStyle _inter(TextStyle s) => GoogleFonts.inter(textStyle: s);
 
 /// CSS drop-shadow(x y blur color): sigma = blur / 2.
 Shadow _cssDropShadow(double x, double y, double blur, Color color) {

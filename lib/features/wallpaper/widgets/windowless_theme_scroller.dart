@@ -1,9 +1,6 @@
-import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import '../../../core/media/theme_catalog.dart';
-import '../../../core/vision/category_nav.dart';
 import 'package:video_player/video_player.dart';
 import '../../../models/theme_def.dart';
 import '../../../core/vision/vision_kit.dart';
@@ -58,68 +55,21 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
     widget.onLivePreview(t);
   }
 
-  @override
-  void didUpdateWidget(covariant WindowlessThemeScroller old) {
-    super.didUpdateWidget(old);
-    // The theme list arrives after start-up: follow the real current theme.
-    if (old.currentTheme.id != widget.currentTheme.id && _previewed.id == old.currentTheme.id) {
-      _previewed = widget.currentTheme;
-    }
-  }
-
-  String _category = '';
-  bool _navOpen = false;
   List<WallpaperTheme> get _themes {
     final store = ThemePackStore.instance;
-    final all = <WallpaperTheme>[
+    return [
       ...WallpaperCatalog.freeThemes,
       for (final t in WallpaperCatalog.premiumThemes)
-        if (store.isUnlocked(t.id)) t,
+        if (store.storeOpen && store.isUnlocked(t.id)) t,
     ];
-    return all.where((t) => CategoryTaxonomy.matches(_category, t.tags)).toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Cold-load race (playtest: black card 1 run in 2): the gallery could
-    // build before the R2 catalog arrived and keep the empty placeholder
-    // theme. It now rebuilds on every catalog change and swaps the
-    // placeholder for the real current theme the moment one exists; until
-    // then it draws nothing rather than a black card.
-    return ListenableBuilder(
-      listenable: ThemeCatalog.instance,
-      builder: (context, _) {
-        if (_previewed.assetPath.isEmpty) {
-          final cur = widget.currentTheme;
-          final free = WallpaperCatalog.freeThemes;
-          final r = cur.assetPath.isNotEmpty ? cur : (free.isNotEmpty ? free.first : null);
-          if (r == null) return const SizedBox.shrink();
-          _previewed = r;
-        }
-        return _build(context);
-      },
-    );
-  }
-
-  Widget _build(BuildContext context) => LayoutBuilder(builder: (context, c) => _buildIn(context, c));
-
-  Widget _buildIn(BuildContext context, BoxConstraints c) {
-    // v9.1.7 (#6/#7): the pane may end above the docked ticker, so it sizes
-    // from the room it is given, not the screen.
-    final screen = MediaQuery.of(context).size;
-    final size = Size(screen.width, c.maxHeight.isFinite ? c.maxHeight : screen.height);
-    final docked = size.height < screen.height - 1;
-    final bottomReserve = docked ? 8.0 : 84.0;
+    final size = MediaQuery.of(context).size;
     final pad = MediaQuery.of(context).padding;
-    // David: previews are phone-shaped (device portrait aspect), centred;
-    // narrowed to fit rather than shifted.
-    final aspect = (size.height / size.width).clamp(1.78, 2.17);
-    final maxH = (size.height - pad.top - bottomReserve - 112 - 90 - 52).clamp(200.0, 900.0);
-    final winW = math.min((size.width - 120).clamp(160.0, 440.0), maxH / aspect);
-    final winH = winW * aspect;
-    // v9.1.7: the name/Set row and the strip keep a readable width when the
-    // window shrinks (docked ticker), so the name never breaks mid-word.
-    final ctrlW = math.max(winW, math.min(size.width - 128, 320.0)); // clears the side rail like the ticker
+    final winW = (size.width - 32).clamp(240.0, 440.0);
+    final winH = (winW * 1.3).clamp(240.0, size.height - pad.top - 84 - 150);
     return ListenableBuilder(
       listenable: ThemePackStore.instance,
       builder: (context, _) {
@@ -132,32 +82,32 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // The room, blurred (Figma: the environment behind the window).
-              Positioned.fill(
-                child: AnimatedSwitcher(
-                  duration: VMotion.base,
-                  child: KeyedSubtree(
-                    key: ValueKey('room-${_expanded ? _previewed.id : widget.currentTheme.id}-$_expanded'),
-                    child: _expanded
-                        ? GestureDetector(
-                            onTap: () => setState(() => _expanded = false),
-                            child: ThemePosterImage(theme: _previewed, fit: BoxFit.cover, fullBleed: true),
-                          )
-                        // David: no blur, dim or change to the wallpaper until one is set;
-                        // the real wallpaper behind shows through untouched.
-                        : const SizedBox.expand(),
+              // Restored v8.3 Gallery. PRD R32 (David, Oct 15): browsing never
+              // changes or blurs the wallpaper, so the blurred "room" of the
+              // previewed theme is gone; the real wallpaper shows, unchanged,
+              // until a theme is set (the check circle).
+              if (_expanded)
+                Positioned.fill(
+                  child: GestureDetector(
+                    onTap: () => setState(() => _expanded = false),
+                    child: ThemePosterImage(theme: _previewed, fit: BoxFit.cover, fullBleed: true),
                   ),
                 ),
-              ),
               if (_expanded && _previewed.isLive)
                 Positioned.fill(child: IgnorePointer(child: _LoopVideo(key: ValueKey('full-${_previewed.id}'), url: _previewed.videoUrl!))),
+              if (_expanded)
+                Positioned(
+                  left: VSpace.md,
+                  top: pad.top + VSpace.sm,
+                  child: VCircleButton(icon: Icons.fullscreen_exit_rounded, floating: true, tooltip: 'Back', onTap: () => setState(() => _expanded = false)),
+                ),
               if (!_expanded)
                 Positioned(
                   left: 0,
                   right: 0,
-                  top: pad.top + 112,
-                  bottom: bottomReserve,
-                  child: Center(
+                  top: 0,
+                  bottom: 0,
+                  child: Center( // every window centred on the screen
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -173,46 +123,21 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                           ),
                         ),
                         const SizedBox(height: VSpace.sm),
-                        // One control below the image: the name and Set.
                         SizedBox(
-                          width: ctrlW,
-                          child: Row(children: [
-                            Expanded(child: Text(_previewed.name, maxLines: 2, softWrap: true, style: VType.headline(color: Colors.white))), // never truncated
-                            VPress(
-                              key: const ValueKey('gallery-set'),
-                              onTap: () => widget.onConfirmTheme(_previewed),
-                              tooltip: 'Set wallpaper',
-                              child: Container(
-                                height: 36,
-                                padding: const EdgeInsets.symmetric(horizontal: 16),
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(999)),
-                                child: Text('Set wallpaper', style: VType.footnote(color: Colors.black, weight: FontWeight.w600)),
-                              ),
-                            ),
-                          ]),
-                        ),
-                        const SizedBox(height: VSpace.sm),
-                        SizedBox(
-                          width: ctrlW,
+                          width: winW,
                           height: 60,
-                          // Playtest: the strip ran past the edge. It now shows only the
-                          // thumbnails that fit, centred on the selected one, so
-                          // nothing is cut; picking one recentres the window.
-                          child: Builder(builder: (context) {
-                            final fit = ((ctrlW - 64) / 40).floor().clamp(1, themes.length);
-                            final sel = themes.indexWhere((t) => t.id == _previewed.id).clamp(0, themes.length - 1);
-                            final start = (sel - fit ~/ 2).clamp(0, (themes.length - fit).clamp(0, themes.length));
-                            final shown = themes.sublist(start, (start + fit).clamp(0, themes.length));
-                            return Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                              for (var k = 0; k < shown.length; k++) ...[
-                                if (k > 0) const SizedBox(width: 4),
-                                Builder(builder: (_) {
-                                  final i = themes.indexOf(shown[k]);
+                          child: EdgeFadeHorizontal(
+                            child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              physics: const BouncingScrollPhysics(),
+                              itemCount: themes.length,
+                              separatorBuilder: (_, __) => const SizedBox(width: 4),
+                              itemBuilder: (_, i) {
                                 final t = themes[i];
                                 final sel = t.id == _previewed.id;
                                 return VPress(
                                   onTap: () => _select(t),
+                                  tooltip: t.name,
                                   child: AnimatedContainer(
                                     duration: VMotion.base,
                                     curve: Curves.easeOutCubic,
@@ -221,47 +146,17 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                                     decoration: BoxDecoration(borderRadius: BorderRadius.circular(6), boxShadow: VShadow.medium),
                                     child: ClipRRect(
                                       borderRadius: BorderRadius.circular(6),
-                                                      child: Stack(fit: StackFit.expand, children: [
-                                        ThemePosterImage(theme: t, fit: BoxFit.cover, filterQuality: FilterQuality.high),
-                                      ]),
+                                      child: ThemePosterImage(theme: t, fit: BoxFit.cover, filterQuality: FilterQuality.medium),
                                     ),
                                   ),
                                 );
-                                }),
-                              ],
-                            ]);
-                          }),
+                              },
+                            ),
+                          ),
                         ),
                       ],
                     ),
                   ),
-                ),
-              // v9.1.6c: catalog selector (Free/Premium switch) centred at the
-              // top; the category nav is a bar pinned under it, always visible.
-              if (!_expanded)
-                Positioned(
-                  left: 0, right: 0,
-                  top: pad.top + 10,
-                  child: Center(child: TierSwitchPill(label: 'Free', onSwitch: widget.onUpgradeTier)),
-                ),
-              if (!_expanded)
-                Positioned(
-                  left: 12, right: 12,
-                  top: pad.top + 62,
-                  child: Builder(builder: (_) {
-                    final store = ThemePackStore.instance;
-                    final pool = [
-                      ...WallpaperCatalog.freeThemes,
-                      for (final t in WallpaperCatalog.premiumThemes)
-                        if (store.isUnlocked(t.id)) t,
-                    ];
-                    return CategoryBar(
-                      groups: CategoryTaxonomy.build([for (final t in pool) t.tags]),
-                      total: pool.length,
-                      selected: _category,
-                      onSelected: (k) => setState(() => _category = k),
-                    );
-                  }),
                 ),
             ],
           ),
@@ -349,12 +244,69 @@ class _PreviewWindowState extends State<_PreviewWindow> {
               clipBehavior: Clip.hardEdge,
               child: SizedBox(width: c.value.size.width, height: c.value.size.height, child: VideoPlayer(c)),
             ),
-          // David (repeatedly): nothing sits on top of a theme image or video.
-          // The back / Expand View / Set / title / scrubber overlays came back
-          // from the v9-final import and the v8.7 restore (50a61a7); they are
-          // gone here and media_check.py fails if any widget overlaps the image.
-          // Tap the image to view it full screen; Set lives below.
-          Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: widget.onExpand)),
+          const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0x33000000), Color(0x00000000), Color(0x00000000), Color(0x99000000)],
+                stops: [0, 0.2, 0.6, 1],
+              ),
+            ),
+          ),
+          Positioned(
+            left: 12,
+            right: 12,
+            top: 12,
+            child: Row(
+              children: [
+                VCircleButton(icon: Icons.chevron_left_rounded, size: 32, floating: true, tooltip: 'Back', onTap: widget.onBack),
+                // David (rejected before): no Expand View pill on the image.
+                const Spacer(),
+                VCircleButton(icon: Icons.check_rounded, size: 32, floating: true, tooltip: 'Set Wallpaper', onTap: widget.onSet),
+              ],
+            ),
+          ),
+          Positioned(
+            left: 18,
+            right: 14,
+            bottom: ready ? 8 : 18,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(t.name, maxLines: 2, style: VType.title2(color: Colors.white).copyWith(shadows: _WindowlessThemeScrollerState._shadow)),
+                if (ready)
+                  Row(children: [
+                    VPress(
+                      onTap: () => c.value.isPlaying ? c.pause() : c.play(),
+                      tooltip: c.value.isPlaying ? 'Pause' : 'Play',
+                      child: SizedBox(width: 32, height: 40, child: Icon(c.value.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, color: Colors.white, size: 24)),
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: SliderTheme(
+                        data: SliderThemeData(
+                          trackHeight: 4,
+                          activeTrackColor: Colors.white.withValues(alpha: 0.9),
+                          inactiveTrackColor: Colors.white.withValues(alpha: 0.3),
+                          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 0, elevation: 0, pressedElevation: 0),
+                          overlayShape: SliderComponentShape.noOverlay,
+                        ),
+                        child: Slider(
+                          value: frac.clamp(0.0, 1.0),
+                          onChanged: (v) => setState(() => _scrub = v),
+                          onChangeEnd: (v) {
+                            c.seekTo(Duration(milliseconds: (dur * v).round()));
+                            setState(() => _scrub = null);
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ]),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -420,34 +372,4 @@ class EdgeFadeHorizontal extends StatelessWidget {
       child: child,
     );
   }
-}
-
-
-/// Floating 'Browse' button (opens the category overlay).
-class TierlessBrowseButton extends StatelessWidget {
-  final String label;
-  final bool on;
-  final VoidCallback onTap;
-  const TierlessBrowseButton({super.key, required this.label, required this.on, required this.onTap});
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(999),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-            child: Container(
-              height: 44,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              color: on ? const Color(0x55FFFFFF) : const Color(0xB318181E),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.view_sidebar_outlined, size: 18, color: Colors.white),
-                const SizedBox(width: 6),
-                ConstrainedBox(constraints: const BoxConstraints(maxWidth: 90), child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white))),
-              ]),
-            ),
-          ),
-        ),
-      );
 }
