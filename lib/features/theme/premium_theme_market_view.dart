@@ -463,13 +463,22 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
       // label form, fixed height) is centred between it and the bottom bar.
       const mainTop =
           _kHeaderHeight + _kSearchPad + _kSearchHeight + _kSearchHintGap + _kSearchPad;
-      final mainHeight = math.max(0.0, h - mainTop - barReserve);
-      const contentHeight =
-          _kStageHeight + _kLabelsMarginTop + _kLabelsBlockHeight;
+      // v9.1.7 (#6/#7): docked mode. The shell ends this pane above the
+      // ticker band, so the bottom bar is no longer inside it and the stage
+      // scales down (as one unit) until the name, song and action still fit.
+      final docked = h < MediaQuery.sizeOf(context).height - 1;
+      final reserve = docked ? 0.0 : barReserve;
+      final mainHeight = math.max(0.0, h - mainTop - reserve);
+      const labelsDocked = 8 + 28 + 8 + _kSongRowExtent + 16 + _kActionHeight + 8;
+      final stageH = docked
+          ? (mainHeight - _kLabelsMarginTop - labelsDocked).clamp(_kStageHeight * 0.55, _kStageHeight).toDouble()
+          : _kStageHeight;
+      final contentHeight =
+          stageH + _kLabelsMarginTop + (docked ? labelsDocked : _kLabelsBlockHeight);
       final contentTop =
           mainTop + math.max(0.0, (mainHeight - contentHeight) / 2);
       final stageTop = contentTop;
-      final labelsTop = stageTop + _kStageHeight + _kLabelsMarginTop;
+      final labelsTop = stageTop + stageH + _kLabelsMarginTop;
       final contentWidth = w - _kMainPadX * 2;
       final searchWidth = math.min(w - _kSearchPad * 2, _kSearchMaxWidth);
 
@@ -484,7 +493,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
         // The app shell's bottom bar (PermanentNavBar: VOrnament, elevated
         // glass, 3 x 44 circles) and the Buy / Apply / Subscribe capsule:
         // same material blur, applied to the video behind them.
-        AmbientGlass(
+        if (!docked) AmbientGlass(
             Rect.fromLTWH((w - _kBarWidth) / 2,
                 h - _kBarBottom - MediaQuery.paddingOf(context).bottom - _kBarHeight,
                 _kBarWidth, _kBarHeight),
@@ -583,8 +592,10 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
                   left: _kMainPadX,
                   right: _kMainPadX,
                   top: stageTop,
-                  height: _kStageHeight,
-                  child: Center(
+                  height: stageH,
+                  child: FittedBox(
+                    fit: BoxFit.contain,
+                    alignment: Alignment.topCenter,
                     child: SizedBox(
                       width: math.min(contentWidth, _kStageMaxWidth),
                       height: _kStageHeight,

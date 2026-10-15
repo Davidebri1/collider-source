@@ -856,6 +856,22 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   /// R09: "row count 1, 2 or 3." A slot is sized for a model name plus a
   /// wrapped one-line summary; longer answers scroll behind the edge fade.
   static const int _maxTickerRows = 4; // four shown, the rest scroll (v8.6)
+  /// v9.1.7 (#6/#7): under a tall pane the ticker docks in the band above the
+  /// composer with two rows showing; the rest still scroll.
+  static const int _dockedTickerRows = 2;
+  /// Panes tall enough to cover the ticker. Each one ends above the dock band.
+  bool get _tallPaneOpen => _browserOpen || const {'themes', 'premium', 'music'}.contains(_activeDrawer);
+  final GlobalKey _tickerWindowKey = GlobalKey();
+  /// Distance from the screen bottom to the top of the docked ticker (0 when
+  /// the ticker has no rows). Measured after layout.
+  double _dockBand = 0;
+  void _measureDockBand() {
+    final ctx = _tickerWindowKey.currentContext;
+    final box = ctx?.findRenderObject() as RenderBox?;
+    final h = MediaQuery.sizeOf(context).height;
+    final band = (box == null || !box.hasSize || box.size.height < 1) ? 0.0 : (h - box.localToGlobal(Offset.zero).dy + 8).clamp(0.0, h * 0.5);
+    if ((band - _dockBand).abs() > 1) setState(() => _dockBand = band);
+  }
   // v9.1.7: one compact row (name + one-line summary) plus its 6 px gap, so
   // the window shows about four rows and scrolls to the rest.
   static const double _rowSlot = 46;
@@ -1292,7 +1308,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     final rowCount = _tickerRows(_activeCategory).length;
     // v9.1.2: nothing asked yet -> nothing drawn, just the wallpaper.
     if (rowCount == 0 && !showConsensus) return const SizedBox.shrink();
-    final visible = rowCount.clamp(1, _maxTickerRows);
+    final visible = rowCount.clamp(1, _tallPaneOpen ? _dockedTickerRows : _maxTickerRows);
     final window = SizedBox(
       // v9.1.2: chat bubbles span the screen like the reference.
       // v9.1.6 (approved app-11): rows sit right of the side rail.
@@ -1302,15 +1318,17 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         child: _windowSurface(
           bare: true,
           padding: const EdgeInsets.fromLTRB(VSpace.xs - 2, VSpace.xs - 2, VSpace.xs - 2, VSpace.xs - 2),
-          child: CustomMultiChildLayout(
-            // Only the card list is elastic. The pinned row keeps its natural
-            // height (R16: the line is not cut off) and the category strip is
-            // fixed, so the window is exactly as tall as it needs to be and
-            // gives the height back to the 40% ceiling when it overflows.
-            delegate: _TickerWindowLayout(listSlots: visible * _rowSlot + _chipStripHeight),
+          // v9.1.7 (#6/#7): CustomMultiChildLayout always sizes itself to the
+          // constraints, so the window was a fixed 40 % of the screen with the
+          // rows at its top and a blank band down to the composer. A min-size
+          // column is exactly as tall as the pinned row plus the visible rows,
+          // so the rail sits directly over the composer (app-11) and the band
+          // it occupies is small enough to dock under tall panes.
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              LayoutId(
-                id: _TickerWindowLayout.pinned,
+              ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: _tickerHeight * 0.40),
                 child: showConsensus
                     ? ConsensusRow(
                         score: _consensusRatio,
@@ -1320,7 +1338,10 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                       )
                     : const SizedBox.shrink(),
               ),
-              LayoutId(id: _TickerWindowLayout.list, child: _buildTicker()),
+              if (showConsensus) const SizedBox(height: 6),
+              // Loose: the list takes its slots, or what is left of the 40 %
+              // ceiling when the consensus row is tall.
+              Flexible(child: SizedBox(height: visible * _rowSlot + _chipStripHeight, child: _buildTicker())),
             ],
           ),
         ),
@@ -1334,7 +1355,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       duration: VMotion.base,
       curve: Curves.easeOutCubic,
       opacity: _isComposerSummoned ? 1.0 : 1,
-      child: IgnorePointer(ignoring: _isComposerSummoned, child: window /* David: centred; the side rail floats over it, never offsets it */),
+      child: IgnorePointer(ignoring: _isComposerSummoned, child: KeyedSubtree(key: _tickerWindowKey, child: window) /* David: centred; the side rail floats over it, never offsets it */),
     );
   }
 
@@ -1923,6 +1944,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   Widget build(BuildContext context) {
     final surfaceSig = '$_activeDrawer|${_expandedModelIds.join(',')}|$_settingsOpen|$_browserOpen|$_zoomedMessage|$_localHistoryModel';
     if (surfaceSig != _lastSurfaceSig) { _lastSurfaceSig = surfaceSig; }
+    WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) _measureDockBand(); });
     _guardPreview();
     // Max 9 active model rows filtered by active category with fallback
     var categoryPills = _tickerItems
@@ -2215,7 +2237,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               ))),
 
           // v9.1.4 (playtest #14): dissolves out instead of a hard cut.
-            Positioned.fill(child: MaterializeSwitch(show: _activeDrawer == 'themes', builder: (_) => WindowlessThemeScroller(
+            Positioned.fill(bottom: _activeDrawer == 'themes' ? _dockBand : 0, child: MaterializeSwitch(show: _activeDrawer == 'themes', builder: (_) => WindowlessThemeScroller(
                 currentTheme: _currentTheme,
                 // v8.3.1: browsing never changes the app background (only Set does).
                 onLivePreview: (_) {},
@@ -2232,7 +2254,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               ))),
 
           // v9.1.4 (playtest #14): dissolves out instead of a hard cut.
-            Positioned.fill(child: MaterializeSwitch(show: _activeDrawer == 'premium', builder: (_) => GestureDetector(
+            Positioned.fill(bottom: _activeDrawer == 'premium' ? _dockBand : 0, child: MaterializeSwitch(show: _activeDrawer == 'premium', builder: (_) => GestureDetector(
                 behavior: HitTestBehavior.translucent,
                 child: PremiumThemeMarketView(
                 // v9.1.4 (playtest #2): rebuild once the catalog arrives, so a
@@ -2261,7 +2283,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
           // No songs in the catalog: no Music drawer (v8.3, D46).
           // v9.1.4 (playtest #14): dissolves out instead of a hard cut.
-            Positioned.fill(child: MaterializeSwitch(show: _activeDrawer == 'music' && MusicPlayer.library.isNotEmpty, builder: (_) => MusicCollectionDrawer(
+            Positioned.fill(bottom: _activeDrawer == 'music' ? _dockBand : 0, child: MaterializeSwitch(show: _activeDrawer == 'music' && MusicPlayer.library.isNotEmpty, builder: (_) => MusicCollectionDrawer(
                 onClose: () => setState(() => _activeDrawer = null),
               ))),
 
@@ -2395,6 +2417,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             // Tap outside the window closes it (David: swipe and tap outside are the escapes).
             Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: _closeBrowser)),
             Positioned.fill(
+              bottom: _dockBand,
               child: Center(
                 child: InAppBrowserSheet(
                   key: _browserKey,

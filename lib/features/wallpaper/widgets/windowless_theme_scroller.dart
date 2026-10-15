@@ -101,15 +101,25 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
     );
   }
 
-  Widget _build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
+  Widget _build(BuildContext context) => LayoutBuilder(builder: (context, c) => _buildIn(context, c));
+
+  Widget _buildIn(BuildContext context, BoxConstraints c) {
+    // v9.1.7 (#6/#7): the pane may end above the docked ticker, so it sizes
+    // from the room it is given, not the screen.
+    final screen = MediaQuery.of(context).size;
+    final size = Size(screen.width, c.maxHeight.isFinite ? c.maxHeight : screen.height);
+    final docked = size.height < screen.height - 1;
+    final bottomReserve = docked ? 8.0 : 84.0;
     final pad = MediaQuery.of(context).padding;
     // David: previews are phone-shaped (device portrait aspect), centred;
     // narrowed to fit rather than shifted.
     final aspect = (size.height / size.width).clamp(1.78, 2.17);
-    final maxH = (size.height - pad.top - 84 - 112 - 90 - 52).clamp(240.0, 900.0);
+    final maxH = (size.height - pad.top - bottomReserve - 112 - 90 - 52).clamp(200.0, 900.0);
     final winW = math.min((size.width - 120).clamp(160.0, 440.0), maxH / aspect);
     final winH = winW * aspect;
+    // v9.1.7: the name/Set row and the strip keep a readable width when the
+    // window shrinks (docked ticker), so the name never breaks mid-word.
+    final ctrlW = math.max(winW, math.min(size.width - 128, 320.0)); // clears the side rail like the ticker
     return ListenableBuilder(
       listenable: ThemePackStore.instance,
       builder: (context, _) {
@@ -146,7 +156,7 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                   left: 0,
                   right: 0,
                   top: pad.top + 112,
-                  bottom: 84,
+                  bottom: bottomReserve,
                   child: Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -165,7 +175,7 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                         const SizedBox(height: VSpace.sm),
                         // One control below the image: the name and Set.
                         SizedBox(
-                          width: winW,
+                          width: ctrlW,
                           child: Row(children: [
                             Expanded(child: Text(_previewed.name, maxLines: 2, softWrap: true, style: VType.headline(color: Colors.white))), // never truncated
                             VPress(
@@ -184,13 +194,13 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                         ),
                         const SizedBox(height: VSpace.sm),
                         SizedBox(
-                          width: winW,
+                          width: ctrlW,
                           height: 60,
                           // Playtest: the strip ran past the edge. It now shows only the
                           // thumbnails that fit, centred on the selected one, so
                           // nothing is cut; picking one recentres the window.
                           child: Builder(builder: (context) {
-                            final fit = ((winW - 64) / 40).floor().clamp(1, themes.length);
+                            final fit = ((ctrlW - 64) / 40).floor().clamp(1, themes.length);
                             final sel = themes.indexWhere((t) => t.id == _previewed.id).clamp(0, themes.length - 1);
                             final start = (sel - fit ~/ 2).clamp(0, (themes.length - fit).clamp(0, themes.length));
                             final shown = themes.sublist(start, (start + fit).clamp(0, themes.length));
