@@ -190,12 +190,16 @@ class _ModelPillState extends State<ModelPill> {
       decoration: BoxDecoration(
         gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [top, bottom]),
         borderRadius: BorderRadius.circular(VRadius.lg - 4),
-        border: Border.all(
-          color: c.withValues(alpha: 0.18 + 0.14 * e),
-          width: 0.6,
-          // An isolated card keeps its own hue at full strength; only a left
-          // edge marks that it sits outside the shared block.
-          left: item.isIsolated ? BorderSide(color: c.withValues(alpha: 0.85), width: 2.5) : BorderSide.none,
+        // Border.all paints every side the same and has no per-side argument.
+        // An isolated card keeps that thin rim, and a stronger left edge marks
+        // that it sits outside the shared block (R41) without dimming it.
+        border: Border(
+          top: BorderSide(color: c.withValues(alpha: 0.18 + 0.14 * e), width: 0.6),
+          right: BorderSide(color: c.withValues(alpha: 0.18 + 0.14 * e), width: 0.6),
+          bottom: BorderSide(color: c.withValues(alpha: 0.18 + 0.14 * e), width: 0.6),
+          left: item.isIsolated
+              ? BorderSide(color: c.withValues(alpha: 0.85), width: 2.5)
+              : BorderSide(color: c.withValues(alpha: 0.18 + 0.14 * e), width: 0.6),
         ),
         boxShadow: [
           BoxShadow(
