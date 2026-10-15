@@ -59,10 +59,12 @@ class _HistoryDrawerState extends State<HistoryDrawer> {
       fit: StackFit.expand,
       children: [
         VScrim(onTap: widget.onClose),
+        // v9.1.7: panes sit centred, never top-shifted (clear of the status
+        // bar above and the composer + nav bar below).
         Align(
-          alignment: Alignment.topCenter,
+          alignment: Alignment.center,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(VSpace.md, 56, VSpace.md, 0),
+            padding: const EdgeInsets.fromLTRB(VSpace.md, 56, VSpace.md, 150),
             child: VWindow(
               title: 'History',
               maxWidth: VOverlay.menuWidth(context),

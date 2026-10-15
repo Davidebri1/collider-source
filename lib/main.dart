@@ -1899,6 +1899,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   }
 
   bool get _otherSurfaceFocused => _settingsOpen || _browserOpen || (_activeDrawer != null) || _zoomedMessage != null || _localHistoryModel != null;
+  /// One blur for the ticker whenever something else has focus.
+  static const double _tickerBlur = 3;
   Widget _tickerGate(Widget child) {
     final off = _otherSurfaceFocused;
     return IgnorePointer(
@@ -1907,7 +1909,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         enabled: off,
         // v9.1.6: light enough that the rows stay clearly visible as rows
         // (sigma 8 plus the surface's own blur erased them).
-        imageFilter: ui.ImageFilter.blur(sigmaX: 3, sigmaY: 3),
+        imageFilter: ui.ImageFilter.blur(sigmaX: _tickerBlur, sigmaY: _tickerBlur),
         child: child,
       ),
     );
@@ -2112,7 +2114,13 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                         // carry their own BackdropFilter renders as a flat grey block on web,
                         // and the field-focus signal can stay on after History's search
                         // closes. The wallpaper DOF plane already blurs; the rail just quiets.
-                        builder: (_, on, child) => AnimatedOpacity(duration: VMotion.base, opacity: on && _isComposerSummoned ? 0.6 : 1, child: child!),
+                        // v9.1.7: the same blur the ticker gets under every pane (_tickerGate,
+                        // sigma 3), so typing and panes push the rail back the same way.
+                        builder: (_, on, child) => ImageFiltered(
+                          enabled: on && _isComposerSummoned && !_otherSurfaceFocused,
+                          imageFilter: ui.ImageFilter.blur(sigmaX: _tickerBlur, sigmaY: _tickerBlur),
+                          child: AnimatedOpacity(duration: VMotion.base, opacity: on && _isComposerSummoned ? 0.6 : 1, child: child!),
+                        ),
                         child: _buildTickerWindow(),
                       ),
                       const SizedBox(height: _windowGap),
