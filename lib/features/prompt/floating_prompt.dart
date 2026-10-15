@@ -237,6 +237,7 @@ class _FloatingPromptState extends State<FloatingPrompt> {
     );
   }
 
+  // ignore: unused_element
   Widget _optionsRow() {
     Widget chip(IconData i, String l, bool on, VoidCallback t) => GestureDetector(
           behavior: HitTestBehavior.opaque,
@@ -296,10 +297,9 @@ class _FloatingPromptState extends State<FloatingPrompt> {
                 // v9.1.3: compact options row right above the input while
                 // writing. Inside the field's tap region, so a tap here never
                 // closes the keyboard.
-                if (widget.summoned || _focus.hasFocus) ...[
-                  _optionsRow(),
-                  const SizedBox(height: 14),
-                ],
+                // v9.1.7 (MASTER-LIST #41): input, attach and send only. The
+                // Attach/Web/Research/Private chip row is gone; every one of
+                // those options stays in the + menu (_openMenu).
                 // Attached files: the file names are the only way to tell them apart.
                 if (_files.isNotEmpty) ...[
                   Wrap(spacing: 12, runSpacing: 12, children: [
@@ -324,7 +324,9 @@ class _FloatingPromptState extends State<FloatingPrompt> {
                       child: GestureDetector(
                         key: _plusKey,
                         behavior: HitTestBehavior.opaque,
-                        onTap: _attach, // v9.1.4 (playtest #5): + only attaches; modes live in the options row
+                        // v9.1.7 (#41): the chip row is gone, so + opens the menu (Attach file
+                        // first, then Create, Internet/Research/Deep Research, Private) so no option is lost.
+                        onTap: _openMenu,
                         child: Container(
                           width: 60,
                           height: 60,

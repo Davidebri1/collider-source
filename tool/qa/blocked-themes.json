@@ -237,6 +237,9 @@
   "a3612b1a-ba58-4437-9515-779c1ee1fe9e_1080_hd.mp4": [
    "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
    "h264 decode errors in the source: Reference 3 >= 2"
+  ],
+  "7.webp": [
+   "not a wallpaper: a screenshot of an app interface (MASTER-LIST #76)"
   ]
  }
 }

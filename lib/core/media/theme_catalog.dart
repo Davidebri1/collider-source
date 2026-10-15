@@ -293,6 +293,7 @@ class ThemeCatalog extends ChangeNotifier {
   /// qa/set_wallpaper_check.py. Reasons and backup: qa/blocked-themes.json.
   /// The files stay in R2; delete a name here to bring a theme back.
   static const Set<String> _blocked = {
+    '7.webp', // MASTER-LIST #76: a screenshot of an app interface, not a wallpaper
     '0251d1e0-16a1-49ad-9807-19d1bceac3e9_1080_hd.mp4',
     '0_Background_Backdrop_1920x1080.mp4',
     '0_Beach_Waves_3840x2160.mp4',
