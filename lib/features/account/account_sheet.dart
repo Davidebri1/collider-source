@@ -8,7 +8,6 @@
 // stores and an auth backend that this link does not have: those actions
 // answer inline that they are not available here (H10, D60).
 import 'package:flutter/material.dart';
-import '../drawers/settings_drawer.dart';
 
 import '../../core/vision/vision_kit.dart';
 import '../../models/model_def.dart';
@@ -31,10 +30,8 @@ class _AccountSheetState extends State<AccountSheet> {
     return Stack(
       fit: StackFit.expand,
       children: [
-        // v8.7: no scrim; Settings stays visible, stepped back behind.
         GestureDetector(behavior: HitTestBehavior.opaque, onTap: widget.onClose),
-        // v9.1.7: on CPane (centred, same width as every pane, one glass,
-        // modal elevation, shell reserve). It was the phone width minus 32.
+        // v9.1.7: Account is a CPane, the same centred glass as every other pane.
         CPane(
           layer: CLayer.modal,
           fit: CPaneFit.hug,
