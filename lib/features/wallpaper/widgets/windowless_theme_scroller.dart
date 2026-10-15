@@ -46,6 +46,12 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
   static const _shadow = [Shadow(color: Color(0x99000000), blurRadius: 16)];
 
   @override
+  void dispose() {
+    _strip.dispose();
+    super.dispose();
+  }
+
+  @override
   void initState() {
     super.initState();
     _previewed = widget.currentTheme;
@@ -57,6 +63,9 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
   /// Gallery opens before the R2 list lands; resolve it against the list on
   /// every build so the window never opens black.
   bool _picked = false;
+  String? _firstId;
+  WallpaperTheme? _firstTheme;
+  final ScrollController _strip = ScrollController();
   WallpaperTheme _resolveCurrent(List<WallpaperTheme> themes) {
     final cur = widget.currentTheme;
     for (final t in themes) {
@@ -86,13 +95,31 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final pad = MediaQuery.of(context).padding;
-    final winW = (size.width - 32).clamp(240.0, 440.0);
-    final winH = (winW * 1.3).clamp(240.0, size.height - pad.top - 84 - 150);
+    // David (Oct 15): v8.3's card, measured off his photo (430 x 932): x 16
+    // to 414, y 130 to 645, so 92.6% of the width, 1.294 tall per wide, top at
+    // 13.95% of the height. The strip sits 12 below it.
+    final winW = (size.width * 398 / 430).clamp(240.0, 440.0);
+    final winH = (winW * 515 / 398).clamp(240.0, size.height - pad.top - 84 - 150);
+    final winTop = math.max(pad.top + 8, size.height * 130 / 932);
     return ListenableBuilder(
       listenable: ThemePackStore.instance,
       builder: (context, _) {
-        final themes = _themes;
-        if (!_picked) _previewed = _resolveCurrent(themes);
+        final listed = _themes;
+        if (!_picked) _previewed = _resolveCurrent(listed);
+        // v8.3: the strip starts at the left margin with the theme on the
+        // wallpaper first. The order is fixed when Gallery opens.
+        // Follows the wallpaper's theme until the first pick, then stays.
+        if (!_picked) {
+          _firstId = _previewed.name.isEmpty ? null : _previewed.id;
+          _firstTheme = _previewed;
+        }
+        // The wallpaper's theme leads even when it is not in the free list
+        // (a live theme that came with the app).
+        final lead = listed.where((t) => t.id == _firstId).toList();
+        final themes = [
+          if (lead.isEmpty && _firstId != null) _firstTheme! else ...lead,
+          for (final t in listed) if (t.id != _firstId) t,
+        ];
         return GestureDetector(
           behavior: HitTestBehavior.translucent,
           onVerticalDragEnd: (d) {
@@ -122,11 +149,9 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                 ),
               if (!_expanded)
                 Positioned(
-                  left: 0,
-                  right: 0,
-                  top: 0,
-                  bottom: 0,
-                  child: Center( // every window centred on the screen
+                  left: (size.width - winW) / 2,
+                  top: winTop,
+                  child: Align( // horizontally centred; v8.3's height on screen
                     child: PaneRect(child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -141,12 +166,15 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                             onSet: () => widget.onConfirmTheme(_previewed),
                           ),
                         ),
-                        const SizedBox(height: VSpace.sm),
+                        const SizedBox(height: 12),
                         SizedBox(
                           width: winW,
                           height: 60,
                           child: EdgeFadeHorizontal(
+                            controller: _strip,
                             child: ListView.separated(
+                              controller: _strip,
+                              padding: EdgeInsets.zero,
                               scrollDirection: Axis.horizontal,
                               physics: const BouncingScrollPhysics(),
                               itemCount: themes.length,
@@ -161,8 +189,13 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                                     duration: VMotion.base,
                                     curve: Curves.easeOutCubic,
                                     width: sel ? 60 : 36,
-                                    margin: EdgeInsets.symmetric(vertical: sel ? 0 : 6, horizontal: sel ? 4 : 0),
-                                    decoration: BoxDecoration(borderRadius: BorderRadius.circular(6), boxShadow: VShadow.medium),
+                                    margin: EdgeInsets.only(top: sel ? 0 : 6, bottom: sel ? 0 : 6, right: sel ? 4 : 0),
+                                    // The active theme: larger, with a light rim (v8.3).
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(6),
+                                      boxShadow: VShadow.medium,
+                                      border: sel ? Border.all(color: const Color(0xCCFFFFFF), width: 1.5) : null,
+                                    ),
                                     child: ClipRRect(
                                       borderRadius: BorderRadius.circular(6),
                                       child: ThemePosterImage(theme: t, fit: BoxFit.cover, filterQuality: FilterQuality.medium),
@@ -372,27 +405,35 @@ class _LoopVideoState extends State<_LoopVideo> {
   }
 }
 
-/// Horizontal edge fade for thumbnail strips.
+/// Horizontal edge fade for thumbnail strips. With a [controller], the left
+/// edge fades only once the strip has scrolled (v8.3 starts sharp at the
+/// left margin); the right end always fades.
 class EdgeFadeHorizontal extends StatelessWidget {
   final Widget child;
-  const EdgeFadeHorizontal({super.key, required this.child});
+  final ScrollController? controller;
+  const EdgeFadeHorizontal({super.key, required this.child, this.controller});
 
   @override
   Widget build(BuildContext context) {
-    return ShaderMask(
-      blendMode: BlendMode.dstIn,
-      shaderCallback: (r) {
-        final f = (16 / (r.width <= 0 ? 1 : r.width)).clamp(0.0, 0.3);
-        return LinearGradient(
-          colors: const [Color(0x00FFFFFF), Colors.white, Colors.white, Color(0x00FFFFFF)],
-          stops: [0, f, 1 - f, 1],
-        ).createShader(r);
-      },
-      child: child,
+    final c = controller;
+    Widget mask(double leftOn) => ShaderMask(
+          blendMode: BlendMode.dstIn,
+          shaderCallback: (r) {
+            final f = (16 / (r.width <= 0 ? 1 : r.width)).clamp(0.0, 0.3);
+            return LinearGradient(
+              colors: [Color.fromRGBO(255, 255, 255, 1 - leftOn), Colors.white, Colors.white, const Color(0x00FFFFFF)],
+              stops: [0, f, 1 - f, 1],
+            ).createShader(r);
+          },
+          child: child,
+        );
+    if (c == null) return mask(1);
+    return AnimatedBuilder(
+      animation: c,
+      builder: (_, __) => mask(c.hasClients ? (c.offset / 16).clamp(0.0, 1.0) : 0),
     );
   }
 }
-
 
 /// David (Oct 15): the carousel ends are blurred. A thumbnail blurs as it
 /// nears either end of the strip (only the thumbnail itself; the wallpaper
@@ -425,7 +466,9 @@ class _EdgeBlurState extends State<_EdgeBlur> {
     final view = Scrollable.maybeOf(context)?.context.findRenderObject() as RenderBox?;
     if (box == null || view == null || !box.attached || !view.attached) return;
     final x = box.localToGlobal(Offset.zero, ancestor: view).dx;
-    final d = math.min(x + box.size.width / 2, view.size.width - x - box.size.width / 2);
+    final scrolled = (_pos?.pixels ?? 0) > 1;
+    final right = view.size.width - x - box.size.width / 2;
+    final d = scrolled ? math.min(x + box.size.width / 2, right) : right;
     final s = d >= _zone ? 0.0 : _maxSigma * (1 - (d / _zone).clamp(0.0, 1.0));
     if ((s - _sigma).abs() > 0.05) setState(() => _sigma = s);
   }

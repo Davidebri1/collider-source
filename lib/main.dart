@@ -442,15 +442,25 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
   void _qaSeedAnswers() {
     final qp = Uri.base.queryParameters;
-    // QA builds only: ?qa_files=1 puts one short R2 video in Files so the
-    // Player can be opened and checked.
+    // QA builds only: ?qa_files=1 puts one short R2 video and six R2 stills
+    // in Files so the Player and the grid can be checked.
     if (ThemePackStore.qaUnlockAll && qp['qa_files'] == '1') {
       () async {
         final fs = FileStore.instance;
         await fs.init();
-        if (fs.files.any((f) => f.name == 'QA clip.mp4')) return;
-        final r = await Dio().get<List<int>>('${ThemeCatalog.mediaBaseUrl}FARM%20SKY.mp4', options: Options(responseType: ResponseType.bytes));
-        if (r.data != null) await fs.addBytes('QA clip.mp4', Uint8List.fromList(r.data!), 'files');
+        // David's v8.4 Files row: the grid shows files in the order added,
+        // so his stills go in first (Copper Kiln, Obsidian Rain, ...).
+        for (final n in const ['Copper Kiln', 'Obsidian Rain', 'Limestone Dust', 'Earthen Kiln', 'Tide Concrete', 'Glasshouse Fog']) {
+          if (fs.files.any((f) => f.name == '$n.jpg')) continue;
+          try {
+            final r = await Dio().get<List<int>>('${ThemeCatalog.mediaBaseUrl}posters%2F${Uri.encodeComponent(n)}.mp4.jpg', options: Options(responseType: ResponseType.bytes));
+            if (r.data != null) await fs.addBytes('$n.jpg', Uint8List.fromList(r.data!), 'files');
+          } catch (_) {}
+        }
+        if (!fs.files.any((f) => f.name == 'QA clip.mp4')) {
+          final r = await Dio().get<List<int>>('${ThemeCatalog.mediaBaseUrl}FARM%20SKY.mp4', options: Options(responseType: ResponseType.bytes));
+          if (r.data != null) await fs.addBytes('QA clip.mp4', Uint8List.fromList(r.data!), 'files');
+        }
       }();
     }
     // QA builds only: ?qa_answers=1 fills the General ticker with sample

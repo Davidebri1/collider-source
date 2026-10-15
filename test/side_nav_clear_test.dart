@@ -24,6 +24,8 @@ void main() {
     expect(s!.labels, isTrue);
   });
   test('Gallery (card 358x465 + strip, centred)', () => clears('gallery', 3, [Rect.fromCenter(center: const Offset(195, 422), width: 358, height: 533)]));
+  test('Gallery at v8.3 geometry (card 361x467 at y 118 + strip)', () => clears('gallery v8.3', 3, [const Rect.fromLTWH(14.5, 117.7, 361, 539)]));
+  test('Files portrait CPane (full height) with 6 entries', () => clears('files portrait', 6, [Rect.fromCenter(center: const Offset(195, 422), width: 358, height: 564)]));
   test('Files (v8.4 window centred, 8 pt sides)', () => clears('files', 6, [Rect.fromCenter(center: const Offset(195, 422), width: 374, height: 253)]));
   test('Premium (cover to price, full width)', () => clears('premium', 3, [const Rect.fromLTWH(0, 198, 390, 448)]));
   test('Discover / any CPane at its tallest (564)', () => clears('cpane', 3, [Rect.fromCenter(center: const Offset(195, 422), width: 358, height: 564)]));

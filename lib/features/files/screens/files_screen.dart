@@ -1,4 +1,4 @@
-import '../../../core/vision/pane_rects.dart';
+import '../../../core/vision/cpane.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -109,269 +109,241 @@ class _FilesScreenState extends State<FilesScreen> {
                     (q.isEmpty || f.name.toLowerCase().contains(q)))
                 .toList();
         final title = cat == 'music' ? 'Music' : (_typeLabel[_type] ?? _type);
-        return FigmaStage(
-          frame: FilesScreen.frame,
-          cropWidth: FilesScreen.cropWidth,
-          center: FilesScreen.center,
-          children: [
-            // The window's rect, for the side nav guard (pane_rects.dart).
-            const Positioned(left: 95.4, top: 0, width: 1241, height: 841.2, child: IgnorePointer(child: PaneRect(child: SizedBox.expand()))),
-            // Sidebar 4253_frame at (95.4, 0), 295 x 740.
-            Positioned(left: 95.4, top: 0, width: 295, height: 740, child: _sidebar(all)),
-            // Main panel 3004_frame at (390.4, 0), 946 x 740.
-            Positioned(left: 390.4, top: 0, width: 946, height: 740, child: _main(title, files, cat)),
-            // Segmented ornament 3231_frame at (518.8, 721), 394.1 x 60.2.
-            Positioned(left: 518.8, top: 721, width: 394.1, height: 60.2, child: _segments()),
-            // Window controls 2686_frame at (625.4, 821.2): dot (close) + bar.
-            Positioned(
-              left: 625.4,
-              top: 815,
-              width: 181,
-              height: 26,
-              child: Row(children: [
-                Semantics(
-                  button: true,
-                  label: 'Close',
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: widget.onClose,
-                    child: Container(
-                      width: 26,
-                      height: 26,
-                      alignment: Alignment.center,
-                      child: Container(width: 14, height: 14, decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0x99FFFFFF))),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 26),
-                GestureDetector(
-                  onVerticalDragEnd: (d) {
-                    if ((d.primaryVelocity ?? 0) > 200) widget.onClose();
-                  },
-                  child: Container(width: 143, height: 12, decoration: BoxDecoration(color: const Color(0x99FFFFFF), borderRadius: BorderRadius.circular(6))),
-                ),
-              ]),
-            ),
-          ],
-        );
+        return _portrait(title, all, files, cat);
       },
     );
   }
 
-  Widget _sidebar(List<StoredFile> all) {
-    Widget menuRow(String type, IconData icon, double top) {
-      final on = _type == type;
-      return Positioned(
-        left: 13,
-        top: 84 + top,
-        child: Semantics(
-          button: true,
-          selected: on,
-          label: _typeLabel[type],
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => setState(() => _type = type),
-            child: Row(children: [
-              Container(
-                width: 42.24,
-                height: 42.24,
-                decoration: on ? const BoxDecoration(shape: BoxShape.circle, color: Color(0x33FFFFFF)) : null,
-                child: Icon(icon, size: 21, color: const Color(0xFFDDDBD6)),
-              ),
-              const SizedBox(width: 11.52),
-              FText(_typeLabel[type]!, size: 17.28, weight: FontWeight.w600, color: on ? Colors.white : const Color(0xFFDDDBD6)),
-            ]),
-          ),
-        ),
-      );
-    }
+  // David (Oct 15): a landscape window scaled to 0.30 is unreadable on a
+  // portrait phone. The same v8.4 widgets (sidebar, header, tiles, segmented
+  // control, glass) laid out for portrait at 1.0 inside the shared CPane:
+  // the sidebar is a collapsible section under the header, the grid has
+  // three columns of real tiles at normal text size.
+  bool _menuOpen = false;
 
-    Widget section(String type, double top, {bool open = false}) {
-      final on = _type == type;
-      return Positioned(
-        left: 21,
-        top: 332 + top,
-        width: 273,
-        height: 28,
-        child: Semantics(
-          button: true,
-          selected: on,
-          label: _typeLabel[type],
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => setState(() => _type = type),
-            child: Row(children: [
-              FText(_typeLabel[type]!, size: 23.17, weight: FontWeight.w600, color: on ? Colors.white : const Color(0xE6FAF9F5)),
-              const Spacer(),
-              Icon(open ? Icons.keyboard_arrow_down_rounded : Icons.chevron_right_rounded, size: 28, color: const Color(0xE6FAF9F5)),
-              const SizedBox(width: 22),
-            ]),
-          ),
-        ),
-      );
-    }
-
-    // "All Albums" highlight + album rows -> the newest files.
-    final recent = all.take(3).toList();
-    return Container(
-      decoration: const BoxDecoration(
-        borderRadius: BorderRadius.only(topLeft: Radius.circular(52.8), bottomLeft: Radius.circular(52.8)),
-        boxShadow: [BoxShadow(color: Color(0x2E000000), offset: Offset(0, 0.85), blurRadius: 20.5)],
-      ),
-      child: FGlass(
-        radius: const BorderRadius.only(topLeft: Radius.circular(52.8), bottomLeft: Radius.circular(52.8)),
-        blur: 24.5,
-        gradient: const LinearGradient(begin: Alignment(-0.9, -1), end: Alignment(0.9, 1), colors: [Color(0x99393939), Color(0x99616161)]),
-        child: Stack(children: [
-          const Positioned(left: 25, top: 23, child: FText('Files', size: 29.8, weight: FontWeight.w700, color: Color(0xFFFAF9F5))),
-          menuRow('All', Icons.schedule_rounded, 0),
-          menuRow('Image', Icons.image_outlined, 57.24),
-          menuRow('Video', Icons.movie_outlined, 114.48),
-          menuRow('Document', Icons.description_outlined, 171.72),
-          section('Writing', 0),
-          section('Data', 55),
-          Positioned(
-            left: 21,
-            top: 442,
-            width: 273,
-            height: 28,
-            child: Row(children: const [
-              FText('Recent', size: 23.17, weight: FontWeight.w600, color: Color(0xE6FAF9F5)),
-              Spacer(),
-              Icon(Icons.keyboard_arrow_down_rounded, size: 28, color: Color(0xE6FAF9F5)),
-              SizedBox(width: 22),
-            ]),
-          ),
-          if (recent.isNotEmpty)
-            Positioned(
-              left: 18,
-              top: 484,
-              width: 255,
-              height: 54,
-              child: GestureDetector(
-                onTap: () => _open(recent.first),
-                child: Container(
-                  decoration: BoxDecoration(color: const Color(0x4DFFFFFF), borderRadius: BorderRadius.circular(20)),
-                  child: Row(children: [
-                    SizedBox(width: 47, height: 47, child: Icon(_icon(recent.first.type), size: 26, color: const Color(0xFFDDDBD6))),
-                    const SizedBox(width: 1.84),
-                    Expanded(child: FText(recent.first.name, size: 16.56, weight: FontWeight.w600, color: const Color(0xFFDDDBD6))),
-                    const SizedBox(width: 12),
-                  ]),
-                ),
-              ),
-            ),
-          for (var k = 1; k < recent.length; k++)
-            Positioned(
-              left: 29,
-              top: 553 + 57.0 * (k - 1),
-              width: 240,
-              height: 32,
-              child: GestureDetector(
-                onTap: () => _open(recent[k]),
-                child: Row(children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4.035),
-                    child: Container(
-                      width: 34,
-                      height: 32,
-                      color: const Color(0x33FFFFFF),
-                      child: FileStore.isImage(recent[k].name)
-                          ? _Thumb(id: recent[k].id, fallback: _icon(recent[k].type))
-                          : Icon(_icon(recent[k].type), size: 18, color: const Color(0xFFDDDBD6)),
-                    ),
-                  ),
-                  const SizedBox(width: 17.48),
-                  Expanded(child: FText(recent[k].name, size: 18, weight: FontWeight.w600, color: const Color(0xFFDDDBD6))),
-                ]),
-              ),
-            ),
-        ]),
-      ),
-    );
-  }
-
-  Widget _main(String title, List<StoredFile> files, String cat) {
+  Widget _portrait(String title, List<StoredFile> all, List<StoredFile> files, String cat) {
     final lib = cat == 'music' || (cat == 'all' && _type == 'All') ? MusicPlayer.library : const <MusicTrack>[];
     final p = MusicPlayer.instance;
     final cur = p.current;
-    return FGlass(
-      radius: const BorderRadius.only(topRight: Radius.circular(52.8), bottomRight: Radius.circular(52.8)),
-      blur: 24.5,
-      gradient: const LinearGradient(begin: Alignment(-0.9, -1), end: Alignment(0.9, 1), colors: [Color(0x8C262626), Color(0x8C404040)]),
-      child: Stack(children: [
-        // Title 3120_text at (40, 22), 146 x 34 (search field when searching).
-        Positioned(
-          left: 40,
-          top: 22,
-          width: 760,
-          height: 34,
-          child: cat == 'search'
-              ? TextField(
-                  controller: _searchCtrl,
-                  autofocus: true,
-                  onChanged: (v) => setState(() => _q = v.trim()),
-                  cursorColor: Colors.white,
-                  style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: Colors.white),
-                  decoration: const InputDecoration(border: InputBorder.none, isCollapsed: true, hintText: 'Search', hintStyle: TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: Color(0x66FFFFFF))),
-                )
-              : FText(title, size: 28.6, weight: FontWeight.w700, color: const Color(0xFFFAF9F5)),
-        ),
-        // Adding files is the real storage path (D22/D32); Figma has no add
-        // control, so it sits on the title row's end (v8.4 note in D22).
-        Positioned(
-          left: 862,
-          top: 17,
-          width: 44,
-          height: 44,
-          child: Semantics(
+    final header = Padding(
+      padding: const EdgeInsets.fromLTRB(18, 14, 12, 6),
+      child: SizedBox(
+        height: 36,
+        child: Row(children: [
+          Expanded(
+            child: cat == 'search'
+                ? TextField(
+                    controller: _searchCtrl,
+                    autofocus: true,
+                    onChanged: (v) => setState(() => _q = v.trim()),
+                    cursorColor: Colors.white,
+                    style: FTextStyle.of(size: 22, weight: FontWeight.w700),
+                    decoration: InputDecoration(border: InputBorder.none, isCollapsed: true, hintText: 'Search', hintStyle: FTextStyle.of(size: 22, weight: FontWeight.w700, color: const Color(0x66FFFFFF))),
+                  )
+                : Semantics(
+                    button: true,
+                    label: _menuOpen ? 'Hide sections' : 'Show sections',
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => setState(() => _menuOpen = !_menuOpen),
+                      child: Row(children: [
+                        Flexible(child: FText(title, size: 22, weight: FontWeight.w700, color: const Color(0xFFFAF9F5))),
+                        const SizedBox(width: 4),
+                        Icon(_menuOpen ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded, size: 24, color: const Color(0xE6FAF9F5)),
+                      ]),
+                    ),
+                  ),
+          ),
+          Semantics(
             button: true,
             label: 'Add files',
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: _pickFile,
               child: Container(
+                width: 34,
+                height: 34,
                 decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0x4DFFFFFF)),
-                child: const Icon(Icons.add_rounded, size: 28, color: Colors.white),
+                child: const Icon(Icons.add_rounded, size: 22, color: Colors.white),
               ),
             ),
           ),
-        ),
-        // Grid 3011/3047/3083: rows at y 75 + 230 i, tiles 170 x 217, 174 apart.
-        Positioned(
-          left: 40,
-          top: 75,
-          width: 866,
-          bottom: 0,
-          child: CustomScrollView(
-            physics: const BouncingScrollPhysics(),
-            slivers: [
-              SliverGrid(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 5, mainAxisSpacing: 13, crossAxisSpacing: 4, childAspectRatio: 170 / 217),
-                delegate: SliverChildBuilderDelegate((_, i) => _tile(files[i]), childCount: files.length),
+        ]),
+      ),
+    );
+    final grid = ShaderMask(
+      blendMode: BlendMode.dstIn,
+      shaderCallback: (r) => const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [Color(0x00FFFFFF), Colors.white, Colors.white, Color(0x00FFFFFF)],
+        stops: [0, 0.03, 0.9, 1],
+      ).createShader(r),
+      child: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
+        slivers: [
+          const SliverToBoxAdapter(child: SizedBox(height: 6)),
+          if (files.isEmpty && lib.isEmpty)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(18, 40, 18, 0),
+                child: FText('Files you add show here', size: 15, weight: FontWeight.w500, opacity: 0.6, align: TextAlign.center),
               ),
-              if (lib.isNotEmpty)
-                SliverPadding(
-                  padding: const EdgeInsets.only(top: 13, bottom: 60),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate((_, i) {
-                      final t = lib[i];
-                      final isCur = cur != null && cur.key == t.key && cur.themeId == t.themeId;
-                      return LibrarySongRow(
-                        art: ThemeImage(t.art, fit: BoxFit.cover),
-                        title: t.title,
-                        subtitle: t.subtitle,
-                        current: isCur,
-                        playing: isCur && p.playing,
-                        onPlay: t.playable ? () => isCur ? p.toggle() : p.playQueue(lib, i, id: 'library') : null,
-                      );
-                    }, childCount: lib.length),
-                  ),
-                ),
-              const SliverToBoxAdapter(child: SizedBox(height: 60)),
-            ],
+            ),
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            sliver: SliverGrid(
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, mainAxisSpacing: 12, crossAxisSpacing: 10, childAspectRatio: 0.76),
+              delegate: SliverChildBuilderDelegate((_, i) => _tile(files[i]), childCount: files.length),
+            ),
+          ),
+          if (lib.isNotEmpty)
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(8, 12, 8, 0),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate((_, i) {
+                  final t = lib[i];
+                  final isCur = cur != null && cur.key == t.key && cur.themeId == t.themeId;
+                  return LibrarySongRow(
+                    art: ThemeImage(t.art, fit: BoxFit.cover),
+                    title: t.title,
+                    subtitle: t.subtitle,
+                    current: isCur,
+                    playing: isCur && p.playing,
+                    onPlay: t.playable ? () => isCur ? p.toggle() : p.playQueue(lib, i, id: 'library') : null,
+                  );
+                }, childCount: lib.length),
+              ),
+            ),
+          const SliverToBoxAdapter(child: SizedBox(height: 64)),
+        ],
+      ),
+    );
+    return CPane(
+      child: Stack(children: [
+        Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          header,
+          AnimatedSize(
+            duration: VMotion.base,
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: _menuOpen ? Padding(padding: const EdgeInsets.fromLTRB(12, 0, 12, 8), child: _sections(all)) : const SizedBox(width: double.infinity),
+          ),
+          Expanded(child: grid),
+        ]),
+        // Segmented ornament (v8.4 3231), pinned at the pane's foot.
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 12,
+          child: Center(child: SizedBox(height: 44, child: FittedBox(child: _segments()))),
+        ),
+      ]),
+    );
+  }
+
+  /// The v8.4 sidebar (4253) as a portrait section: the same rows, glass and
+  /// type, at 1.0.
+  Widget _sections(List<StoredFile> all) {
+    Widget menuRow(String type, IconData icon) {
+      final on = _type == type;
+      return Semantics(
+        button: true,
+        selected: on,
+        label: _typeLabel[type],
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => setState(() {
+            _type = type;
+            _menuOpen = false;
+          }),
+          child: SizedBox(
+            height: 38,
+            child: Row(children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: on ? const BoxDecoration(shape: BoxShape.circle, color: Color(0x33FFFFFF)) : null,
+                child: Icon(icon, size: 18, color: const Color(0xFFDDDBD6)),
+              ),
+              const SizedBox(width: 10),
+              Expanded(child: FText(_typeLabel[type]!, size: 15, weight: FontWeight.w600, color: on ? Colors.white : const Color(0xFFDDDBD6))),
+            ]),
           ),
         ),
+      );
+    }
+
+    Widget section(String type, {bool open = false}) {
+      final on = _type == type;
+      return Semantics(
+        button: true,
+        selected: on,
+        label: _typeLabel[type],
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => setState(() {
+            _type = type;
+            _menuOpen = false;
+          }),
+          child: SizedBox(
+            height: 38,
+            child: Row(children: [
+              const SizedBox(width: 4),
+              Expanded(child: FText(_typeLabel[type]!, size: 17, weight: FontWeight.w600, color: on ? Colors.white : const Color(0xE6FAF9F5))),
+              Icon(open ? Icons.keyboard_arrow_down_rounded : Icons.chevron_right_rounded, size: 22, color: const Color(0xE6FAF9F5)),
+            ]),
+          ),
+        ),
+      );
+    }
+
+    final recent = all.take(3).toList();
+    return FGlass(
+      radius: BorderRadius.circular(20),
+      blur: 24.5,
+      gradient: const LinearGradient(begin: Alignment(-0.9, -1), end: Alignment(0.9, 1), colors: [Color(0x99393939), Color(0x99616161)]),
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
+        // The v8.4 rows, one per line so every label reads in full at 1.0.
+        menuRow('All', Icons.schedule_rounded),
+        menuRow('Image', Icons.image_outlined),
+        menuRow('Video', Icons.movie_outlined),
+        menuRow('Document', Icons.description_outlined),
+        Row(children: [Expanded(child: section('Writing')), const SizedBox(width: 12), Expanded(child: section('Data'))]),
+        const SizedBox(
+          height: 34,
+          child: Row(children: [
+            SizedBox(width: 4),
+            Expanded(child: FText('Recent', size: 17, weight: FontWeight.w600, color: Color(0xE6FAF9F5))),
+            Icon(Icons.keyboard_arrow_down_rounded, size: 22, color: Color(0xE6FAF9F5)),
+          ]),
+        ),
+        for (var k = 0; k < recent.length; k++)
+          GestureDetector(
+            onTap: () => _open(recent[k]),
+            child: Container(
+              height: 38,
+              margin: const EdgeInsets.only(top: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              decoration: k == 0 ? BoxDecoration(color: const Color(0x4DFFFFFF), borderRadius: BorderRadius.circular(14)) : null,
+              child: Row(children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: Container(
+                    width: 28,
+                    height: 28,
+                    color: const Color(0x33FFFFFF),
+                    child: FileStore.isImage(recent[k].name)
+                        ? _Thumb(id: recent[k].id, fallback: _icon(recent[k].type))
+                        : Icon(_icon(recent[k].type), size: 16, color: const Color(0xFFDDDBD6)),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(child: FText(recent[k].name, size: 14, weight: FontWeight.w600, color: const Color(0xFFDDDBD6))),
+              ]),
+            ),
+          ),
       ]),
     );
   }
@@ -424,25 +396,23 @@ class _FilesScreenState extends State<FilesScreen> {
         onTap: () => _open(f),
         onLongPress: () => _confirmRemove(f),
         onSecondaryTap: () => _confirmRemove(f),
-        child: Padding(
-          padding: const EdgeInsets.all(9),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8.02),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          AspectRatio(
+            aspectRatio: 1,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(10),
               child: Container(
-                width: 152,
-                height: 153,
                 color: const Color(0x33FFFFFF),
                 child: FileStore.isImage(f.name)
                     ? _Thumb(id: f.id, fallback: _icon(f.type))
-                    : Icon(_icon(f.type), size: 52, color: const Color(0xCCFFFFFF)),
+                    : Icon(_icon(f.type), size: 34, color: const Color(0xCCFFFFFF)),
               ),
             ),
-            const SizedBox(height: 3),
-            FText(f.name, size: 22, weight: FontWeight.w500),
-            FText(meta, size: 16, opacity: 0.6, weight: FontWeight.w500),
-          ]),
-        ),
+          ),
+          const SizedBox(height: 4),
+          FText(f.name.replaceAll(RegExp(r'\.(jpe?g|png|webp)$', caseSensitive: false), ''), size: 13, weight: FontWeight.w600),
+          FText(meta, size: 11, opacity: 0.6, weight: FontWeight.w500),
+        ]),
       ),
     );
   }

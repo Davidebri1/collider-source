@@ -119,7 +119,9 @@ class SideNavRail extends StatelessWidget {
     final at = all.indexWhere((e) => e.key == activeKey);
     final entries = collapsed && all.isNotEmpty ? [all[at < 0 ? 0 : at]] : all;
     final active = collapsed ? 0 : at;
-    return Recede(child: AnimatedSize(
+    // v8.3 (David, Oct 15): beside a pane the nav is the solid glass pill of
+    // icons; only the labelled rail on the resting screen recedes.
+    final rail = AnimatedSize(
       duration: VMotion.base,
       curve: Curves.easeOutCubic,
       alignment: Alignment.topCenter,
@@ -148,7 +150,8 @@ class SideNavRail extends StatelessWidget {
           ),
         ),
       ),
-    ));
+    );
+    return labels && !collapsed ? Recede(child: rail) : rail;
   }
 }
 
