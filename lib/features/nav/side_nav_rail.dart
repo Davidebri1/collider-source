@@ -23,11 +23,13 @@ List<SideRailEntry> sideRailEntries(ActiveWorkSurface s) => switch (s) {
           SideRailEntry('global', Icons.public_rounded, 'Global'),
           SideRailEntry('consensus', Icons.balance_rounded, 'Roundup'),
         ],
+      // v9.1.7 (#24): Smart Gen's own tools (were a bottom ornament).
       ActiveWorkSurface.smartgen => const [
-          SideRailEntry('cards', Icons.style_rounded, 'Cards'),
-          SideRailEntry('boards', Icons.dashboard_rounded, 'Boards'),
-          SideRailEntry('canvas', Icons.crop_free_rounded, 'Canvas'),
-          SideRailEntry('genie', Icons.assistant_rounded, 'Genie'),
+          SideRailEntry('tasks', Icons.view_kanban_outlined, 'Tasks'),
+          SideRailEntry('projects', Icons.folder_outlined, 'Projects'),
+          SideRailEntry('reminders', Icons.alarm_rounded, 'Remind'),
+          SideRailEntry('memories', Icons.psychology_outlined, 'Memory'),
+          SideRailEntry('artifacts', Icons.description_outlined, 'Outputs'),
         ],
       // R27: Discover is the image market. The Imagine layout is a row of
       // pictures, a row of labeled looks, then a two-column feed. So the side
@@ -45,18 +47,26 @@ List<SideRailEntry> sideRailEntries(ActiveWorkSurface s) => switch (s) {
           const SideRailEntry('gallery', Icons.collections_rounded, 'Gallery'),
           // No songs in the catalog: no Music entry (v8.3, D46).
           if (MusicPlayer.library.isNotEmpty) const SideRailEntry('music', Icons.library_music_rounded, 'Music'),
+          // v9.1.7 (#24): Music's collections (pack songs, ambient tracks).
+          if (MusicPlayer.library.isNotEmpty) ...const [
+            SideRailEntry('music_themes', Icons.collections_bookmark_outlined, 'Packs'),
+            SideRailEntry('music_ambient', Icons.waves_rounded, 'Ambient'),
+          ],
         ],
       ActiveWorkSurface.browser => const [
           SideRailEntry('tabs', Icons.tab_rounded, 'Tabs'),
           SideRailEntry('engine', Icons.travel_explore_rounded, 'Engine'),
           SideRailEntry('clear', Icons.cleaning_services_outlined, 'Clear'),
         ],
+      // v9.1.7 (#24): the Files sidebar's own types, same order and icons,
+      // as the overlaying rail.
       ActiveWorkSurface.files => const [
-          SideRailEntry('all', Icons.folder_open_rounded, 'All'),
-          SideRailEntry('artifacts', Icons.inventory_2_outlined, 'Artifacts'),
-          SideRailEntry('attachments', Icons.attach_file_rounded, 'Files'),
-          SideRailEntry('outputs', Icons.output_rounded, 'Outputs'),
-          SideRailEntry('system', Icons.settings_suggest_outlined, 'System'),
+          SideRailEntry('all', Icons.schedule_rounded, 'Recent'),
+          SideRailEntry('image', Icons.image_outlined, 'Images'),
+          SideRailEntry('video', Icons.movie_outlined, 'Videos'),
+          SideRailEntry('document', Icons.description_outlined, 'Docs'),
+          SideRailEntry('writing', Icons.notes_rounded, 'Text'),
+          SideRailEntry('data', Icons.table_chart_outlined, 'Data'),
         ],
     };
 

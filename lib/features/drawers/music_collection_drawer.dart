@@ -17,7 +17,9 @@ import '../theme/theme_living_media.dart';
 /// library: theme songs (grouped by theme) and ambient tracks.
 class MusicCollectionDrawer extends StatelessWidget {
   final VoidCallback onClose;
-  const MusicCollectionDrawer({super.key, required this.onClose});
+  /// v9.1.7 (#24): all, themes (pack songs) or ambient, from the side nav.
+  final String collection;
+  const MusicCollectionDrawer({super.key, required this.onClose, this.collection = 'all'});
 
   static const double s = LibrarySongRow.scale;
 
@@ -56,9 +58,15 @@ class MusicCollectionDrawer extends StatelessWidget {
   }
 
   Widget _body(MusicPlayer p) {
-    final lib = MusicPlayer.library;
+    final all = MusicPlayer.library;
+    final lib = switch (collection) {
+      'themes' => [for (final t in all) if (t.themeId != null) t],
+      'ambient' => [for (final t in all) if (t.themeId == null) t],
+      _ => all,
+    };
     final cur = p.current;
-    final libActive = p.queueId == 'library' && p.index != null;
+    final qid = collection == 'all' ? 'library' : 'library_$collection';
+    final libActive = p.queueId == qid && p.index != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -70,7 +78,7 @@ class MusicCollectionDrawer extends StatelessWidget {
             children: [
               const Icon(Icons.library_music_rounded, size: 28 * s, color: Colors.white),
               const SizedBox(width: 16 * s),
-              Expanded(child: Text('Music', style: VType.headline().copyWith(fontSize: 20 * s))),
+              Expanded(child: Text(switch (collection) { 'themes' => 'Packs', 'ambient' => 'Ambient', _ => 'Music' }, style: VType.headline().copyWith(fontSize: 20 * s))),
               SongPlayButton(playing: false, icon: Icons.close_rounded, tooltip: 'Close', onTap: onClose),
             ],
           ),
@@ -100,7 +108,7 @@ class MusicCollectionDrawer extends StatelessWidget {
                       title: 'Play all',
                       playing: libActive && p.playing,
                       tooltip: libActive && p.playing ? 'Pause' : 'Play all',
-                      onPlay: () => libActive ? p.toggle() : p.playQueue(lib, 0, id: 'library'),
+                      onPlay: () => libActive ? p.toggle() : p.playQueue(lib, 0, id: qid),
                     ),
                     for (var i = 0; i < lib.length; i++)
                       LibrarySongRow(
@@ -111,7 +119,7 @@ class MusicCollectionDrawer extends StatelessWidget {
                         current: cur != null && cur.key == lib[i].key && cur.themeId == lib[i].themeId,
                         playing: libActive && p.index == i && p.playing,
                         onPlay: lib[i].playable
-                            ? () => libActive && p.index == i ? p.toggle() : p.playQueue(lib, i, id: 'library')
+                            ? () => libActive && p.index == i ? p.toggle() : p.playQueue(lib, i, id: qid)
                             : null,
                       ),
                   ],

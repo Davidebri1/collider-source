@@ -38,8 +38,10 @@ import '../../../core/vision/selection.dart';
 /// card's detail sheet rather than on its face.
 class SmartGenScreen extends StatefulWidget {
   final VoidCallback onClose;
+  /// v9.1.7 (#24): the tool picked on the overlaying side nav.
+  final String section;
 
-  const SmartGenScreen({super.key, required this.onClose});
+  const SmartGenScreen({super.key, required this.onClose, this.section = 'tasks'});
 
   @override
   State<SmartGenScreen> createState() => _SmartGenScreenState();
@@ -235,7 +237,8 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
   // (functional-spec.txt line 21). No close button: swipe or tap outside.
   static const _sections = ['Tasks & Kanban', 'Projects', 'Reminders', 'Memories', 'Artifacts'];
   static const _sectionIcons = [Icons.view_kanban_outlined, Icons.folder_outlined, Icons.alarm_rounded, Icons.psychology_outlined, Icons.description_outlined];
-  int _section = 0;
+  static const _sectionKeys = ['tasks', 'projects', 'reminders', 'memories', 'artifacts'];
+  int get _section => _sectionKeys.indexOf(widget.section).clamp(0, _sectionKeys.length - 1);
   String _q = '';
 
   @override
@@ -293,31 +296,7 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: VSpace.sm),
-              VOrnament(
-                padding: const EdgeInsets.all(3),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    for (var i = 0; i < _sections.length; i++)
-                      GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () => setState(() => _section = i),
-                        child: Container(
-                          height: 34,
-                          padding: EdgeInsets.symmetric(horizontal: i == _section ? 12 : 10),
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(color: i == _section ? const Color(0x40FFFFFF) : Colors.transparent, borderRadius: BorderRadius.circular(17)),
-                          // Five tools fit: icons, with the open one named (nothing clipped).
-                          child: Row(mainAxisSize: MainAxisSize.min, children: [
-                            Icon(_sectionIcons[i], size: 18, color: Colors.white),
-                            if (i == _section) ...[const SizedBox(width: 6), Text(_sections[i].split(' ').first, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white))],
-                          ]),
-                        ),
-                      ),
-                  ]),
-                ),
-              ),
+              // v9.1.7 (#24): the tools moved to the overlaying side nav.
             ]),
           ),
         ),

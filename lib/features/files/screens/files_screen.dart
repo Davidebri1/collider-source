@@ -28,7 +28,9 @@ class FilesScreen extends StatefulWidget {
   /// Rail selection (source filter / 'music' / 'search').
   final String category;
 
-  const FilesScreen({super.key, required this.onClose, this.category = 'all'});
+  /// v9.1.7 (#24): the type picked on the overlaying side nav.
+  final String? type;
+  const FilesScreen({super.key, required this.onClose, this.category = 'all', this.type});
 
   static const frame = Size(1336.4, 835.2);
   // The group's own width (rail at 0 .. main panel right 1336.4), no margin.
@@ -47,6 +49,12 @@ class _FilesScreenState extends State<FilesScreen> {
   String _q = '';
   // Sidebar type filter.
   String _type = Uri.base.queryParameters['ftype'] ?? 'All';
+  static const _railTypes = {'all': 'All', 'image': 'Image', 'video': 'Video', 'document': 'Document', 'writing': 'Writing', 'data': 'Data'};
+  @override
+  void didUpdateWidget(covariant FilesScreen old) {
+    super.didUpdateWidget(old);
+    if (widget.type != old.type && widget.type != null) _type = _railTypes[widget.type] ?? _type;
+  }
   // Segmented ornament (Years / Months / Days / All Photos -> time added).
   int _span = 3;
   bool _side = false;
@@ -56,6 +64,7 @@ class _FilesScreenState extends State<FilesScreen> {
   void initState() {
     super.initState();
     _store.init();
+    if (widget.type != null && Uri.base.queryParameters['ftype'] == null) _type = _railTypes[widget.type] ?? _type;
   }
 
   @override

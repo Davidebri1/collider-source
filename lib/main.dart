@@ -311,11 +311,13 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   late List<BrowserTab> _browserTabs;
 
   // Contextual work surface state
-  String _smartGenView = 'cards';
+  String _smartGenView = 'tasks';
   String _smartGenBoardType = 'kanban';
   String _marketCategory = 'stills';
   String _themeSection = 'gallery';
   String _filesCategory = 'all';
+  /// v9.1.7 (#24): Music collection on the side nav: all, themes, ambient.
+  String _musicCollection = 'all';
   String _chatSection = 'global';
 
   /// The rail ornament shows on the resting canvas and durable work surfaces only.
@@ -328,7 +330,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     if (_activeDrawer == null && MediaQuery.of(context).size.width < 768 && _openPill(_tickerItems) != null) return false;
     // Home (chat) and themes only: the Smart Gen, Market and Files rails
     // selected nothing (no surface read their keys), so they are gone (D31).
-    const surfaces = {null, 'themes', 'market'}; // v9.1.7 (#24): Discover feeds
+    const surfaces = {null, 'themes', 'market', 'files', 'smartgen', 'music'}; // v9.1.7 (#24): every sectioned screen
     return surfaces.contains(_activeDrawer);
   }
 
@@ -1786,7 +1788,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       ActiveWorkSurface.chat => _isMobileSideNavOpen ? _chatSection : null,
       ActiveWorkSurface.smartgen => _smartGenView,
       ActiveWorkSurface.market => _marketCategory,
-      ActiveWorkSurface.themes => _activeDrawer == 'premium' ? 'premium' : (_activeDrawer == 'music' ? 'music' : 'gallery'),
+      ActiveWorkSurface.themes => _activeDrawer == 'premium' ? 'premium' : (_activeDrawer == 'music' ? (_musicCollection == 'all' ? 'music' : 'music_$_musicCollection') : 'gallery'),
       ActiveWorkSurface.browser => null,
       ActiveWorkSurface.files => _filesCategory,
     };
@@ -1830,8 +1832,13 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               case ActiveWorkSurface.themes:
                 setState(() {
                   _isMobileSideNavOpen = false;
-                  _themeSection = key;
-                  _activeDrawer = key == 'gallery' ? 'themes' : key;
+                  if (key.startsWith('music')) {
+                    _musicCollection = key == 'music' ? 'all' : key.substring(6);
+                    _activeDrawer = 'music';
+                  } else {
+                    _themeSection = key;
+                    _activeDrawer = key == 'gallery' ? 'themes' : key;
+                  }
                 });
               case ActiveWorkSurface.browser:
                 break;
@@ -2299,6 +2306,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // No songs in the catalog: no Music drawer (v8.3, D46).
           // v9.1.4 (playtest #14): dissolves out instead of a hard cut.
             Positioned.fill(bottom: _activeDrawer == 'music' ? _dockBand : 0, child: MaterializeSwitch(show: _activeDrawer == 'music' && MusicPlayer.library.isNotEmpty, builder: (_) => MusicCollectionDrawer(
+                collection: _musicCollection,
                 onClose: () => setState(() => _activeDrawer = null),
               ))),
 
@@ -2317,6 +2325,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               top: 0,
               bottom: 78,
               child: SmartGenScreen(
+                section: _smartGenView,
                 onClose: () => _requestSwitchSurface(null),
               ),
             ),
@@ -2346,6 +2355,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               top: 0,
               bottom: 78,
               child: FilesScreen(
+                type: _filesCategory,
                 onClose: () => _requestSwitchSurface(null),
               ),
             ),
