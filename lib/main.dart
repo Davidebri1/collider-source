@@ -2065,7 +2065,11 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // away the background's capability) and dims (cinematic focus) what
           // is behind it. Nothing sits flat over the main view.
           // v9.1.4 (playtest #14): dissolves out instead of a hard cut.
-            Positioned.fill(child: MaterializeSwitch(show: _browserOpen || const {'files', 'smartgen', 'history', 'music', 'apps', 'consensus', 'market'}.contains(_activeDrawer), builder: (_) => GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => setState(() { _browserOpen = false; _closeAllPanes(); }), child: const SizedBox.expand()))),
+            // A Materialize Opacity here is invisible, but on web it is the layer
+            // the pane's backdrop filter samples, so the glass paints as a flat
+            // black slab instead of the wallpaper. The catch is a bare target.
+            if (_browserOpen || const {'files', 'smartgen', 'history', 'music', 'apps', 'consensus', 'market'}.contains(_activeDrawer))
+              Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => setState(() { _browserOpen = false; _closeAllPanes(); }), child: const SizedBox.expand())),
 
           // Depth of field for the summoned composer: the world falls out of
           // focus behind the writing surface. Previously summoning only

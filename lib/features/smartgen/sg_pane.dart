@@ -29,6 +29,11 @@ class _SgPaneState extends State<SgPane> {
   Timer? _toastTimer;
   bool _forceFlip = false;
   String _overlay = '';
+  final GlobalKey _listKey = GlobalKey();
+  final GlobalKey _labelsKey = GlobalKey();
+  final GlobalKey _membersKey = GlobalKey();
+  final GlobalKey _checkKey = GlobalKey();
+  final GlobalKey _filesKey = GlobalKey();
   final Set<String> _toasted = {};
   Timer? _notes;
   Timer? _hour;
@@ -277,7 +282,7 @@ class _SgPaneState extends State<SgPane> {
           Text('Status control', style: appFont(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
           Wrap(spacing: 4, children: [
             for (final k in SgStatusKind.values)
-              ChoiceChip(label: Text(k.name, style: appFont(fontSize: 10, color: Colors.white)), selected: b.statusKind == k, onSelected: (_) => store.touch(() => b.statusKind = k)),
+              ChoiceChip(label: Text(_statusKindLabel(k), style: appFont(fontSize: 10, color: Colors.white)), selected: b.statusKind == k, onSelected: (_) => store.touch(() => b.statusKind = k)),
           ]),
         ],
       ),
@@ -298,9 +303,9 @@ class _SgPaneState extends State<SgPane> {
     );
   }
 
-  Widget _toggle(String label, bool value, ValueChanged<bool> onChanged) {
+  Widget _toggle(String label, bool value, ValueChanged<bool> onChanged, {Color color = Colors.white}) {
     return Row(children: [
-      Expanded(child: Text(label, style: appFont(fontSize: 11, color: Colors.white))),
+      Expanded(child: Text(label, style: appFont(fontSize: 14, color: color))),
       Switch(value: value, onChanged: onChanged),
     ]);
   }
@@ -438,7 +443,6 @@ class _SgPaneState extends State<SgPane> {
           ],
         ),
       ),
-      Text('Pro unlocks agent actions. This engine runs locally.', style: appFont(fontSize: 10, color: Colors.white54)),
       Row(children: [
         Expanded(child: TextField(controller: _genieInput, style: appFont(color: Colors.white, fontSize: 13), decoration: const InputDecoration(hintText: 'set all priority to high', hintStyle: TextStyle(color: Colors.white38)))),
         Tooltip(message: 'Send', child: IconButton(onPressed: () {
@@ -451,139 +455,257 @@ class _SgPaneState extends State<SgPane> {
     ]);
   }
 
-  Widget _editor(SgBoard b, SgCard c) {
-    return ScrollConfiguration(
-      behavior: const SgScroll(),
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 4, 12, 80),
-        children: [
-          Row(children: [
-            Tooltip(message: 'Back', child: IconButton(onPressed: () => setState(() => _openId = null), icon: const Icon(Icons.arrow_back_rounded, color: Colors.white))),
-            Expanded(child: Text(c.type.label, style: appFont(fontSize: 16, color: Colors.white))),
-            if (c.hasHidden)
-              Tooltip(message: 'Hidden fields', child: IconButton(onPressed: () => setState(() => _forceFlip = !_forceFlip), icon: const Icon(Icons.flip_rounded, color: Colors.white))),
-          ]),
-          if (_forceFlip) SgFace(card: c, board: b, back: true),
-          _field('Title', c.title, (v) => store.touch(() => c.title = v)),
-          _addNew('Column', b.orderedLists.map((l) => l.title).toList(), c.status, (name) {
-            final list = b.lists.where((l) => l.title == name).firstOrNull;
-            if (list != null) store.moveCard(c.id, list.id);
-          }, (name) {
-            store.addList(name);
-            final list = b.lists.where((l) => l.title == name).firstOrNull;
-            if (list != null) store.moveCard(c.id, list.id);
-          }),
-          _statusControl(b, c),
-          _field('Description', c.description, (v) => store.touch(() => c.description = v), lines: 3),
-          Text('Type', style: appFont(fontSize: 11, color: Colors.white70)),
-          SizedBox(
-            height: 40,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              children: [
-                for (final t in SgType.values)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 4),
-                    child: ChoiceChip(label: Text(t.label, style: appFont(fontSize: 12, color: Colors.white)), selected: c.type == t, onSelected: (_) => store.touch(() {
-                      c.type = t;
-                      c.color = t.argb;
-                    })),
-                  ),
-              ],
-            ),
-          ),
-          _field('Assignee', c.assignee, (v) => store.touch(() => c.assignee = v)),
-          _field('Due (ms is set by the clock; type a note)', c.dueMs == null ? '' : DateTime.fromMillisecondsSinceEpoch(c.dueMs!).toIso8601String(), (v) {
-            final d = DateTime.tryParse(v);
-            if (d != null) store.touch(() => c.dueMs = d.millisecondsSinceEpoch);
-          }),
-          _toggle('Urgent', c.urgent, (v) => store.touch(() => c.urgent = v)),
-          _toggle('Inherit column status', c.inherit, (v) => store.touch(() => c.inherit = v)),
-          _field('Tags', c.tags.join(', '), (v) => store.touch(() {
-            c.tags
-              ..clear()
-              ..addAll(v.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty));
-          })),
-          _field('Hidden notes', c.hiddenNotes, (v) => store.touch(() => c.hiddenNotes = v), lines: 2),
-          _field('Notebook pages, separated by ---', c.notebook, (v) => store.touch(() => c.notebook = v), lines: 4),
-          _field('Triggers (done-final, hourly)', c.triggers, (v) => store.touch(() => c.triggers = v)),
-          TextButton(onPressed: () => store.markDone(c), child: Text('Mark done', style: appFont(color: Colors.white))),
-          Text('Labels', style: appFont(fontSize: 11, color: Colors.white70)),
-          Wrap(spacing: 4, children: [
-            for (final l in b.labels)
-              FilterChip(
-                label: Text(l.title, style: appFont(fontSize: 10, color: Colors.white)),
-                selected: c.labelIds.contains(l.id),
-                onSelected: (on) => store.touch(() => on ? c.labelIds.add(l.id) : c.labelIds.remove(l.id)),
-              ),
-          ]),
-          Text('Checklist', style: appFont(fontSize: 11, color: Colors.white70)),
-          for (final k in c.checks)
-            CheckboxListTile(
-              dense: true,
-              value: k.done,
-              onChanged: (v) => store.touch(() => k.done = v ?? false),
-              title: Text(k.text, style: appFont(fontSize: 12, color: Colors.white)),
-            ),
-          _field('Add checklist item', '', (v) {
-            if (v.trim().isEmpty) return;
-            store.touch(() => c.checks.add(SgCheck(id: 'k${c.checks.length}${v.hashCode}', text: v.trim())));
-          }),
-          Text('Members', style: appFont(fontSize: 11, color: Colors.white70)),
-          Text(c.members.join(', '), style: appFont(fontSize: 12, color: Colors.white)),
-          _field('Add member', '', (v) {
-            if (v.trim().isEmpty) return;
-            store.touch(() => c.members.add(v.trim()));
-          }),
-          if (c.type == SgType.job) ...[
-            _field('Company', c.company, (v) => store.touch(() => c.company = v)),
-            _field('Position', c.positionTitle, (v) => store.touch(() => c.positionTitle = v)),
-            _field('Start', c.jobStart, (v) => store.touch(() => c.jobStart = v)),
-            _field('End', c.jobEnd, (v) => store.touch(() => c.jobEnd = v)),
-            _field('Responsibilities', c.responsibilities, (v) => store.touch(() => c.responsibilities = v), lines: 2),
-            _field('Achievements', c.achievements, (v) => store.touch(() => c.achievements = v), lines: 2),
-          ],
-          Text('Custom fields', style: appFont(fontSize: 11, color: Colors.white70)),
-          for (final f in b.fields) _custom(c, f),
-          _field('New field name', '', (v) {
-            if (v.trim().isNotEmpty) store.addField(v.trim(), SgFieldKind.text);
-          }),
-          Text('Embeds', style: appFont(fontSize: 11, color: Colors.white70)),
-          for (final id in c.embeds)
-            if (store.byId(id) != null)
-              TextButton(onPressed: () => _open(store.byId(id)!), child: Text(store.byId(id)!.title, style: appFont(color: Colors.white, fontSize: 12))),
-          _addNew('Embed a card', [for (final o in b.cards) if (o.id != c.id) o.title], '', (name) {
-            final other = b.cards.where((o) => o.title == name).firstOrNull;
-            if (other != null && !c.embeds.contains(other.id)) store.touch(() => c.embeds.add(other.id));
-          }, (_) {}),
-          Text('Files', style: appFont(fontSize: 11, color: Colors.white70)),
-          for (final f in c.files) Text(f.name, style: appFont(fontSize: 12, color: Colors.white)),
-          Text('Activity', style: appFont(fontSize: 11, color: Colors.white70)),
-          for (final a in c.activity.reversed.take(6)) Text(a.text, style: appFont(fontSize: 11, color: Colors.white70)),
-          _field('Comment', '', (v) {
-            if (v.trim().isEmpty) return;
-            store.touch(() => c.activity.add(SgActivity(at: DateTime.now().millisecondsSinceEpoch, text: v.trim())));
-          }),
-          TextButton(
-            onPressed: () {
-              store.removeCards([c.id]);
-              setState(() => _openId = null);
-            },
-            child: Text('Delete card', style: appFont(color: const Color(0xFFFF8A80))),
-          ),
-        ],
+  static const Color _ink = Color(0xFF1C1B19);
+  static const Color _muted = Color(0xFF5C564E);
+  static const Color _paper = Color(0xFFFAF7F2);
+
+  Future<void> _pickDue(SgCard c) async {
+    final initial = c.dueMs == null ? DateTime.now() : DateTime.fromMillisecondsSinceEpoch(c.dueMs!);
+    final date = await showDatePicker(context: context, initialDate: initial, firstDate: DateTime(2020), lastDate: DateTime(2100));
+    if (date == null || !mounted) return;
+    final time = await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(initial));
+    if (!mounted) return;
+    final picked = time ?? TimeOfDay.fromDateTime(initial);
+    final next = DateTime(date.year, date.month, date.day, picked.hour, picked.minute);
+    store.touch(() => c.dueMs = next.millisecondsSinceEpoch);
+  }
+
+  Widget _quick(IconData icon, String label, VoidCallback onTap) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: OutlinedButton.icon(
+        onPressed: onTap,
+        icon: Icon(icon, size: 16, color: _ink),
+        label: Text(label, style: appFont(fontSize: 13, color: _ink)),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: _ink,
+          side: const BorderSide(color: Color(0xFFE4DDD4)),
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        ),
       ),
     );
   }
 
-  Widget _statusControl(SgBoard b, SgCard c) {
+  bool _hasTrigger(SgCard c, String token) => c.triggers.split(',').map((s) => s.trim()).contains(token);
+
+  void _setTrigger(SgCard c, String token, bool on) {
+    final parts = c.triggers.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty && s != token).toList();
+    if (on) parts.add(token);
+    c.triggers = parts.join(',');
+  }
+
+  void _reveal(GlobalKey key) {
+    final ctx = key.currentContext;
+    if (ctx != null) Scrollable.ensureVisible(ctx, duration: const Duration(milliseconds: 240), alignment: 0.05);
+  }
+
+  Widget _section(IconData icon, String title, List<Widget> children, {Key? key}) {
+    return Padding(
+      key: key,
+      padding: const EdgeInsets.only(top: 18),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(icon, size: 18, color: _ink),
+          const SizedBox(width: 8),
+          Text(title, style: appFont(fontSize: 16, fontWeight: FontWeight.w700, color: _ink)),
+        ]),
+        const SizedBox(height: 8),
+        ...children,
+      ]),
+    );
+  }
+
+  Widget _editor(SgBoard b, SgCard c) {
+    final listTitle = b.lists.where((l) => l.id == c.listId).firstOrNull?.title ?? c.status;
+    return ColoredBox(
+      color: _paper,
+      child: ScrollConfiguration(
+        behavior: const SgScroll(),
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+          children: [
+            Row(children: [
+              Tooltip(message: 'Back', child: IconButton(onPressed: () => setState(() => _openId = null), icon: const Icon(Icons.arrow_back_rounded, color: _ink))),
+              const Spacer(),
+              if (c.hasHidden)
+                Tooltip(message: 'Hidden fields', child: IconButton(onPressed: () => setState(() => _forceFlip = !_forceFlip), icon: Icon(_forceFlip ? Icons.flip_rounded : Icons.flip_to_back_rounded, color: _ink))),
+            ]),
+            if (_forceFlip) SgFace(card: c, board: b, back: true) else SgCover(card: c),
+            _field('Title', c.title, (v) => store.touch(() => c.title = v), color: _ink),
+            Text('in $listTitle on ${b.name}', style: appFont(fontSize: 13, color: _muted)),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: ActionChip(
+                avatar: const Icon(Icons.schedule, size: 16, color: _ink),
+                label: Text(_dueLabel(c.dueMs), style: appFont(fontSize: 14, color: _ink, fontWeight: FontWeight.w600)),
+                onPressed: () => _pickDue(c),
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 40,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  _quick(Icons.swap_horiz_rounded, 'Move', () => _reveal(_listKey)),
+                  _quick(Icons.label_outline, 'Labels', () => _reveal(_labelsKey)),
+                  _quick(Icons.people_outline, 'Members', () => _reveal(_membersKey)),
+                  _quick(Icons.check_box_outlined, 'Checklist', () => _reveal(_checkKey)),
+                  _quick(Icons.attach_file, 'Attachment', () => _reveal(_filesKey)),
+                  _quick(Icons.flag_outlined, 'Done', () => store.markDone(c)),
+                ],
+              ),
+            ),
+            _section(Icons.notes_rounded, 'Description', [
+              _field('Description', c.description, (v) => store.touch(() => c.description = v), lines: 3, color: _ink),
+            ]),
+            _section(Icons.view_column_outlined, 'List', [
+              _addNew('List', b.orderedLists.map((l) => l.title).toList(), c.status, (name) {
+                final list = b.lists.where((l) => l.title == name).firstOrNull;
+                if (list != null) store.moveCard(c.id, list.id);
+              }, (name) {
+                store.addList(name);
+                final list = b.lists.where((l) => l.title == name).firstOrNull;
+                if (list != null) store.moveCard(c.id, list.id);
+              }, color: _ink),
+              _statusControl(b, c, color: _ink),
+            ], key: _listKey),
+            _section(Icons.tune_rounded, 'Custom Fields', [
+              for (final f in b.fields) _custom(c, f, color: _ink),
+              _field('New field', '', (v) {
+                if (v.trim().isNotEmpty) store.addField(v.trim(), SgFieldKind.text);
+              }, color: _ink),
+            ]),
+            _section(Icons.checklist_rounded, 'Checklist', [
+              for (final k in c.checks)
+                CheckboxListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  value: k.done,
+                  onChanged: (v) => store.touch(() => k.done = v ?? false),
+                  title: Text(k.text, style: appFont(fontSize: 14, color: _ink)),
+                ),
+              _field('Add an item', '', (v) {
+                if (v.trim().isEmpty) return;
+                store.touch(() => c.checks.add(SgCheck(id: 'k${c.checks.length}${v.hashCode}', text: v.trim())));
+              }, color: _ink),
+            ], key: _checkKey),
+            _section(Icons.attach_file, 'Attachments', [
+              for (final f in c.files) Text(f.name, style: appFont(fontSize: 14, color: _ink)),
+              if (c.files.isEmpty) Text('No attachments', style: appFont(fontSize: 14, color: _muted)),
+            ], key: _filesKey),
+            _section(Icons.chat_bubble_outline, 'Activity', [
+              for (final a in c.activity.reversed.take(8))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(a.text, style: appFont(fontSize: 14, color: _ink)),
+                ),
+              _field('Comment', '', (v) {
+                if (v.trim().isEmpty) return;
+                store.touch(() => c.activity.add(SgActivity(at: DateTime.now().millisecondsSinceEpoch, text: v.trim())));
+              }, color: _ink),
+            ]),
+            _section(Icons.category_outlined, 'Type', [
+              SizedBox(
+                height: 40,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    for (final t in SgType.values)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 4),
+                        child: ChoiceChip(
+                          label: Text(t.label, style: appFont(fontSize: 12, color: _ink)),
+                          selected: c.type == t,
+                          onSelected: (_) => store.touch(() {
+                            c.type = t;
+                            c.color = t.argb;
+                          }),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ]),
+            _section(Icons.label_outline, 'Labels', [
+              Wrap(spacing: 4, children: [
+                for (final l in b.labels)
+                  FilterChip(
+                    label: Text(l.title, style: appFont(fontSize: 12, color: _ink)),
+                    selected: c.labelIds.contains(l.id),
+                    onSelected: (on) => store.touch(() => on ? c.labelIds.add(l.id) : c.labelIds.remove(l.id)),
+                  ),
+              ]),
+            ], key: _labelsKey),
+            _section(Icons.people_outline, 'Members', [
+              Text(c.members.isEmpty ? 'No members' : c.members.join(', '), style: appFont(fontSize: 14, color: c.members.isEmpty ? _muted : _ink)),
+              _field('Add a member', '', (v) {
+                if (v.trim().isEmpty) return;
+                store.touch(() => c.members.add(v.trim()));
+              }, color: _ink),
+              _field('Assignee', c.assignee, (v) => store.touch(() => c.assignee = v), color: _ink),
+            ], key: _membersKey),
+            _section(Icons.bolt_outlined, 'Triggers', [
+              _toggle('When the card is finished', _hasTrigger(c, 'done-final'), (v) => store.touch(() => _setTrigger(c, 'done-final', v)), color: _ink),
+              _toggle('Each hour', _hasTrigger(c, 'hourly'), (v) => store.touch(() => _setTrigger(c, 'hourly', v)), color: _ink),
+              _toggle('Urgent', c.urgent, (v) => store.touch(() => c.urgent = v), color: _ink),
+              _toggle('Use the list name as the status', c.inherit, (v) => store.touch(() => c.inherit = v), color: _ink),
+            ]),
+            _section(Icons.dashboard_customize_outlined, 'Embeds', [
+              for (final id in c.embeds)
+                if (store.byId(id) != null)
+                  TextButton(onPressed: () => _open(store.byId(id)!), child: Align(alignment: Alignment.centerLeft, child: Text(store.byId(id)!.title, style: appFont(color: _ink, fontSize: 14)))),
+              _addNew('Add a card', [for (final o in b.cards) if (o.id != c.id) o.title], '', (name) {
+                final other = b.cards.where((o) => o.title == name).firstOrNull;
+                if (other != null && !c.embeds.contains(other.id)) store.touch(() => c.embeds.add(other.id));
+              }, (_) {}, color: _ink),
+            ]),
+            if (c.hasHidden || c.hiddenNotes.isNotEmpty)
+              _section(Icons.flip_to_back_rounded, 'Hidden notes', [
+                _field('Private note', c.hiddenNotes, (v) => store.touch(() => c.hiddenNotes = v), lines: 2, color: _ink),
+              ]),
+            _section(Icons.menu_book_outlined, 'Pages', [
+              _field('Pages', c.notebook.replaceAll('\n---\n', '\n\n'), (v) => store.touch(() => c.notebook = v.replaceAll('\n\n', '\n---\n')), lines: 4, color: _ink),
+            ]),
+            _section(Icons.sell_outlined, 'Tags', [
+              _field('Tags', c.tags.join(', '), (v) => store.touch(() {
+                c.tags
+                  ..clear()
+                  ..addAll(v.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty));
+              }), color: _ink),
+            ]),
+            if (c.type == SgType.job)
+              _section(Icons.work_outline, 'Role', [
+                _field('Company', c.company, (v) => store.touch(() => c.company = v), color: _ink),
+                _field('Position', c.positionTitle, (v) => store.touch(() => c.positionTitle = v), color: _ink),
+                _field('Start', c.jobStart, (v) => store.touch(() => c.jobStart = v), color: _ink),
+                _field('End', c.jobEnd, (v) => store.touch(() => c.jobEnd = v), color: _ink),
+                _field('Responsibilities', c.responsibilities, (v) => store.touch(() => c.responsibilities = v), lines: 2, color: _ink),
+                _field('Achievements', c.achievements, (v) => store.touch(() => c.achievements = v), lines: 2, color: _ink),
+              ]),
+            TextButton(
+              onPressed: () {
+                store.removeCards([c.id]);
+                setState(() => _openId = null);
+              },
+              child: Text('Delete card', style: appFont(color: const Color(0xFFB42318))),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _statusControl(SgBoard b, SgCard c, {Color color = Colors.white}) {
     return switch (b.statusKind) {
-      SgStatusKind.dropdown => _addNew('Status', b.statuses, c.status, (name) => store.touch(() => c.status = name), (name) => store.addStatus(name)),
+      SgStatusKind.dropdown => _addNew('Status', b.statuses, c.status, (name) => store.touch(() => c.status = name), (name) => store.addStatus(name), color: color),
       SgStatusKind.toggle => _toggle('Status is ${c.status}', c.status == (b.statuses.isEmpty ? '' : b.statuses.last), (v) {
           if (b.statuses.isEmpty) return;
           store.touch(() => c.status = v ? b.statuses.last : b.statuses.first);
-        }),
-      SgStatusKind.input => _field('Status', c.status, (v) => store.touch(() => c.status = v)),
+        }, color: color),
+      SgStatusKind.input => _field('Status', c.status, (v) => store.touch(() => c.status = v), color: color),
       SgStatusKind.color => Wrap(spacing: 4, children: [
           for (final t in SgType.values)
             GestureDetector(
@@ -594,31 +716,31 @@ class _SgPaneState extends State<SgPane> {
     };
   }
 
-  Widget _custom(SgCard c, SgFieldDef f) {
+  Widget _custom(SgCard c, SgFieldDef f, {Color color = Colors.white}) {
     final value = c.custom[f.id] ?? '';
     return switch (f.kind) {
-      SgFieldKind.checkbox => _toggle(f.name, value == 'true', (v) => store.touch(() => c.custom[f.id] = v.toString())),
-      SgFieldKind.select || SgFieldKind.multi => _addNew(f.name, const ['open', 'doing', 'done'], value, (name) => store.touch(() => c.custom[f.id] = name), (name) => store.touch(() => c.custom[f.id] = name)),
-      SgFieldKind.text || SgFieldKind.textarea || SgFieldKind.richtext || SgFieldKind.number || SgFieldKind.date || SgFieldKind.datetime || SgFieldKind.person || SgFieldKind.url || SgFieldKind.file => _field('${f.name} (${f.kind.label})', value, (v) => store.touch(() => c.custom[f.id] = v), lines: f.kind == SgFieldKind.textarea || f.kind == SgFieldKind.richtext ? 3 : 1),
+      SgFieldKind.checkbox => _toggle(f.name, value == 'true', (v) => store.touch(() => c.custom[f.id] = v.toString()), color: color),
+      SgFieldKind.select || SgFieldKind.multi => _addNew(f.name, const ['open', 'doing', 'done'], value, (name) => store.touch(() => c.custom[f.id] = name), (name) => store.touch(() => c.custom[f.id] = name), color: color),
+      SgFieldKind.text || SgFieldKind.textarea || SgFieldKind.richtext || SgFieldKind.number || SgFieldKind.date || SgFieldKind.datetime || SgFieldKind.person || SgFieldKind.url || SgFieldKind.file => _field(f.name, value, (v) => store.touch(() => c.custom[f.id] = v), lines: f.kind == SgFieldKind.textarea || f.kind == SgFieldKind.richtext ? 3 : 1, color: color),
     };
   }
 
-  Widget _field(String label, String value, ValueChanged<String> onSubmit, {int lines = 1}) {
+  Widget _field(String label, String value, ValueChanged<String> onSubmit, {int lines = 1, Color color = Colors.white}) {
     return Padding(
       padding: const EdgeInsets.only(top: 6),
       child: TextField(
         controller: TextEditingController(text: value),
         minLines: lines,
         maxLines: lines,
-        style: appFont(fontSize: 13, color: Colors.white),
-        decoration: InputDecoration(labelText: label, labelStyle: const TextStyle(color: Colors.white54), isDense: true),
+        style: appFont(fontSize: 15, color: color),
+        decoration: InputDecoration(labelText: label, labelStyle: TextStyle(color: color.withValues(alpha: 0.55)), isDense: true),
         onSubmitted: onSubmit,
       ),
     );
   }
 
-  Widget _addNew(String label, List<String> options, String current, ValueChanged<String> onPick, ValueChanged<String> onCreate) {
-    return _OptionRow(label: label, options: options, current: current, onPick: onPick, onCreate: onCreate);
+  Widget _addNew(String label, List<String> options, String current, ValueChanged<String> onPick, ValueChanged<String> onCreate, {Color color = Colors.white}) {
+    return _OptionRow(label: label, options: options, current: current, onPick: onPick, onCreate: onCreate, color: color);
   }
 
   Widget _bulkEdit(SgBoard b) {
@@ -699,12 +821,13 @@ class _SgPaneState extends State<SgPane> {
 }
 
 class _OptionRow extends StatefulWidget {
-  const _OptionRow({required this.label, required this.options, required this.current, required this.onPick, required this.onCreate});
+  const _OptionRow({required this.label, required this.options, required this.current, required this.onPick, required this.onCreate, this.color = Colors.white});
   final String label;
   final List<String> options;
   final String current;
   final ValueChanged<String> onPick;
   final ValueChanged<String> onCreate;
+  final Color color;
   @override
   State<_OptionRow> createState() => _OptionRowState();
 }
@@ -723,11 +846,11 @@ class _OptionRowState extends State<_OptionRow> {
     return Padding(
       padding: const EdgeInsets.only(top: 6),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(widget.label, style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
+        Text(widget.label, style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: widget.color)),
         const SizedBox(height: 4),
         Wrap(spacing: 4, children: [
           for (final o in widget.options)
-            ChoiceChip(label: Text(o, style: appFont(fontSize: 13, color: Colors.white)), selected: o == widget.current, onSelected: (_) => widget.onPick(o)),
+            ChoiceChip(label: Text(o, style: appFont(fontSize: 13, color: widget.color)), selected: o == widget.current, onSelected: (_) => widget.onPick(o)),
         ]),
         TextButton(
           style: TextButton.styleFrom(
@@ -737,12 +860,12 @@ class _OptionRowState extends State<_OptionRow> {
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
           onPressed: () => setState(() => adding = true),
-          child: Text('+ Add new…', style: appFont(fontSize: 16, color: Colors.white)),
+          child: Text('+ Add new…', style: appFont(fontSize: 16, color: widget.color)),
         ),
         if (adding)
           TextField(
             controller: t,
-            style: appFont(color: Colors.white, fontSize: 13),
+            style: appFont(color: widget.color, fontSize: 13),
             decoration: const InputDecoration(hintText: 'New option', hintStyle: TextStyle(color: Colors.white38)),
             onSubmitted: (v) {
               if (v.trim().isEmpty) return;
@@ -757,3 +880,21 @@ class _OptionRowState extends State<_OptionRow> {
 
 /// Quiet reference so the token import stays used if a caller wants spacing.
 const double kSgPad = VSpace.sm;
+
+const _dueMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+String _dueLabel(int? ms) {
+  if (ms == null) return 'Add date';
+  final d = DateTime.fromMillisecondsSinceEpoch(ms);
+  final hour = d.hour % 12 == 0 ? 12 : d.hour % 12;
+  final ap = d.hour >= 12 ? 'PM' : 'AM';
+  final min = d.minute.toString().padLeft(2, '0');
+  return '${_dueMonths[d.month - 1]} ${d.day}, $hour:$min $ap';
+}
+
+String _statusKindLabel(SgStatusKind kind) => switch (kind) {
+      SgStatusKind.dropdown => 'List',
+      SgStatusKind.toggle => 'Switch',
+      SgStatusKind.input => 'Text',
+      SgStatusKind.color => 'Color',
+    };

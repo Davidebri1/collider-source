@@ -66,13 +66,19 @@ class CPane extends StatelessWidget {
     final mat = Materialize.of(context);
     final w = CPaneTokens.width(context);
     final maxH = maxHeight(context);
-    final glass = DecoratedBox(
-      decoration: BoxDecoration(borderRadius: r, boxShadow: layer.elevation),
-      child: ClipRRect(
-        borderRadius: r,
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: VFrost.blur * mat, sigmaY: VFrost.blur * mat),
-          child: DecoratedBox(decoration: BoxDecoration(color: VFrost.tint, borderRadius: r), child: child),
+    // The shadow has to live inside the backdrop filter. A shadow on the
+    // parent is its own layer on web, and the filter then blurs that empty
+    // layer, so the pane paints as a flat black slab instead of the wallpaper.
+    final glass = ClipRRect(
+      borderRadius: r,
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: VFrost.blur * mat, sigmaY: VFrost.blur * mat),
+        child: DecoratedBox(
+          decoration: BoxDecoration(color: VFrost.tint, borderRadius: r),
+          child: DecoratedBox(
+            decoration: BoxDecoration(borderRadius: r, boxShadow: layer.elevation),
+            child: child,
+          ),
         ),
       ),
     );

@@ -83,6 +83,26 @@ class _SgPulseState extends State<SgPulse> with SingleTickerProviderStateMixin {
   Widget build(BuildContext context) => AnimatedBuilder(animation: c, builder: (_, __) => widget.child());
 }
 
+/// The card's cover image, full width, when a file is attached.
+class SgCover extends StatelessWidget {
+  const SgCover({super.key, required this.card});
+  final SgCard card;
+  @override
+  Widget build(BuildContext context) {
+    if (card.files.isEmpty) return const SizedBox.shrink();
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Image.memory(
+        _bytes(card.files.first.dataUrl),
+        height: 160,
+        width: double.infinity,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+      ),
+    );
+  }
+}
+
 class SgFace extends StatelessWidget {
   const SgFace({super.key, required this.card, required this.board, this.compact = false, this.back = false});
   final SgCard card;
