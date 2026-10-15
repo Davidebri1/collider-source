@@ -9,6 +9,7 @@ import '../../../core/files/audio_art.dart';
 import '../../../core/files/file_store.dart';
 import '../../../core/files/thumb_codec.dart';
 import '../../../core/vision/vision_kit.dart';
+import '../../../core/vision/cpane.dart';
 import 'audio_source.dart';
 import 'thumb_view.dart';
 
@@ -95,12 +96,9 @@ class _AudioPlayerViewState extends State<AudioPlayerView> {
     return SafeArea(
       child: Center(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(VSpace.md, 40, VSpace.md, 96),
-          child: VWindow(
+          padding: EdgeInsets.zero, // batch 4: CPane centres on the screen
+          child: CPaneWindow(fit: CPaneFit.fill,
             title: f.name,
-            centerTitle: true,
-            maxWidth: VOverlay.toolWidth(context),
-            maxHeight: VOverlay.toolMaxHeight(context),
             leading: close,
             child: Column(
               children: [

@@ -2,6 +2,7 @@ import '../../core/theme/edge_fade.dart';
 import 'package:flutter/material.dart';
 import '../../../models/model_def.dart';
 import '../../../core/vision/vision_kit.dart';
+import '../../../core/vision/cpane.dart';
 
 /// REQ-17 Model Hierarchy Ladder — library list (Vision OS Design System
 /// 417:6219 "Your Library"): filter chips, recessed search, rows with a
@@ -48,13 +49,11 @@ class _ModelLadderDrawerState extends State<ModelLadderDrawer> {
       children: [
         VScrim(onTap: widget.onClose),
         Align(
-          alignment: Alignment.topCenter,
+          alignment: Alignment.center,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(VSpace.md, 56, VSpace.md, 0),
-            child: VWindow(
+            padding: EdgeInsets.zero, // batch 4: CPane centres on the screen
+            child: CPaneWindow(fit: CPaneFit.hug,
               title: 'Models',
-              maxWidth: VOverlay.menuWidth(context),
-              maxHeight: VOverlay.menuMaxHeight(context),
               actions: [VCircleButton(icon: Icons.close_rounded, tooltip: 'Close', onTap: widget.onClose)],
               child: Column(
                 mainAxisSize: MainAxisSize.min,

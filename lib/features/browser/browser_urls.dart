@@ -7,7 +7,7 @@
 // returns server-fetched markup, so a search page has to be one that renders
 // from HTML alone. Google's results page is script-rendered and comes back
 // nearly empty through the proxy (D41).
-const String browserHomeUrl = 'https://www.bing.com';
+const String browserHomeUrl = 'https://www.google.com'; // PRD R34 / D6: home is Google
 
 /// The page a fresh tab and the home control both open.
 String browserStartUrl() => browserHomeUrl;

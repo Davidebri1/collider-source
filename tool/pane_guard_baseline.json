@@ -10,10 +10,6 @@
     "glass": 1,
     "width": 3
   },
-  "lib/features/drawers/model_ladder_drawer.dart": {
-    "glass": 1,
-    "width": 1
-  },
   "lib/features/drawers/settings_drawer.dart": {
     "blur": 6,
     "width": 2
@@ -24,26 +20,8 @@
     "glass": 4,
     "width": 1
   },
-  "lib/features/files/widgets/audio_player_view.dart": {
-    "glass": 1,
-    "width": 1
-  },
-  "lib/features/files/widgets/image_viewer_view.dart": {
-    "glass": 1,
-    "width": 1
-  },
   "lib/features/files/widgets/pdf_viewer_view.dart": {
-    "shadow": 1,
-    "glass": 1,
-    "width": 1
-  },
-  "lib/features/files/widgets/text_reader_view.dart": {
-    "glass": 1,
-    "width": 1
-  },
-  "lib/features/files/widgets/unsupported_view.dart": {
-    "glass": 1,
-    "width": 1
+    "shadow": 1
   },
   "lib/features/files/widgets/video_player_view.dart": {
     "blur": 2
@@ -93,7 +71,6 @@
     "glass": 5
   },
   "lib/features/ticker/widgets/message_zoom_overlay.dart": {
-    "glass": 1,
     "width": 1
   },
   "lib/features/ticker/widgets/model_pill.dart": {

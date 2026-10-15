@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/widgets.dart';
 import 'materialize.dart';
@@ -35,6 +36,9 @@ class CPaneTokens {
     return phone(c) ? (w - 104).clamp(260.0, 300.0) : (w * 0.46).clamp(480.0, 640.0);
   }
   static const double topGap = 40;
+  /// Composer + nav bar band at the bottom of the screen (measured on the
+  /// 390x844 phone: composer top at ~712, so 132 + margin).
+  static const double chromeReserve = 140;
   static const double radius = VRadius.xl;
 }
 
@@ -52,12 +56,27 @@ class CPane extends StatelessWidget {
   final Widget child;
   final CLayer layer;
   final CPaneFit fit;
-  const CPane({super.key, required this.child, this.layer = CLayer.floating, this.fit = CPaneFit.fill});
+  /// PRD R32: theme browsing never blurs the wallpaper. Gallery and Premium
+  /// use [CPane.clear]: the same centred window, tint only, no blur.
+  final bool clear;
+  const CPane({super.key, required this.child, this.layer = CLayer.floating, this.fit = CPaneFit.fill}) : clear = false;
+  const CPane.clear({super.key, required this.child, this.layer = CLayer.floating, this.fit = CPaneFit.fill}) : clear = true;
 
-  /// The rectangle a pane occupies, for screens that must lay out inside it.
-  static double maxHeight(BuildContext c) {
+  /// v9.1.7 batch 4 (David, Oct 15): every pane is centred vertically on
+  /// the FULL screen (centre = screen height / 2), never top-aligned in the
+  /// room above the docked ticker. The pane may pass over the docked ticker
+  /// (the ticker stays visible, blurred, behind the glass) but never over
+  /// the composer and nav bar: the top and bottom margins are equal and at
+  /// least [CPaneTokens.chromeReserve]. test/cpane_centre_test.dart fails the
+  /// build if a pane's centre drifts more than 2 px from the screen centre.
+  static double margin(BuildContext c) {
     final m = MediaQuery.of(c);
-    return (m.size.height - m.padding.top - CPaneTokens.topGap - CShell.reserveOf(c)).clamp(160.0, 2000.0);
+    return math.max(m.padding.top + CPaneTokens.topGap, math.max(m.padding.bottom, 0) + CPaneTokens.chromeReserve);
+  }
+
+  static double maxHeight(BuildContext c) {
+    final h = MediaQuery.sizeOf(c).height;
+    return (h - 2 * margin(c)).clamp(160.0, 2000.0);
   }
 
   @override
@@ -70,21 +89,21 @@ class CPane extends StatelessWidget {
       decoration: BoxDecoration(borderRadius: r, boxShadow: layer.elevation),
       child: ClipRRect(
         borderRadius: r,
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: VFrost.blur * mat, sigmaY: VFrost.blur * mat),
-          child: DecoratedBox(decoration: BoxDecoration(color: VFrost.tint, borderRadius: r), child: child),
-        ),
+        child: clear
+            ? DecoratedBox(decoration: BoxDecoration(color: VFrost.workTint, borderRadius: r), child: child)
+            : BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: VFrost.blur * mat, sigmaY: VFrost.blur * mat),
+                child: DecoratedBox(decoration: BoxDecoration(color: VFrost.tint, borderRadius: r), child: child),
+              ),
       ),
     );
-    return Padding(
-      padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top + CPaneTokens.topGap),
-      child: Align(
-        alignment: Alignment.topCenter,
-        child: SizedBox(
-          width: w,
-          height: fit == CPaneFit.fill ? maxH : null,
-          child: fit == CPaneFit.fill ? glass : ConstrainedBox(constraints: BoxConstraints(maxHeight: maxH), child: glass),
-        ),
+    // Centred on the whole screen: no top padding, no bottom reserve; the
+    // equal margins live in maxHeight.
+    return Center(
+      child: SizedBox(
+        width: w,
+        height: fit == CPaneFit.fill ? maxH : null,
+        child: fit == CPaneFit.fill ? glass : ConstrainedBox(constraints: BoxConstraints(maxHeight: maxH), child: glass),
       ),
     );
   }

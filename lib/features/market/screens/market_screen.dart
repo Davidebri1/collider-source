@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../../core/api/media_gen.dart';
 import '../../../core/vision/cpane.dart';
@@ -23,10 +24,10 @@ class MarketScreen extends StatefulWidget {
   /// One quiet line (e.g. a generation that cannot run on this link).
   final void Function(String text)? onNotice;
 
-  /// The Discover feed picked on the side nav: stills, templates or night.
+  /// The Discover side-nav pick (PRD Surfaces): home, search, library or looks.
   final String feed;
 
-  const MarketScreen({super.key, required this.onClose, required this.onUsePrompt, this.onNotice, this.feed = 'stills'});
+  const MarketScreen({super.key, required this.onClose, required this.onUsePrompt, this.onNotice, this.feed = 'home'});
 
   @override
   State<MarketScreen> createState() => _MarketScreenState();
@@ -37,12 +38,17 @@ class _Tile {
   final String title;
   final String src; // theme media path or data: URI
   final bool generated;
-  const _Tile(this.id, this.title, this.src, {this.generated = false});
+  final List<String> tags;
+  const _Tile(this.id, this.title, this.src, {this.generated = false, this.tags = const []});
 }
 
 class _MarketScreenState extends State<MarketScreen> {
-  static const _kinds = ['Stills', 'Templates', 'Night']; // fits the pane, no clipped chip
-  int _kind = 0;
+  // PRD R27 / Surfaces (Discover Market): the side nav is Search, Library and
+  // Looks. Home (nothing picked) is the Imagine order: a row of pictures, a
+  // row of labelled looks, then the two-column feed. No template shelf (X5).
+  static const _looks = ['Nature', 'Ocean', 'Space', 'City', 'Rain', 'Cozy', 'Fantasy', 'Abstract'];
+  String? _look;
+  String _q = '';
   final List<_Tile> _generated = [];
   final TextEditingController _ctrl = TextEditingController();
   bool _busy = false;
@@ -62,25 +68,29 @@ class _MarketScreenState extends State<MarketScreen> {
     final seen = <String>{};
     for (final id in prefer) {
       for (final t in themes) {
-        if (t.id.toLowerCase().contains(id) && seen.add(t.id)) out.add(_Tile('photo-${t.id}', t.name, t.stillPath ?? t.assetPath));
+        if (t.id.toLowerCase().contains(id) && seen.add(t.id)) out.add(_Tile('photo-${t.id}', t.name, t.stillPath ?? t.assetPath, tags: t.tags));
       }
     }
     for (final t in themes) {
       if (out.length >= 18) break;
-      if (seen.add(t.id)) out.add(_Tile('photo-${t.id}', t.name, t.stillPath ?? t.assetPath));
+      if (seen.add(t.id)) out.add(_Tile('photo-${t.id}', t.name, t.stillPath ?? t.assetPath, tags: t.tags));
     }
     return out;
   }
 
-  List<_Tile> _masonry(List<_Tile> seed) {
-    final merged = [..._generated, ...seed];
-    return switch (_kinds[_kind]) {
-      'Templates' => merged.take(10).toList(),
-      'Cinematic' => [for (var i = 0; i < merged.length; i++) if (i % 2 == 0) merged[i]],
-      'Night' => [for (var i = 0; i < merged.length; i++) if (i % 3 != 1) merged[i]],
-      _ => merged,
-    };
+  List<_Tile> _feed(List<_Tile> seed) {
+    var merged = widget.feed == 'library' ? [..._generated] : [..._generated, ...seed];
+    if (_look != null) merged = [for (final t in merged) if (t.tags.any((g) => g.toLowerCase() == _look!.toLowerCase())) t];
+    if (widget.feed == 'search' && _q.isNotEmpty) merged = [for (final t in merged) if (t.title.toLowerCase().contains(_q.toLowerCase())) t];
+    return merged;
   }
+
+  /// One picture per look: the first seed image tagged with it.
+  List<(String, _Tile)> _lookTiles(List<_Tile> seed) => [
+        for (final l in _looks)
+          if (seed.any((t) => t.tags.any((g) => g.toLowerCase() == l.toLowerCase())))
+            (l, seed.firstWhere((t) => t.tags.any((g) => g.toLowerCase() == l.toLowerCase()))),
+      ];
 
   Future<void> _submit() async {
     final text = _ctrl.text.trim();
@@ -110,18 +120,26 @@ class _MarketScreenState extends State<MarketScreen> {
   Widget build(BuildContext context) {
     final seed = _seed();
     if (seed.isEmpty && _generated.isEmpty) return const SizedBox.shrink();
-    _kind = switch (widget.feed) { 'templates' => 1, 'night' => 2, _ => 0 };
-    final shelf = [..._generated.take(4), ...seed.take(10)];
-    final grid = _masonry(seed);
-    // v9.1.7 (#126): David's rule wins over the literal copy: Discover is a
-    // centred floating pane the width of the other panes (Smart Gen), never
-    // full width. Inside it, Grok Imagine's content and order are unchanged.
-    // v9.1.7 (#18/#19): a literal copy of the Grok Imagine feed in black:
-    // full-bleed black stage, floating top bar over the scrolling content,
-    // "Create from template" portrait row, then the flush two-column grid
-    // with hairline gaps and square corners. No promo banner (#18). Labels
-    // stay below images (David: nothing on top of an image). The feeds are
-    // on the overlaying side nav (#24); the app keeps its one composer.
+    final feed = widget.feed;
+    final grid = _feed(seed);
+    final looks = _lookTiles(seed);
+    final home = feed != 'library' && feed != 'search' && feed != 'looks';
+    // v9.1.7 (#126): Discover is a centred floating pane (CPane).
+    // PRD R27: pictures only, in the Imagine order. Labels stay below images.
+    Widget lookCard((String, _Tile) l, {double w = 96, double h = 120}) => VPress(
+          onTap: () => setState(() => _look = _look == l.$1 ? null : l.$1),
+          child: SizedBox(
+            width: w,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: SizedBox(width: w, height: h, child: Opacity(opacity: _look == null || _look == l.$1 ? 1 : 0.45, child: _img(l.$2))),
+              ),
+              const SizedBox(height: 4),
+              Text(l.$1, maxLines: 1, overflow: TextOverflow.ellipsis, style: VType.caption(color: _look == l.$1 ? Colors.white : Colors.white70)),
+            ]),
+          ),
+        );
     final pane = Stack(
       children: [
         const Positioned.fill(child: ColoredBox(color: Colors.black)),
@@ -129,37 +147,56 @@ class _MarketScreenState extends State<MarketScreen> {
           child: CustomScrollView(
             slivers: [
               SliverToBoxAdapter(child: SizedBox(height: 64)),
-              if (_kind != 2) ...[
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
-                    child: Text('Create from template', style: VType.callout(weight: FontWeight.w600, color: Colors.white70)),
-                  ),
-                ),
+              if (home) ...[
+                // 1. A row of pictures.
                 SliverToBoxAdapter(
                   child: SizedBox(
-                    height: 228,
+                    height: 132,
                     child: ListView.separated(
                       scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: shelf.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      itemCount: math.min(seed.length, 10),
+                      separatorBuilder: (_, __) => const SizedBox(width: 6),
                       itemBuilder: (_, i) => VPress(
-                        onTap: () => _remix(shelf[i]),
-                        child: SizedBox(
-                          width: 132,
-                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            ClipRRect(borderRadius: BorderRadius.circular(16), child: SizedBox(width: 132, height: 196, child: _img(shelf[i]))),
-                            const SizedBox(height: 6),
-                            Text(shelf[i].title, maxLines: 1, overflow: TextOverflow.ellipsis, style: VType.caption(color: Colors.white)),
-                          ]),
-                        ),
+                        onTap: () => setState(() => _open = seed[i]),
+                        child: ClipRRect(borderRadius: BorderRadius.circular(12), child: SizedBox(width: 88, height: 132, child: _img(seed[i]))),
                       ),
                     ),
                   ),
                 ),
-                const SliverToBoxAdapter(child: SizedBox(height: 16)),
+                const SliverToBoxAdapter(child: SizedBox(height: 12)),
+                // 2. A row of labelled looks.
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: 100,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      itemCount: looks.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 6),
+                      itemBuilder: (_, i) => lookCard(looks[i], w: 64, h: 76),
+                    ),
+                  ),
+                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 12)),
               ],
+              if (feed == 'looks')
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  sliver: SliverGrid(
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, mainAxisSpacing: 10, crossAxisSpacing: 8, childAspectRatio: 0.72),
+                    delegate: SliverChildBuilderDelegate((_, i) => LayoutBuilder(builder: (_, c) => lookCard(looks[i], w: c.maxWidth, h: c.maxHeight - 22)), childCount: looks.length),
+                  ),
+                ),
+              if (feed == 'library' && grid.isEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 80, 20, 0),
+                    child: Text('Images you make or save show here', textAlign: TextAlign.center, style: VType.callout(color: Colors.white70)),
+                  ),
+                ),
+              // 3. The two-column feed.
+              if (feed != 'looks')
               SliverGrid(
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, mainAxisSpacing: 3, crossAxisSpacing: 3, childAspectRatio: 0.67),
                 delegate: SliverChildBuilderDelegate(
@@ -193,7 +230,18 @@ class _MarketScreenState extends State<MarketScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                 decoration: BoxDecoration(color: const Color(0x26FFFFFF), borderRadius: BorderRadius.circular(999)),
-                child: Text(_kind == 0 ? 'Discover' : _kinds[_kind], style: VType.callout(weight: FontWeight.w600, color: Colors.white)),
+                child: feed == 'search'
+                    ? SizedBox(
+                        width: 200,
+                        child: TextField(
+                          autofocus: true,
+                          onChanged: (v) => setState(() => _q = v.trim()),
+                          cursorColor: Colors.white,
+                          style: VType.callout(weight: FontWeight.w600, color: Colors.white),
+                          decoration: InputDecoration(isCollapsed: true, border: InputBorder.none, hintText: 'Search', hintStyle: VType.callout(color: Colors.white54)),
+                        ),
+                      )
+                    : Text(switch (feed) { 'library' => 'Library', 'looks' => 'Looks', _ => _look ?? 'Discover' }, style: VType.callout(weight: FontWeight.w600, color: Colors.white)),
               ),
               // v9.1.7: no close circle (David: no on-screen close controls;
               // tap outside or swipe closes), so the general rule wins here too.

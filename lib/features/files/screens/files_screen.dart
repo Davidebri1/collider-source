@@ -168,13 +168,16 @@ class _FilesScreenState extends State<FilesScreen> {
             }
             // v9.1.7: on CPane (centred, same width as every pane, one glass,
             // shell reserve); the Figma parts are laid out inside it.
-            return CPane(child: LayoutBuilder(builder: (context, c) {
+            // Batch 4: the pane hugs what it holds (one file = a short pane,
+            // as in the approved v8.4 Files screen), centred on the screen,
+            // up to the CPane height; it grows to fit the sidebar when open.
+            return CPane(fit: CPaneFit.hug, child: LayoutBuilder(builder: (context, c) {
             const pw = FilesScreen.phoneWidth;
             final s = c.maxWidth / pw;
-            final ph = c.maxHeight / s;
+            final ph = _phoneHeight(files, cat).clamp(252.0, c.maxHeight / s);
             const top = 0.0;
             final panelH = ph - 36;
-            return FigmaStage(
+            return SizedBox(height: ph * s, child: FigmaStage(
               frame: Size(pw, ph),
               cropWidth: pw,
               center: Offset(pw / 2, ph / 2),
@@ -191,7 +194,7 @@ class _FilesScreenState extends State<FilesScreen> {
                   child: NotificationListener<Notification>(child: _sidebar(all, onPicked: () => setState(() => _side = false))),
                 ),
               ],
-            );
+            ));
             }));
           })),
           if (_sel.active) Positioned(left: 0, right: 0, bottom: 40, child: Center(child: _selBar(files))),
@@ -199,6 +202,29 @@ class _FilesScreenState extends State<FilesScreen> {
         ]);
       },
     );
+  }
+
+  /// Batch 4: the phone pane's height in Figma px for what it shows:
+  /// title row 75, the grid rows, the 60 px end space and the 36 px band
+  /// the segmented control sits in. With the sidebar open it is tall enough
+  /// for the sidebar (776).
+  double _phoneHeight(List<StoredFile> files, String cat) {
+    const inner = FilesScreen.phoneWidth - 48;
+    double grid;
+    if (cat == 'music' && MusicPlayer.library.isNotEmpty) return 4000; // the song list fills the pane
+    if (files.isEmpty) {
+      grid = 230; // the empty state
+    } else if (_type == 'Image' || _type == 'Video') {
+      const tw = (inner - 8) / 2;
+      final rows = (files.length + 1) ~/ 2;
+      grid = rows * tw * 126 / 214 + (rows - 1) * 8;
+    } else {
+      const tw = (inner - 4) / 2;
+      final rows = (files.length + 1) ~/ 2;
+      grid = rows * tw * 217 / 170 + (rows - 1) * 13;
+    }
+    final h = 75 + grid + 60 + 36;
+    return _side ? math.max(h, 776) : h;
   }
 
   Widget _sidebar(List<StoredFile> all, {VoidCallback? onPicked}) {

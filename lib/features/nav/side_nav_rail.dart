@@ -21,7 +21,10 @@ List<SideRailEntry> sideRailEntries(ActiveWorkSurface s, {bool musicOpen = false
           SideRailEntry('new', Icons.add_rounded, 'New'),
           SideRailEntry('local', Icons.history_rounded, 'Local'),
           SideRailEntry('global', Icons.public_rounded, 'Global'),
-          SideRailEntry('consensus', Icons.balance_rounded, 'Roundup'),
+          // PRD R14 / Surfaces (Ticker): model select on the side nav.
+          SideRailEntry('models', Icons.tune_rounded, 'Models'),
+          // #126 (David, Oct 15): the consensus entry ('Roundup') is not in
+          // the PRD; it came in with the v9 import. Removed.
         ],
       // v9.1.7 (#24): Smart Gen's own tools (were a bottom ornament).
       ActiveWorkSurface.smartgen => const [
@@ -37,10 +40,11 @@ List<SideRailEntry> sideRailEntries(ActiveWorkSurface s, {bool musicOpen = false
       // visuals / video / audio / gallery shelves were a prompt shelf, clips
       // and songs, which R27 and X5 both exclude.
       // v9.1.7 (#24): the side nav carries the Discover feeds.
+      // PRD Surfaces (Discover Market): Search, Library, Looks. Images only.
       ActiveWorkSurface.market => const [
-          SideRailEntry('stills', Icons.photo_outlined, 'Stills'),
-          SideRailEntry('templates', Icons.view_carousel_outlined, 'Looks'), // the 58pt rail cuts 'Templates'
-          SideRailEntry('night', Icons.nightlight_outlined, 'Night'),
+          SideRailEntry('search', Icons.search_rounded, 'Search'),
+          SideRailEntry('library', Icons.photo_library_outlined, 'Library'),
+          SideRailEntry('looks', Icons.style_outlined, 'Looks'),
         ],
       ActiveWorkSurface.themes => [
           const SideRailEntry('premium', Icons.workspace_premium_rounded, 'Market'),

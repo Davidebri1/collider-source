@@ -6,6 +6,7 @@ import '../../core/audio/music_player.dart';
 import '../music/song_row_parts.dart';
 import '../theme/theme_living_media.dart';
 import '../../core/vision/cpane.dart';
+import '../theme/theme_pack_store.dart';
 
 /// Music drawer (v8.3, DEVIATIONS.md D40): ported from the Figma music app
 /// (file YEuK4CL2uyECUhvGEcgCNS) instead of an own design:
@@ -46,6 +47,13 @@ class MusicCollectionDrawer extends StatelessWidget {
       'ambient' => [for (final t in all) if (t.themeId == null) t],
       _ => all,
     };
+    // QA builds only (?qa_art=1): log every row's art for the #130 check.
+    if (ThemePackStore.qaUnlockAll && Uri.base.queryParameters['qa_art'] == '1') {
+      for (final t in lib) {
+        // ignore: avoid_print
+        print('QA_ART ${t.title} | ${t.art}');
+      }
+    }
     final cur = p.current;
     final qid = collection == 'all' ? 'library' : 'library_$collection';
     final libActive = p.queueId == qid && p.index != null;

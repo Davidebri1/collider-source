@@ -320,7 +320,8 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
         Padding(
           padding: const EdgeInsets.fromLTRB(
               VSpace.md, VSpace.md, VSpace.md, VSpace.sm),
-          child: Text('Smart Gen Workspace',
+          child: Text('Smart Gen', // PRD R40: never 'Workspaces'
+
               style: VType.headline(color: Colors.white)),
         ),
         Padding(
@@ -342,7 +343,7 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
                 decoration: const InputDecoration(
                     isCollapsed: true,
                     border: InputBorder.none,
-                    hintText: 'Search workspace',
+                    hintText: 'Search',
                     hintStyle: TextStyle(color: Colors.white54, fontSize: 15)),
               )),
             ]),

@@ -314,7 +314,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   // Contextual work surface state
   String _smartGenView = 'tasks';
   String _smartGenBoardType = 'kanban';
-  String _marketCategory = 'stills';
+  String _marketCategory = 'home'; // PRD: Search / Library / Looks on the side nav
   String _themeSection = 'gallery';
   String _filesCategory = 'all';
   /// v9.1.7 (#24): Music collection on the side nav: all, themes, ambient.
@@ -470,6 +470,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       setState(() {
         _currentPrompt = 'Plan my weekend trip to the lake';
         _promptTime = now;
+        // A finished shared send, so the pinned consensus row can be checked.
+        _consensusRatio = '5/8';
+        _consensusSummary = 'Go Saturday morning by train and be back before the rain.';
         var i = 0;
         _tickerItems = [
           for (final m in ModelRoster.forCategory(ModelCategory.general))
@@ -966,13 +969,24 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
   // Restored v8.6 (9f839b7): the rail is one row per model in the category,
   // answered or not, so every model can be seen and toggled.
-  List<TickerItem> _tickerRows(ModelCategory c) => [
-        for (final m in ModelRoster.forCategory(c))
+  // PRD R03 / R09: never more than 9 models on the ticker. The selected
+  // models always show; the rest of the roster fills up to 9, roster order.
+  List<TickerItem> _tickerRows(ModelCategory c) {
+    final roster = ModelRoster.forCategory(c);
+    final sel = _selByCat[c] ?? const <String>[];
+    var room = 9 - roster.where((m) => sel.contains(m.id)).length;
+    return [
+      for (final m in roster)
+        if (sel.contains(m.id) || room-- > 0)
           _tickerItems.firstWhere(
             (t) => t.modelDef.id == m.id,
             orElse: () => TickerItem(modelDef: m, relativeTime: '', summary: '', conversation: const []),
           ),
-      ];
+    ];
+  }
+
+  /// PRD R09: the row selector, 1, 2 or 3 rows. Three rows show 9.
+  int _tickerRowCount = 3;
 
   /// Long-press on a ticker row: its context menu (tap outside closes it).
   void _rowMenu(ModelCategory c, TickerItem item) {
@@ -1004,6 +1018,11 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                       close();
                       _onTogglePill(id);
                     }),
+                  // PRD R09: the row selector (1, 2 or 3 rows; three rows show 9).
+                  GlassMenuRow(icon: Icons.view_agenda_outlined, label: 'Rows: $_tickerRowCount', on: true, toggle: false, onTap: () {
+                    close();
+                    setState(() => _tickerRowCount = _tickerRowCount % 3 + 1);
+                  }),
                   GlassMenuRow(icon: on ? Icons.toggle_on_rounded : Icons.toggle_off_outlined, label: on ? 'Turn off' : 'Turn on', on: on, onTap: () {
                     close();
                     _toggleSelect(c, id);
@@ -1084,47 +1103,77 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         ),
       );
     }
-    // No Scrollbar: a hard grey track on a glass surface reads as a debug
-    // affordance and flattens the illusion. The EdgeFade plus the chevron
-    // carry the affordance instead.
-    // v9.1.6 (grey slab): no ShaderMask over rows that carry BackdropFilters;
-    // on web the mask's layer flattens them to grey. Rows clip at the edge.
+    // PRD R09: 1, 2 or 3 rows (the selector), three cells per row in view,
+    // so three rows show 9; anything past the view scrolls horizontally
+    // inside the window. Cells run left to right, then down, page by page.
+    final r = _tickerRowCount;
+    final perPage = r * 3;
+    final pages = (rows.length / perPage).ceil();
     return ClipRect(
-      child: Stack(
-        children: [
-          ScrollConfiguration(
-            behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false, overscroll: false),
-            child: ListView.separated(
-            controller: sc,
-            padding: const EdgeInsets.only(bottom: 4),
-            physics: const BouncingScrollPhysics(),
-            itemCount: rows.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 6),
-            itemBuilder: (_, i) => _tickerRow(c, rows[i], rows.length <= 1 ? 1.0 : 1.0 - i / (rows.length - 1)),
-          ),
-          ),
-          if (rows.length > 3 && _one(sc) && sc.position.maxScrollExtent > 0)
-            Positioned(
-              right: 2,
-              bottom: 2,
-              child: IgnorePointer(
-                child: AnimatedBuilder(
-                  animation: sc,
-                  builder: (_, __) {
-                    final p = _one(sc) && sc.position.maxScrollExtent > 0
-                        ? (sc.offset / sc.position.maxScrollExtent).clamp(0.0, 1.0)
-                        : 0.0;
-                    final more = 1 - p;
-                    return Opacity(
-                      opacity: (0.18 + 0.62 * more).clamp(0.0, 0.85),
-                      child: const Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: Colors.white),
-                    );
-                  },
-                ),
-              ),
+      child: LayoutBuilder(builder: (context, bc) {
+        const gap = 6.0;
+        final cw = (bc.maxWidth - gap * 2) / 3;
+        return ScrollConfiguration(
+          behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false, overscroll: false),
+          child: PageView.builder(
+            controller: _tickerPages[c] ??= PageController(),
+            physics: pages > 1 ? const BouncingScrollPhysics() : const NeverScrollableScrollPhysics(),
+            itemCount: pages,
+            itemBuilder: (_, p) => Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var i = 0; i < r; i++)
+                  Padding(
+                    padding: EdgeInsets.only(bottom: i < r - 1 ? gap : 0),
+                    child: Row(children: [
+                      for (var j = 0; j < 3; j++) ...[
+                        if (j > 0) const SizedBox(width: gap),
+                        SizedBox(
+                          width: cw,
+                          height: _rowSlot - gap,
+                          child: (p * perPage + i * 3 + j) < rows.length ? _tickerCell(c, rows[p * perPage + i * 3 + j]) : null,
+                        ),
+                      ],
+                    ]),
+                  ),
+              ],
             ),
-        ],
+          ),
+        );
+      }),
+    );
+  }
+
+  final Map<ModelCategory, PageController> _tickerPages = {};
+
+  /// One ticker cell (PRD R09): the model's name and a one-line summary.
+  /// Tap opens that model (R03); long-press is the row menu; a model with no
+  /// answer toggles on and off. Selected cells glow in the model's colour.
+  Widget _tickerCell(ModelCategory c, TickerItem item) {
+    final selected = _selByCat[c]!.contains(item.modelDef.id);
+    final hasAnswer = item.conversation.isNotEmpty || item.isStreaming;
+    final open = _expandedModelIds.contains(item.modelDef.id);
+    final cell = Container(
+      padding: const EdgeInsets.fromLTRB(8, 5, 6, 5),
+      decoration: BoxDecoration(
+        color: Color.alphaBlend(item.modelDef.providerColor.withValues(alpha: selected ? 0.22 : 0.08), const Color(0xD018181E)),
+        borderRadius: BorderRadius.circular(12),
+        border: open ? Border.all(color: Colors.white70, width: 1) : null,
       ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+        Text(item.modelDef.label, maxLines: 1, overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontFamily: 'GoogleSansFlex', fontSize: 11, height: 1.15, fontWeight: FontWeight.w700, color: selected ? Colors.white : const Color(0xB3FFFFFF))),
+        if (hasAnswer)
+          Text(item.isStreaming && item.summary.isEmpty ? '' : item.summary, maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontFamily: 'GoogleSansFlex', fontSize: 11, height: 1.2, fontWeight: FontWeight.w500, color: Color(0xE6FFFFFF))),
+      ]),
+    );
+    return GestureDetector(
+      key: ValueKey('cell-${c.name}-${item.modelDef.id}'),
+      behavior: HitTestBehavior.opaque,
+      onTap: () => hasAnswer ? _onTogglePill(item.modelDef.id) : _toggleSelect(c, item.modelDef.id),
+      onLongPress: () => _rowMenu(c, item),
+      child: selected ? AmbientGlow(color: item.modelDef.providerColor, radius: 12, phase: (item.modelDef.id.hashCode % 100) / 100, child: cell) : cell,
     );
   }
 
@@ -1326,14 +1375,16 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   /// state, so opening a card or the composer cannot resize the room.
   Widget _buildTickerWindow() {
     // v9.1.3: no consensus bubble until it has words.
-    final showConsensus = !_activeCategory.isMedia && _tickerItems.isNotEmpty && _consensusSummary.trim().isNotEmpty;
+    // PRD R16/R17: pinned for every shared send; an unfinished one shows an empty score.
+    final showConsensus = !_activeCategory.isMedia && _tickerItems.isNotEmpty && (_consensusSummary.trim().isNotEmpty || _isConsensusGenerating || _currentPrompt.isNotEmpty);
     // R09: the window shows one, two or three rows. A slot is sized for a model
     // name plus a wrapped one-line summary; anything longer scrolls behind the
     // edge fade and the chevron.
     final rowCount = _tickerRows(_activeCategory).length;
     // v9.1.2: nothing asked yet -> nothing drawn, just the wallpaper.
     if (rowCount == 0 && !showConsensus) return const SizedBox.shrink();
-    final visible = rowCount.clamp(1, _tallPaneOpen ? _dockedTickerRows : _maxTickerRows);
+    // PRD R09: the selector sets the rows (1, 2 or 3); under a pane, at most 2.
+    final visible = math.min(_tickerRowCount, _tallPaneOpen ? _dockedTickerRows : 3).clamp(1, math.max(1, (rowCount / 3).ceil()));
     final window = SizedBox(
       // v9.1.2: chat bubbles span the screen like the reference.
       // v9.1.6 (approved app-11): rows sit right of the side rail.
@@ -1854,7 +1905,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                 {
                   setState(() {
                     _isMobileSideNavOpen = false;
-                    _marketCategory = key;
+                    _marketCategory = _marketCategory == key ? 'home' : key; // a second tap goes back home
                   });
                 }
               case ActiveWorkSurface.themes:

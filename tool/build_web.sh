@@ -5,4 +5,6 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 out="$1"; shift
 dart run tool/pane_guard.dart
+# batch 4: every pane centred on the full screen (fails if > 2 px off).
+flutter test test/cpane_centre_test.dart
 flutter build web --release --base-href /collider-app/ -o "$out" "$@"

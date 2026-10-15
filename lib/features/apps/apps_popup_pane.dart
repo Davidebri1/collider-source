@@ -35,14 +35,16 @@ class AppsPopupPane extends StatelessWidget {
       // v8.3 (D45, D48): one-word names (an icon alone is ambiguous in a
       // launcher); full-colour icons and a Settings app, as in Figma 97-34752.
       _App('Smart Gen', Icons.view_kanban_outlined, const [Color(0xFFC4B5FD), Color(0xFF7C3AED)], onOpenSmartGen),
-      _App('Market', Icons.explore_rounded, const [Color(0xFFFDBA74), Color(0xFFEA580C)], onOpenDiscoverMarket),
-      _App('Themes', Icons.landscape_rounded, const [Color(0xFF6EE7B7), Color(0xFF059669)], onOpenThemeGallery),
+      // PRD R13: seven apps (Smart Gen, Discover Market, Theme Gallery,
+      // Premium Theme Marketplace, Files, Music Player, Browser). Settings is
+      // on the dock, not in the platter. R40: "Discover" is the user word.
+      _App('Discover', Icons.explore_rounded, const [Color(0xFFFDBA74), Color(0xFFEA580C)], onOpenDiscoverMarket),
+      _App('Gallery', Icons.landscape_rounded, const [Color(0xFF6EE7B7), Color(0xFF059669)], onOpenThemeGallery),
       _App('Premium', Icons.diamond_rounded, const [Color(0xFFFDE68A), Color(0xFFD97706)], onOpenPremiumMarketplace),
       _App('Files', Icons.folder_rounded, const [Color(0xFF93C5FD), Color(0xFF2563EB)], onOpenFiles),
       // No songs in the catalog: no Music app (v8.3, D46).
       if (MusicPlayer.library.isNotEmpty) _App('Music', Icons.music_note_rounded, const [Color(0xFFFF7A90), Color(0xFFF2213B)], onOpenMusicPlayer),
       _App('Browser', Icons.explore_outlined, const [Color(0xFF7DD3FC), Color(0xFF0369A1)], onOpenBrowser),
-      _App('Settings', Icons.settings_rounded, const [Color(0xFFE5E7EB), Color(0xFF8E8E93)], onOpenSettings, glyph: const Color(0xFF3A3A3C)),
     ];
 
     final width = MediaQuery.of(context).size.width;

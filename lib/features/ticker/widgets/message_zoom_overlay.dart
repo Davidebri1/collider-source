@@ -68,19 +68,19 @@ class MessageZoomOverlay extends StatelessWidget {
       children: [
         VScrim(onTap: onClose),
         SafeArea(
+          // PRD R18 / Surfaces (Message zoom): no frame, faded edges, blur or
+          // dim behind it (the scrim), centred.
           child: Align(
-            alignment: Alignment.topCenter,
+            alignment: Alignment.center,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(VSpace.md, 40, VSpace.md, 0),
+              padding: const EdgeInsets.symmetric(horizontal: VSpace.md),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   ConstrainedBox(
                     constraints: BoxConstraints(maxWidth: VOverlay.menuWidth(context), maxHeight: size.height * 0.42),
-                    child: VGlass(
-                      material: VMaterial.modal,
-                      radius: VRadius.xl,
-                      padding: const EdgeInsets.fromLTRB(VSpace.lg, VSpace.md, VSpace.md, VSpace.md),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(VSpace.sm, VSpace.md, VSpace.sm, VSpace.md),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
