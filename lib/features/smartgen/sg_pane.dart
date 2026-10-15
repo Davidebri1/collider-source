@@ -202,24 +202,29 @@ class _SgPaneState extends State<SgPane> {
   Widget _glassChoice({required String label, required bool selected, required ValueChanged<bool> onSelected, double size = 12}) {
     final ink = selected ? const Color(0xFF1C1B19) : Colors.white;
     final style = appFont(fontSize: size, fontWeight: selected ? FontWeight.w700 : FontWeight.w500, color: ink);
-    return ChoiceChip(
-      label: Text(label, style: style),
-      labelStyle: style,
-      selected: selected,
-      showCheckmark: false,
-      onSelected: onSelected,
-      visualDensity: VisualDensity.compact,
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      elevation: 0,
-      pressElevation: 0,
-      surfaceTintColor: Colors.transparent,
-      shadowColor: Colors.transparent,
-      selectedShadowColor: Colors.transparent,
-      side: BorderSide(color: selected ? const Color(0xFFFFFFFF) : const Color(0xB3FFFFFF), width: 1),
-      color: WidgetStateProperty.resolveWith((states) {
-        if (states.contains(WidgetState.selected)) return const Color(0xFFF7F4EF);
-        return const Color(0x14FFFFFF);
-      }),
+    // The chip's own material is an opaque dark slab on this theme. A
+    // transparent canvas lets the pane's glass show through the outline.
+    return Theme(
+      data: Theme.of(context).copyWith(canvasColor: Colors.transparent),
+      child: ChoiceChip(
+        label: Text(label, style: style),
+        labelStyle: style,
+        selected: selected,
+        showCheckmark: false,
+        onSelected: onSelected,
+        visualDensity: VisualDensity.compact,
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        elevation: 0,
+        pressElevation: 0,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
+        selectedShadowColor: Colors.transparent,
+        side: BorderSide(color: selected ? const Color(0xFFFFFFFF) : const Color(0xE6FFFFFF), width: 1),
+        color: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return const Color(0xFFF7F4EF);
+          return const Color(0x14FFFFFF);
+        }),
+      ),
     );
   }
 
