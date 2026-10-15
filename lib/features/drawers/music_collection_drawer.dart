@@ -5,6 +5,7 @@ import '../../core/vision/vision_kit.dart';
 import '../../core/audio/music_player.dart';
 import '../music/song_row_parts.dart';
 import '../theme/theme_living_media.dart';
+import '../../core/vision/cpane.dart';
 
 /// Music drawer (v8.3, DEVIATIONS.md D40): ported from the Figma music app
 /// (file YEuK4CL2uyECUhvGEcgCNS) instead of an own design:
@@ -26,33 +27,14 @@ class MusicCollectionDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = MusicPlayer.instance;
-    final size = MediaQuery.sizeOf(context);
-    final pad = MediaQuery.paddingOf(context);
-    final width = (size.width - 96).clamp(280.0, 460.0); // a pane, not full width
     return Stack(
       fit: StackFit.expand,
       children: [
         // v9.1.6: the shared depth scrim behind already blurs; tap-out only.
         GestureDetector(behavior: HitTestBehavior.opaque, onTap: onClose),
-        Positioned(
-          left: (size.width - width) / 2,
-          width: width,
-          top: pad.top + VSpace.xl,
-          bottom: pad.bottom + 84,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: const Color(0x2618181E), // lighter than workTint: the ticker reads through
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: AnimatedBuilder(animation: p, builder: (context, _) => _body(p)),
-              ),
-            ),
-          ),
-        ),
+        // v9.1.7: on CPane (centred, same width as every pane, one glass,
+        // layer elevation, shell reserve). Content unchanged.
+        CPane(child: AnimatedBuilder(animation: p, builder: (context, _) => _body(p))),
       ],
     );
   }

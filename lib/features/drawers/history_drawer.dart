@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../models/ticker_item.dart';
+import '../../../core/vision/cpane.dart';
 import '../../../core/vision/vision_kit.dart';
 import '../../../core/vision/selection.dart';
 
@@ -59,16 +60,9 @@ class _HistoryDrawerState extends State<HistoryDrawer> {
       fit: StackFit.expand,
       children: [
         VScrim(onTap: widget.onClose),
-        // v9.1.7: panes sit centred, never top-shifted (clear of the status
-        // bar above and the composer + nav bar below).
-        Align(
-          alignment: Alignment.center,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(VSpace.md, 56, VSpace.md, 150),
-            child: VWindow(
+        // v9.1.7: on CPane (centred, one glass, layer elevation, shell reserve).
+        CPaneWindow(
               title: 'History',
-              maxWidth: VOverlay.menuWidth(context),
-              maxHeight: VOverlay.menuMaxHeight(context),
               actions: [VCircleButton(icon: Icons.close_rounded, tooltip: 'Close', onTap: widget.onClose)],
               child: HistorySessionList(
                 sessions: sessions,
@@ -79,8 +73,6 @@ class _HistoryDrawerState extends State<HistoryDrawer> {
                 onLongPress: (x) => _sel.toggle(x.id),
               ),
             ),
-          ),
-        ),
         if (_sel.active)
           Positioned(
             left: 0,

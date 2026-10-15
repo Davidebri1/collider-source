@@ -16,6 +16,7 @@ import '../../../core/figma/figma_stage.dart';
 import '../../music/song_row_parts.dart';
 import '../../theme/theme_living_media.dart';
 import '../widgets/video_player_view.dart';
+import '../../../core/vision/cpane.dart';
 
 /// Map row 7 — Files. v8.4: a straight copy of Vision Pro Spatial UI Kit
 /// 71:7502 ("Albums", group 1336 x 835) at its own size, scaled as one unit
@@ -37,7 +38,9 @@ class FilesScreen extends StatefulWidget {
   static const cropWidth = 1336.4;
   static const center = Offset(668.2, 417.6);
   /// v9.1.6: portrait composition width (Figma px) on phones.
-  static const double phoneWidth = 560;
+  // v9.1.7 (CPane): composed 420 wide so it reads at ~0.68x inside the
+  // shared pane width (it was 560 scaled to the full phone width).
+  static const double phoneWidth = 420;
 
   @override
   State<FilesScreen> createState() => _FilesScreenState();
@@ -163,19 +166,21 @@ class _FilesScreenState extends State<FilesScreen> {
                 ],
               );
             }
+            // v9.1.7: on CPane (centred, same width as every pane, one glass,
+            // shell reserve); the Figma parts are laid out inside it.
+            return CPane(child: LayoutBuilder(builder: (context, c) {
             const pw = FilesScreen.phoneWidth;
             final s = c.maxWidth / pw;
             final ph = c.maxHeight / s;
-            final top = (MediaQuery.paddingOf(context).top + 60) / s;
-            // Clear the home composer and nav bar (playtest: filter bar overlapped the composer).
-            final panelH = ph - top - 200 / s;
+            const top = 0.0;
+            final panelH = ph - 36;
             return FigmaStage(
               frame: Size(pw, ph),
               cropWidth: pw,
               center: Offset(pw / 2, ph / 2),
               children: [
-                Positioned(left: 14, top: top, width: pw - 28, height: panelH, child: _main(title, files, cat, phone: true)),
-                Positioned(left: (pw - 394.1) / 2, top: top + panelH - 30, width: 394.1, height: 60.2, child: _segments()),
+                Positioned(left: 0, top: top, width: pw, height: panelH, child: _main(title, files, cat, phone: true)),
+                Positioned(left: (pw - 394.1) / 2, top: ph - 64, width: 394.1, height: 60.2, child: _segments()),
                 Positioned.fill(child: IgnorePointer(ignoring: !_side, child: AnimatedOpacity(
                   duration: VMotion.base, opacity: _side ? 1 : 0,
                   child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => setState(() => _side = false), child: const ColoredBox(color: Color(0x33000000))),
@@ -187,6 +192,7 @@ class _FilesScreenState extends State<FilesScreen> {
                 ),
               ],
             );
+            }));
           })),
           if (_sel.active) Positioned(left: 0, right: 0, bottom: 40, child: Center(child: _selBar(files))),
           Positioned(top: MediaQuery.paddingOf(context).top + 8, right: 8, child: VCloseButton(onTap: widget.onClose)),
@@ -329,12 +335,15 @@ class _FilesScreenState extends State<FilesScreen> {
   }
 
   Widget _main(String title, List<StoredFile> files, String cat, {bool phone = false}) {
-    final mw = phone ? FilesScreen.phoneWidth - 28 : 946.0;
+    final mw = phone ? FilesScreen.phoneWidth : 946.0;
     final tl = phone ? 96.0 : 40.0;
     final lib = cat == 'music' ? MusicPlayer.library : const <MusicTrack>[];
     final p = MusicPlayer.instance;
     final cur = p.current;
-    return FGlass(
+    // v9.1.7: on a phone the surface is the CPane around it (one glass).
+    Widget surface({required BorderRadius radius, required double blur, required Gradient gradient, required Widget child}) =>
+        phone ? child : FGlass(radius: radius, blur: blur, gradient: gradient, child: child);
+    return surface(
       radius: phone ? const BorderRadius.all(Radius.circular(52.8)) : const BorderRadius.only(topRight: Radius.circular(52.8), bottomRight: Radius.circular(52.8)),
       blur: 6, // ticker stays visible, blurred, behind Files
       gradient: const LinearGradient(begin: Alignment(-0.9, -1), end: Alignment(0.9, 1), colors: [Color(0x80262626), Color(0x80404040)]),
@@ -353,7 +362,7 @@ class _FilesScreenState extends State<FilesScreen> {
         Positioned(
           left: tl,
           top: 22,
-          width: mw - tl - 140,
+          width: mw - tl - 136,
           height: 34,
           child: cat == 'search'
               ? TextField(
@@ -364,7 +373,7 @@ class _FilesScreenState extends State<FilesScreen> {
                   style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: Colors.white),
                   decoration: const InputDecoration(border: InputBorder.none, isCollapsed: true, hintText: 'Search', hintStyle: TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: Color(0x66FFFFFF))),
                 )
-              : FText(title, size: 28.6, weight: FontWeight.w700, color: const Color(0xFFFAF9F5)),
+              : FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: FText(title, size: 28.6, weight: FontWeight.w700, color: const Color(0xFFFAF9F5))), // never cut off in the pane
         ),
         // Adding files is the real storage path (D22/D32); Figma has no add
         // control, so it sits on the title row's end (v8.4 note in D22).
@@ -406,7 +415,7 @@ class _FilesScreenState extends State<FilesScreen> {
                 )
               else
               SliverGrid(
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: phone ? 3 : 5, mainAxisSpacing: 13, crossAxisSpacing: 4, childAspectRatio: 170 / 217),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: phone ? 2 : 5, mainAxisSpacing: 13, crossAxisSpacing: 4, childAspectRatio: 170 / 217),
                 delegate: SliverChildBuilderDelegate((_, i) => _tile(files[i]), childCount: files.length),
               ),
               if (lib.isNotEmpty)

@@ -3,6 +3,7 @@ import '../../../models/ticker_item.dart';
 import '../../../models/model_def.dart';
 import '../../../core/vision/vision_kit.dart';
 import '../../drawers/history_drawer.dart';
+import '../../../core/vision/cpane.dart';
 
 /// REQ-14 Model Local History — the same notes-list window as the global
 /// history, headed by the model's avatar. Search covers titles and message bodies.
@@ -46,23 +47,16 @@ class _LocalHistoryPaneState extends State<LocalHistoryPane> {
       fit: StackFit.expand,
       children: [
         VScrim(onTap: widget.onClose),
-        Align(
-          alignment: Alignment.topCenter,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(VSpace.md, 56, VSpace.md, 0),
-            child: VWindow(
-              title: widget.modelDef.label,
-              maxWidth: VOverlay.menuWidth(context),
-              maxHeight: VOverlay.menuMaxHeight(context),
-              leading: VAvatar(label: widget.modelDef.label, color: widget.modelDef.providerColor, size: 34),
-              actions: [VCircleButton(icon: Icons.close_rounded, tooltip: 'Close', onTap: widget.onClose)],
-              child: HistorySessionList(
-                sessions: sessions,
-                searchController: _searchCtrl,
-                onQuery: (v) => setState(() => _query = v.trim()),
-                onSelect: widget.onSelectSession,
-              ),
-            ),
+        // v9.1.7: on CPane (centred, one glass, layer elevation, shell reserve).
+        CPaneWindow(
+          title: widget.modelDef.label,
+          leading: VAvatar(label: widget.modelDef.label, color: widget.modelDef.providerColor, size: 34),
+          actions: [VCircleButton(icon: Icons.close_rounded, tooltip: 'Close', onTap: widget.onClose)],
+          child: HistorySessionList(
+            sessions: sessions,
+            searchController: _searchCtrl,
+            onQuery: (v) => setState(() => _query = v.trim()),
+            onSelect: widget.onSelectSession,
           ),
         ),
       ],

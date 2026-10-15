@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
+import '../../../core/vision/cpane.dart';
 import '../../../core/api/media_gen.dart';
 import '../../../core/vision/vision_kit.dart';
 import '../kanban_store.dart';
@@ -11,9 +12,11 @@ import '../../../core/vision/selection.dart';
 /// Parses the Smart Gen agent's reply into the derived need, how the cards
 /// serve it, and the proposed cards. Kept out of the widget so it can be
 /// tested against the shapes a model actually returns.
-({String need, String serve, List<(String title, String note)> cards}) parseSmartGen(String out) {
+({String need, String serve, List<(String title, String note)> cards})
+    parseSmartGen(String out) {
   final need = RegExp(r'NEED:\s*(.+)').firstMatch(out)?.group(1)?.trim() ?? '';
-  final serve = RegExp(r'SERVE:\s*(.+)').firstMatch(out)?.group(1)?.trim() ?? '';
+  final serve =
+      RegExp(r'SERVE:\s*(.+)').firstMatch(out)?.group(1)?.trim() ?? '';
   final block = RegExp(r'CARDS:\s*([\s\S]+)').firstMatch(out)?.group(1) ?? '';
   final cards = <(String, String)>[];
   for (final line in const LineSplitter().convert(block)) {
@@ -22,7 +25,8 @@ import '../../../core/vision/selection.dart';
     final parts = t.substring(1).trim().split('|');
     final title = parts.first.trim();
     if (title.isEmpty) continue;
-    cards.add((title, parts.length > 1 ? parts.sublist(1).join('|').trim() : ''));
+    cards.add(
+        (title, parts.length > 1 ? parts.sublist(1).join('|').trim() : ''));
     if (cards.length == 6) break;
   }
   return (need: need, serve: serve, cards: cards);
@@ -38,10 +42,12 @@ import '../../../core/vision/selection.dart';
 /// card's detail sheet rather than on its face.
 class SmartGenScreen extends StatefulWidget {
   final VoidCallback onClose;
+
   /// v9.1.7 (#24): the tool picked on the overlaying side nav.
   final String section;
 
-  const SmartGenScreen({super.key, required this.onClose, this.section = 'tasks'});
+  const SmartGenScreen(
+      {super.key, required this.onClose, this.section = 'tasks'});
 
   @override
   State<SmartGenScreen> createState() => _SmartGenScreenState();
@@ -50,7 +56,8 @@ class SmartGenScreen extends StatefulWidget {
 class _SmartGenScreenState extends State<SmartGenScreen> {
   final KanbanStore _store = KanbanStore.instance;
   final Selection<String> _sel = Selection<String>();
-  void _tapCard(KanbanCard c) => _sel.active ? _sel.toggle(c.id) : _openDetail(c);
+  void _tapCard(KanbanCard c) =>
+      _sel.active ? _sel.toggle(c.id) : _openDetail(c);
   final ScrollController _strip = ScrollController();
   int _col = 0;
   bool _generating = false;
@@ -59,9 +66,23 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
 
   // Nimo widget card fills (light), with their accent for the card's picture
   // and its header mark.
-  static const List<Color> palette = [Color(0xFFDDE8FB), Color(0xFFF6DEE7), Color(0xFFDAF1E4), Color(0xFFF5EDD8)];
-  static const List<Color> accents = [Color(0xFF2F6FE4), Color(0xFFD9466F), Color(0xFF1F9D63), Color(0xFFC08A12)];
-  static const List<IconData> colIcons = [Icons.radio_button_unchecked_rounded, Icons.timelapse_rounded, Icons.check_circle_outline_rounded];
+  static const List<Color> palette = [
+    Color(0xFFDDE8FB),
+    Color(0xFFF6DEE7),
+    Color(0xFFDAF1E4),
+    Color(0xFFF5EDD8)
+  ];
+  static const List<Color> accents = [
+    Color(0xFF2F6FE4),
+    Color(0xFFD9466F),
+    Color(0xFF1F9D63),
+    Color(0xFFC08A12)
+  ];
+  static const List<IconData> colIcons = [
+    Icons.radio_button_unchecked_rounded,
+    Icons.timelapse_rounded,
+    Icons.check_circle_outline_rounded
+  ];
 
   // The strip is the only scroller on the screen; its height is fixed so the
   // rail can be centred over the hero above it.
@@ -132,12 +153,17 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
       setState(() => _generating = false);
       await showVAlert(
         context,
-        icon: made > 0 ? Icons.check_circle_outline_rounded : Icons.error_outline_rounded,
-        title: made > 0 ? '$made card${made == 1 ? '' : 's'} added' : 'No cards to add',
+        icon: made > 0
+            ? Icons.check_circle_outline_rounded
+            : Icons.error_outline_rounded,
+        title: made > 0
+            ? '$made card${made == 1 ? '' : 's'} added'
+            : 'No cards to add',
         message: [
           if (parsed.need.isNotEmpty) 'Need: ${parsed.need}',
           if (parsed.serve.isNotEmpty) 'Serve: ${parsed.serve}',
-          if (made == 0) 'The agent returned no usable cards. Add a card or two first so it has something to read.',
+          if (made == 0)
+            'The agent returned no usable cards. Add a card or two first so it has something to read.',
         ].join('\n\n'),
         actions: const [VAlertChoice('OK')],
       );
@@ -166,16 +192,21 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
       transitionBuilder: (_, a, __, child) => FadeTransition(
         opacity: a,
         child: ScaleTransition(
-          scale: Tween(begin: 0.96, end: 1.0).animate(CurvedAnimation(parent: a, curve: Curves.easeOutCubic)),
+          scale: Tween(begin: 0.96, end: 1.0)
+              .animate(CurvedAnimation(parent: a, curve: Curves.easeOutCubic)),
           child: child,
         ),
       ),
-      pageBuilder: (ctx, _, __) => _CardSheet(card: c, accent: accents[c.color % accents.length], startEditing: editing),
+      pageBuilder: (ctx, _, __) => _CardSheet(
+          card: c,
+          accent: accents[c.color % accents.length],
+          startEditing: editing),
     );
   }
 
   Future<void> _menu(KanbanCard c, Rect anchor) async {
-    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox?;
+    final overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox?;
     if (overlay == null) return;
     final screen = overlay.size;
     final choice = await showGeneralDialog<String>(
@@ -184,12 +215,15 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
       barrierLabel: 'Close',
       barrierColor: Colors.transparent,
       transitionDuration: const Duration(milliseconds: 150),
-      transitionBuilder: (_, a, __, child) => FadeTransition(opacity: a, child: child),
+      transitionBuilder: (_, a, __, child) =>
+          FadeTransition(opacity: a, child: child),
       pageBuilder: (ctx, _, __) {
         const w = 220.0;
         final left = (anchor.right - w).clamp(8.0, screen.width - w - 8);
         final below = anchor.bottom + 6;
-        final top = below + 260 > screen.height ? (anchor.top - 266).clamp(8.0, screen.height) : below;
+        final top = below + 260 > screen.height
+            ? (anchor.top - 266).clamp(8.0, screen.height)
+            : below;
         return Stack(children: [
           Positioned(
             left: left,
@@ -197,13 +231,28 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
             child: Material(
               type: MaterialType.transparency,
               child: GlassMenu(width: w, rows: [
-                GlassMenuRow(icon: Icons.edit_outlined, label: 'Edit', onTap: () => Navigator.of(ctx).pop('edit')),
-                GlassMenuRow(icon: Icons.check_circle_outline_rounded, label: 'Select', onTap: () => Navigator.of(ctx).pop('select')),
+                GlassMenuRow(
+                    icon: Icons.edit_outlined,
+                    label: 'Edit',
+                    onTap: () => Navigator.of(ctx).pop('edit')),
+                GlassMenuRow(
+                    icon: Icons.check_circle_outline_rounded,
+                    label: 'Select',
+                    onTap: () => Navigator.of(ctx).pop('select')),
                 for (var i = 0; i < KanbanStore.columns.length; i++)
                   if (i != c.column)
-                    GlassMenuRow(icon: colIcons[i], label: 'Move to ${KanbanStore.columns[i]}', onTap: () => Navigator.of(ctx).pop('move$i')),
-                GlassMenuRow(icon: Icons.palette_outlined, label: 'Colour', onTap: () => Navigator.of(ctx).pop('color')),
-                GlassMenuRow(icon: Icons.delete_outline_rounded, label: 'Delete', onTap: () => Navigator.of(ctx).pop('delete')),
+                    GlassMenuRow(
+                        icon: colIcons[i],
+                        label: 'Move to ${KanbanStore.columns[i]}',
+                        onTap: () => Navigator.of(ctx).pop('move$i')),
+                GlassMenuRow(
+                    icon: Icons.palette_outlined,
+                    label: 'Colour',
+                    onTap: () => Navigator.of(ctx).pop('color')),
+                GlassMenuRow(
+                    icon: Icons.delete_outline_rounded,
+                    label: 'Delete',
+                    onTap: () => Navigator.of(ctx).pop('delete')),
               ]),
             ),
           ),
@@ -225,7 +274,10 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
         icon: Icons.delete_outline_rounded,
         title: 'Delete card?',
         message: c.title.isEmpty ? null : c.title,
-        actions: const [VAlertChoice('Delete', destructive: true), VAlertChoice('Cancel')],
+        actions: const [
+          VAlertChoice('Delete', destructive: true),
+          VAlertChoice('Cancel')
+        ],
       );
       if (i == 0) await _store.remove(c);
     }
@@ -235,72 +287,75 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
   // "Smart Gen Workspace" + search on top, the section's content, and the
   // section ornament under the pane. Sections are the PRD's five tools
   // (functional-spec.txt line 21). No close button: swipe or tap outside.
-  static const _sections = ['Tasks & Kanban', 'Projects', 'Reminders', 'Memories', 'Artifacts'];
-  static const _sectionIcons = [Icons.view_kanban_outlined, Icons.folder_outlined, Icons.alarm_rounded, Icons.psychology_outlined, Icons.description_outlined];
-  static const _sectionKeys = ['tasks', 'projects', 'reminders', 'memories', 'artifacts'];
-  int get _section => _sectionKeys.indexOf(widget.section).clamp(0, _sectionKeys.length - 1);
+  static const _sections = [
+    'Tasks & Kanban',
+    'Projects',
+    'Reminders',
+    'Memories',
+    'Artifacts'
+  ];
+  static const _sectionIcons = [
+    Icons.view_kanban_outlined,
+    Icons.folder_outlined,
+    Icons.alarm_rounded,
+    Icons.psychology_outlined,
+    Icons.description_outlined
+  ];
+  static const _sectionKeys = [
+    'tasks',
+    'projects',
+    'reminders',
+    'memories',
+    'artifacts'
+  ];
+  int get _section =>
+      _sectionKeys.indexOf(widget.section).clamp(0, _sectionKeys.length - 1);
   String _q = '';
 
   @override
   Widget build(BuildContext context) {
-    final w = MediaQuery.sizeOf(context).width;
-    final paneW = (w * 0.72).clamp(280.0, 520.0);
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(0, 40, 0, 120),
-        child: Center(
-          child: SizedBox(
-            width: paneW,
-            child: Column(children: [
+    // v9.1.7: on CPane (centred, one glass, layer elevation, shell reserve).
+    return CPane(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+              VSpace.md, VSpace.md, VSpace.md, VSpace.sm),
+          child: Text('Smart Gen Workspace',
+              style: VType.headline(color: Colors.white)),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: VSpace.sm),
+          child: Container(
+            height: 36,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+                color: const Color(0x33000000),
+                borderRadius: BorderRadius.circular(999)),
+            child: Row(children: [
+              const Icon(Icons.search_rounded, size: 18, color: Colors.white70),
+              const SizedBox(width: 8),
               Expanded(
-                child: Container(
-                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(VRadius.xl), boxShadow: VElev.e6),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(VRadius.xl),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(VRadius.xl),
-                          border: Border.all(color: const Color(0x26FFFFFF)),
-                          gradient: const LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0x40606060), Color(0x38505858)]),
-                        ),
-                        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(VSpace.md, VSpace.md, VSpace.md, VSpace.sm),
-                            child: Text('Smart Gen Workspace', style: VType.headline(color: Colors.white)),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: VSpace.sm),
-                            child: Container(
-                              height: 36,
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
-                              decoration: BoxDecoration(color: const Color(0x33000000), borderRadius: BorderRadius.circular(999)),
-                              child: Row(children: [
-                                const Icon(Icons.search_rounded, size: 18, color: Colors.white70),
-                                const SizedBox(width: 8),
-                                Expanded(child: TextField(
-                                  onChanged: (v) => setState(() => _q = v.trim().toLowerCase()),
-                                  cursorColor: Colors.white,
-                                  style: const TextStyle(color: Colors.white, fontSize: 15),
-                                  decoration: const InputDecoration(isCollapsed: true, border: InputBorder.none, hintText: 'Search workspace', hintStyle: TextStyle(color: Colors.white54, fontSize: 15)),
-                                )),
-                              ]),
-                            ),
-                          ),
-                          const SizedBox(height: VSpace.sm),
-                          Expanded(child: _section == 0 ? _tasks() : Center(child: Text('Nothing yet', style: VType.callout(color: Colors.white70)))),
-                        ]),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              // v9.1.7 (#24): the tools moved to the overlaying side nav.
+                  child: TextField(
+                onChanged: (v) => setState(() => _q = v.trim().toLowerCase()),
+                cursorColor: Colors.white,
+                style: const TextStyle(color: Colors.white, fontSize: 15),
+                decoration: const InputDecoration(
+                    isCollapsed: true,
+                    border: InputBorder.none,
+                    hintText: 'Search workspace',
+                    hintStyle: TextStyle(color: Colors.white54, fontSize: 15)),
+              )),
             ]),
           ),
         ),
-      ),
+        const SizedBox(height: VSpace.sm),
+        Expanded(
+            child: _section == 0
+                ? _tasks()
+                : Center(
+                    child: Text('Nothing yet',
+                        style: VType.callout(color: Colors.white70)))),
+      ]),
     );
   }
 
@@ -309,42 +364,59 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
   Widget _tasks() {
     return Stack(children: [
       Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Padding(padding: const EdgeInsets.symmetric(horizontal: VSpace.xs), child: FittedBox(fit: BoxFit.scaleDown, child: _rail())), // never clipped
-        Expanded(child: ListenableBuilder(listenable: _sel, builder: (_, __) => _board())),
+        Padding(
+            padding: const EdgeInsets.symmetric(horizontal: VSpace.xs),
+            child: FittedBox(
+                fit: BoxFit.scaleDown, child: _rail())), // never clipped
+        Expanded(
+            child: ListenableBuilder(
+                listenable: _sel, builder: (_, __) => _board())),
       ]),
-              ListenableBuilder(
-                listenable: _sel,
-                builder: (context, _) => !_sel.active
-                    ? const SizedBox.shrink()
-                    : Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: _stripH + VSpace.lg,
-                        child: Center(
-                          child: SelectionBar(
-                            count: _sel.count,
-                            onSelectAll: () => _sel.all(_store.allCards.map((c) => c.id)),
-                            onDone: _sel.clear,
-                            actions: [
-                              SelectionAction(Icons.drive_file_move_outline, 'Move', () async {
-                                final ids = _sel.ids;
-                                final col = (_store.allCards.firstWhere((c) => ids.contains(c.id)).column + 1) % KanbanStore.columns.length;
-                                await _store.modifyMany(ids, column: col);
-                              }),
-                              SelectionAction(Icons.palette_outlined, 'Colour', () async {
-                                final ids = _sel.ids;
-                                final col = (_store.allCards.firstWhere((c) => ids.contains(c.id)).color + 1) % palette.length;
-                                await _store.modifyMany(ids, color: col);
-                              }),
-                              SelectionAction(Icons.delete_outline_rounded, 'Delete', () async {
-                                await _store.removeMany(_sel.ids);
-                                _sel.clear();
-                              }, destructive: true),
-                            ],
-                          ),
-                        ),
-                      ),
+      ListenableBuilder(
+        listenable: _sel,
+        builder: (context, _) => !_sel.active
+            ? const SizedBox.shrink()
+            : Positioned(
+                left: 0,
+                right: 0,
+                bottom: _stripH + VSpace.lg,
+                child: Center(
+                  child: SelectionBar(
+                    count: _sel.count,
+                    onSelectAll: () =>
+                        _sel.all(_store.allCards.map((c) => c.id)),
+                    onDone: _sel.clear,
+                    actions: [
+                      SelectionAction(Icons.drive_file_move_outline, 'Move',
+                          () async {
+                        final ids = _sel.ids;
+                        final col = (_store.allCards
+                                    .firstWhere((c) => ids.contains(c.id))
+                                    .column +
+                                1) %
+                            KanbanStore.columns.length;
+                        await _store.modifyMany(ids, column: col);
+                      }),
+                      SelectionAction(Icons.palette_outlined, 'Colour',
+                          () async {
+                        final ids = _sel.ids;
+                        final col = (_store.allCards
+                                    .firstWhere((c) => ids.contains(c.id))
+                                    .color +
+                                1) %
+                            palette.length;
+                        await _store.modifyMany(ids, color: col);
+                      }),
+                      SelectionAction(Icons.delete_outline_rounded, 'Delete',
+                          () async {
+                        await _store.removeMany(_sel.ids);
+                        _sel.clear();
+                      }, destructive: true),
+                    ],
+                  ),
+                ),
               ),
+      ),
     ]);
   }
 
@@ -368,11 +440,27 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
                 child: Container(
                   height: 36,
                   padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(color: i == _col ? const Color(0xE6FFFFFF) : const Color(0x26FFFFFF), borderRadius: BorderRadius.circular(18)),
+                  decoration: BoxDecoration(
+                      color: i == _col
+                          ? const Color(0xE6FFFFFF)
+                          : const Color(0x26FFFFFF),
+                      borderRadius: BorderRadius.circular(18)),
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(colIcons[i], size: 16, color: cand.isNotEmpty ? VColors.accentBlue : (i == _col ? const Color(0xFF111111) : Colors.white)),
+                    Icon(colIcons[i],
+                        size: 16,
+                        color: cand.isNotEmpty
+                            ? VColors.accentBlue
+                            : (i == _col
+                                ? const Color(0xFF111111)
+                                : Colors.white)),
                     const SizedBox(width: 6),
-                    Text(KanbanStore.columns[i], style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: i == _col ? const Color(0xFF111111) : Colors.white)),
+                    Text(KanbanStore.columns[i],
+                        style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: i == _col
+                                ? const Color(0xFF111111)
+                                : Colors.white)),
                   ]),
                 ),
               ),
@@ -385,9 +473,13 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
 
   Widget _board() {
     if (!_store.loaded) return const SizedBox.shrink();
-    final cards = _store.inColumn(_col).where((c) => _q.isEmpty || c.title.toLowerCase().contains(_q)).toList();
+    final cards = _store
+        .inColumn(_col)
+        .where((c) => _q.isEmpty || c.title.toLowerCase().contains(_q))
+        .toList();
     return Padding(
-      padding: const EdgeInsets.fromLTRB(VSpace.xs, VSpace.sm, VSpace.xs, VSpace.xs),
+      padding:
+          const EdgeInsets.fromLTRB(VSpace.xs, VSpace.sm, VSpace.xs, VSpace.xs),
       child: Column(
         children: [
           Expanded(child: _hero(cards.isEmpty ? null : cards.first)),
@@ -414,49 +506,70 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
           shadow: VShadow.heavy,
           // v9.1.6: a real empty state: what this board is, and one clear
           // way to start (no blank tinted plate).
-          child: ColoredBox(color: const Color(0x14FFFFFF), child: Stack(children: [
-            Positioned.fill(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: VSpace.lg),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 64, height: 64,
-                      decoration: const BoxDecoration(color: Color(0x26FFFFFF), shape: BoxShape.circle),
-                      child: const Icon(Icons.auto_awesome_rounded, size: 30, color: Colors.white),
-                    ),
-                    const SizedBox(height: VSpace.md),
-                    Text(_col == 0 ? 'Nothing to do yet' : (_col == 1 ? 'Nothing in progress' : 'Nothing finished yet'),
-                        textAlign: TextAlign.center, style: VType.headline()),
-                    const SizedBox(height: VSpace.xs),
-                    Text(
-                      _col == 0
-                          ? 'Add a task and Smart Gen turns it into a card with a picture and next steps.'
-                          : 'Cards move here when you drag them or mark them from the card menu.',
-                      textAlign: TextAlign.center,
-                      style: VType.callout(color: const Color(0xD9FFFFFF)),
-                    ),
-                    if (_col == 0) ...[
-                      const SizedBox(height: VSpace.lg),
-                      VPress(
-                        onTap: _add,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
-                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(999)),
-                          child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                            Icon(Icons.add_rounded, size: 20, color: Color(0xFF111111)),
-                            SizedBox(width: 6),
-                            Text('New card', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF111111))),
-                          ]),
+          child: ColoredBox(
+              color: const Color(0x14FFFFFF),
+              child: Stack(children: [
+                Positioned.fill(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: VSpace.lg),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 64,
+                          height: 64,
+                          decoration: const BoxDecoration(
+                              color: Color(0x26FFFFFF), shape: BoxShape.circle),
+                          child: const Icon(Icons.auto_awesome_rounded,
+                              size: 30, color: Colors.white),
                         ),
-                      ),
-                    ],
-                  ],
+                        const SizedBox(height: VSpace.md),
+                        Text(
+                            _col == 0
+                                ? 'Nothing to do yet'
+                                : (_col == 1
+                                    ? 'Nothing in progress'
+                                    : 'Nothing finished yet'),
+                            textAlign: TextAlign.center,
+                            style: VType.headline()),
+                        const SizedBox(height: VSpace.xs),
+                        Text(
+                          _col == 0
+                              ? 'Add a task and Smart Gen turns it into a card with a picture and next steps.'
+                              : 'Cards move here when you drag them or mark them from the card menu.',
+                          textAlign: TextAlign.center,
+                          style: VType.callout(color: const Color(0xD9FFFFFF)),
+                        ),
+                        if (_col == 0) ...[
+                          const SizedBox(height: VSpace.lg),
+                          VPress(
+                            onTap: _add,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 22, vertical: 12),
+                              decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(999)),
+                              child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.add_rounded,
+                                        size: 20, color: Color(0xFF111111)),
+                                    SizedBox(width: 6),
+                                    Text('New card',
+                                        style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                            color: Color(0xFF111111))),
+                                  ]),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ),
-          ])),
+              ])),
         ),
       );
     }
@@ -465,10 +578,24 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
       data: c,
       feedback: Material(
         type: MaterialType.transparency,
-        child: SizedBox(width: 240, height: 300, child: _HeroView(card: c, accent: accent, onOpen: () => _openDetail(c), dragging: true)),
+        child: SizedBox(
+            width: 240,
+            height: 300,
+            child: _HeroView(
+                card: c,
+                accent: accent,
+                onOpen: () => _openDetail(c),
+                dragging: true)),
       ),
-      childWhenDragging: Opacity(opacity: 0.4, child: _HeroView(card: c, accent: accent, onOpen: () => _openDetail(c))),
-      child: _HeroView(card: c, accent: accent, onOpen: () => _tapCard(c), controls: controls),
+      childWhenDragging: Opacity(
+          opacity: 0.4,
+          child:
+              _HeroView(card: c, accent: accent, onOpen: () => _openDetail(c))),
+      child: _HeroView(
+          card: c,
+          accent: accent,
+          onOpen: () => _tapCard(c),
+          controls: controls),
     );
   }
 
@@ -489,8 +616,16 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
           if (_generating)
             const SizedBox(width: 32, height: 32, child: Center(child: _Busy()))
           else
-            VCircleButton(icon: Icons.psychology_alt_outlined, size: 32, tooltip: 'Smart Gen agent', onTap: _generate),
-          VCircleButton(icon: Icons.add_rounded, size: 32, tooltip: 'New card', onTap: _add),
+            VCircleButton(
+                icon: Icons.psychology_alt_outlined,
+                size: 32,
+                tooltip: 'Smart Gen agent',
+                onTap: _generate),
+          VCircleButton(
+              icon: Icons.add_rounded,
+              size: 32,
+              tooltip: 'New card',
+              onTap: _add),
         ],
       ),
     );
@@ -502,7 +637,8 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
     final box = context.findRenderObject() as RenderBox?;
     if (box == null) return Offset.zero & const Size(32, 32);
     final size = box.size;
-    return (box.localToGlobal(Offset(size.width - 96, size.height - 44))) & const Size(32, 32);
+    return (box.localToGlobal(Offset(size.width - 96, size.height - 44))) &
+        const Size(32, 32);
   }
 
   /// The rest of the column as a horizontal strip: pictures, edge fades,
@@ -511,7 +647,9 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
     final empty = SizedBox(
       height: _stripH,
       child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Text('Nothing in ${KanbanStore.columns[_col]} yet.\nTap to add a card.', style: const TextStyle(fontSize: 15, color: Colors.white, height: 1.35)),
+        Text('Nothing in ${KanbanStore.columns[_col]} yet.\nTap to add a card.',
+            style: const TextStyle(
+                fontSize: 15, color: Colors.white, height: 1.35)),
         const SizedBox(width: 14),
         VPress(
           onTap: _add,
@@ -519,11 +657,14 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
           child: Container(
             width: 72,
             height: 72,
-            decoration: BoxDecoration(borderRadius: BorderRadius.circular(VRadius.lg), boxShadow: VShadow.medium),
+            decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(VRadius.lg),
+                boxShadow: VShadow.medium),
             child: _Plate(
               seed: 11,
               accent: accents[_col % accents.length],
-              center: const Icon(Icons.add_rounded, size: 26, color: VColors.textSecondary),
+              center: const Icon(Icons.add_rounded,
+                  size: 26, color: VColors.textSecondary),
             ),
           ),
         ),
@@ -532,10 +673,12 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
     return NotificationListener<ScrollNotification>(
       onNotification: (n) {
         final m = n.metrics;
-        if (m.maxScrollExtent == _stripMax && m.pixels == _stripAt) return false;
+        if (m.maxScrollExtent == _stripMax && m.pixels == _stripAt)
+          return false;
         // Metrics can arrive mid-layout; move the rebuild past the frame.
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted || (m.maxScrollExtent == _stripMax && m.pixels == _stripAt)) return;
+          if (!mounted ||
+              (m.maxScrollExtent == _stripMax && m.pixels == _stripAt)) return;
           setState(() {
             _stripMax = m.maxScrollExtent;
             _stripAt = m.pixels;
@@ -557,23 +700,25 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
       fade: 22,
       child: SizedBox(
         height: _stripH,
-        child: EdgeFade(fadeHeight: 24, child: ListView.separated(
-          controller: _strip,
-          scrollDirection: Axis.horizontal,
-          physics: const BouncingScrollPhysics(),
-          itemCount: rest.length,
-          separatorBuilder: (_, __) => const SizedBox(width: VSpace.xs),
-          itemBuilder: (_, i) {
-            final c = rest[i];
-            return _CardFace(
-              card: c,
-              accent: accents[c.color % accents.length],
-              onOpen: () => _tapCard(c),
-              selected: _sel.has(c.id),
-              onMenu: _menu,
-            );
-          },
-        )),
+        child: EdgeFade(
+            fadeHeight: 24,
+            child: ListView.separated(
+              controller: _strip,
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              itemCount: rest.length,
+              separatorBuilder: (_, __) => const SizedBox(width: VSpace.xs),
+              itemBuilder: (_, i) {
+                final c = rest[i];
+                return _CardFace(
+                  card: c,
+                  accent: accents[c.color % accents.length],
+                  onOpen: () => _tapCard(c),
+                  selected: _sel.has(c.id),
+                  onMenu: _menu,
+                );
+              },
+            )),
       ),
     );
   }
@@ -590,7 +735,12 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
 /// its foot, and a ⋯ over its corner. Long-press it and drop it on a column in
 /// the rail to move it.
 class _CardFace extends StatelessWidget {
-  const _CardFace({required this.card, required this.accent, required this.onOpen, required this.onMenu, this.selected = false});
+  const _CardFace(
+      {required this.card,
+      required this.accent,
+      required this.onOpen,
+      required this.onMenu,
+      this.selected = false});
 
   final bool selected;
 
@@ -605,7 +755,11 @@ class _CardFace extends StatelessWidget {
       data: card,
       feedback: Material(
         type: MaterialType.transparency,
-        child: SizedBox(width: 116, height: 116, child: Opacity(opacity: 0.92, child: _face(context, dragging: true))),
+        child: SizedBox(
+            width: 116,
+            height: 116,
+            child:
+                Opacity(opacity: 0.92, child: _face(context, dragging: true))),
       ),
       childWhenDragging: Opacity(opacity: 0.35, child: _face(context)),
       child: _face(context),
@@ -619,16 +773,31 @@ class _CardFace extends StatelessWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Expanded(
           child: Container(
-            decoration: selected ? BoxDecoration(borderRadius: BorderRadius.circular(VRadius.md + 2), border: Border.all(color: const Color(0xFF0A84FF), width: 2)) : null,
+            decoration: selected
+                ? BoxDecoration(
+                    borderRadius: BorderRadius.circular(VRadius.md + 2),
+                    border:
+                        Border.all(color: const Color(0xFF0A84FF), width: 2))
+                : null,
             child: _Panel(
               shadow: dragging ? VShadow.heavy : VShadow.medium,
-              child: VPress(onTap: onOpen, child: _Plate(seed: card.id.hashCode, accent: accent, overlay: const SizedBox.shrink())),
+              child: VPress(
+                  onTap: onOpen,
+                  child: _Plate(
+                      seed: card.id.hashCode,
+                      accent: accent,
+                      overlay: const SizedBox.shrink())),
             ),
           ),
         ),
         const SizedBox(height: 4),
         Row(children: [
-          Expanded(child: Text(card.title, maxLines: 2, softWrap: true, style: VType.footnote(color: Colors.white, weight: FontWeight.w600))),
+          Expanded(
+              child: Text(card.title,
+                  maxLines: 2,
+                  softWrap: true,
+                  style: VType.footnote(
+                      color: Colors.white, weight: FontWeight.w600))),
           if (!dragging)
             Builder(
               builder: (more) => VPress(
@@ -638,20 +807,28 @@ class _CardFace extends StatelessWidget {
                   if (b == null) return;
                   onMenu(card, b.localToGlobal(Offset.zero) & b.size);
                 },
-                child: const SizedBox(width: 24, height: 24, child: Icon(Icons.more_horiz_rounded, size: 18, color: Colors.white)),
+                child: const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: Icon(Icons.more_horiz_rounded,
+                        size: 18, color: Colors.white)),
               ),
             ),
         ]),
       ]),
     );
-
   }
 }
 
 /// The hero card: a picture filling the panel, one short name over its foot,
 /// and the control strip if the screen passed one in.
 class _HeroView extends StatelessWidget {
-  const _HeroView({required this.card, required this.accent, required this.onOpen, this.controls, this.dragging = false});
+  const _HeroView(
+      {required this.card,
+      required this.accent,
+      required this.onOpen,
+      this.controls,
+      this.dragging = false});
 
   final KanbanCard card;
   final Color accent;
@@ -669,12 +846,22 @@ class _HeroView extends StatelessWidget {
         Expanded(
           child: _Panel(
             shadow: VShadow.heavy,
-            child: VPress(onTap: onOpen, child: _Plate(seed: card.id.hashCode, accent: accent, overlay: const SizedBox.shrink())),
+            child: VPress(
+                onTap: onOpen,
+                child: _Plate(
+                    seed: card.id.hashCode,
+                    accent: accent,
+                    overlay: const SizedBox.shrink())),
           ),
         ),
         const SizedBox(height: VSpace.xs),
         Row(children: [
-          Expanded(child: Text(card.title, maxLines: 2, softWrap: true, style: VType.callout(color: Colors.white, weight: FontWeight.w600))),
+          Expanded(
+              child: Text(card.title,
+                  maxLines: 2,
+                  softWrap: true,
+                  style: VType.callout(
+                      color: Colors.white, weight: FontWeight.w600))),
           if (controls != null) controls!,
         ]),
       ]),
@@ -683,7 +870,9 @@ class _HeroView extends StatelessWidget {
 }
 
 /// Text that sits over a picture needs its own shadow, not the panel's.
-const List<Shadow> _textShadow = [Shadow(color: Color(0x99000000), blurRadius: 12)];
+const List<Shadow> _textShadow = [
+  Shadow(color: Color(0x99000000), blurRadius: 12)
+];
 
 /// A floating rounded surface with a real drop shadow. The picture planes are
 /// opaque, so the shadow is what lifts them off the scene.
@@ -696,8 +885,10 @@ class _Panel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: BoxDecoration(borderRadius: BorderRadius.circular(VRadius.lg), boxShadow: shadow),
-      child: ClipRRect(borderRadius: BorderRadius.circular(VRadius.lg), child: child),
+      decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(VRadius.lg), boxShadow: shadow),
+      child: ClipRRect(
+          borderRadius: BorderRadius.circular(VRadius.lg), child: child),
     );
   }
 }
@@ -706,7 +897,11 @@ class _Panel extends StatelessWidget {
 /// from the card's id and colour: soft overlapping fields, so a card is never
 /// a blank box. [center] is the empty state's small mark.
 class _Plate extends StatelessWidget {
-  const _Plate({required this.seed, required this.accent, this.overlay = const SizedBox.shrink(), this.center});
+  const _Plate(
+      {required this.seed,
+      required this.accent,
+      this.overlay = const SizedBox.shrink(),
+      this.center});
 
   final int seed;
   final Color accent;
@@ -722,7 +917,8 @@ class _Plate extends StatelessWidget {
         // Reads as depth rather than as a star field: a broad falloff only.
         const DecoratedBox(
           decoration: BoxDecoration(
-            color: const Color(0x00000000), // v9.1: flat frost, no painted gradient
+            color: const Color(
+                0x00000000), // v9.1: flat frost, no painted gradient
           ),
         ),
         if (center != null) Center(child: center!),
@@ -759,7 +955,8 @@ class _PlatePainter extends CustomPainter {
         c,
         s * (0.32 + _n(i + 13) * 0.45),
         Paint()
-          ..color = (i.isEven ? Colors.white : bright).withValues(alpha: 0.14 + _n(i + 19) * 0.12)
+          ..color = (i.isEven ? Colors.white : bright)
+              .withValues(alpha: 0.14 + _n(i + 19) * 0.12)
           ..maskFilter = MaskFilter.blur(BlurStyle.normal, s * 0.16),
       );
     }
@@ -772,7 +969,8 @@ class _PlatePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _PlatePainter old) => old.seed != seed || old.accent != accent;
+  bool shouldRepaint(covariant _PlatePainter old) =>
+      old.seed != seed || old.accent != accent;
 }
 
 /// The agent's own progress mark: a plain ring, no sparkle.
@@ -784,7 +982,8 @@ class _Busy extends StatelessWidget {
     return const SizedBox(
       width: 16,
       height: 16,
-      child: CircularProgressIndicator(strokeWidth: 1.6, color: VColors.textSecondary),
+      child: CircularProgressIndicator(
+          strokeWidth: 1.6, color: VColors.textSecondary),
     );
   }
 }
@@ -793,7 +992,8 @@ class _Busy extends StatelessWidget {
 /// that the card face deliberately does not carry. Opened over the window as
 /// an overlay surface, so it is its own glass, not glass inside glass.
 class _CardSheet extends StatefulWidget {
-  const _CardSheet({required this.card, required this.accent, this.startEditing = false});
+  const _CardSheet(
+      {required this.card, required this.accent, this.startEditing = false});
 
   final KanbanCard card;
   final Color accent;
@@ -804,8 +1004,10 @@ class _CardSheet extends StatefulWidget {
 }
 
 class _CardSheetState extends State<_CardSheet> {
-  late final TextEditingController _title = TextEditingController(text: widget.card.title);
-  late final TextEditingController _notes = TextEditingController(text: widget.card.notes);
+  late final TextEditingController _title =
+      TextEditingController(text: widget.card.title);
+  late final TextEditingController _notes =
+      TextEditingController(text: widget.card.notes);
   final FocusNode _titleFocus = FocusNode();
   final FocusNode _notesFocus = FocusNode();
   bool _editing = false;
@@ -818,7 +1020,8 @@ class _CardSheetState extends State<_CardSheet> {
     super.initState();
     _titleFocus.addListener(_focusChanged);
     _notesFocus.addListener(_focusChanged);
-    if (widget.startEditing) WidgetsBinding.instance.addPostFrameCallback((_) => _startEdit());
+    if (widget.startEditing)
+      WidgetsBinding.instance.addPostFrameCallback((_) => _startEdit());
   }
 
   @override
@@ -851,21 +1054,27 @@ class _CardSheetState extends State<_CardSheet> {
   void _commit() {
     if (!mounted) return;
     setState(() => _editing = false);
-    KanbanStore.instance.edit(widget.card, title: _title.text, notes: _notes.text);
+    KanbanStore.instance
+        .edit(widget.card, title: _title.text, notes: _notes.text);
     // A card with neither a title nor a note is dropped by the store, so the
     // sheet has nothing left to show.
-    if (_title.text.trim().isEmpty && _notes.text.trim().isEmpty) _close(commit: false);
+    if (_title.text.trim().isEmpty && _notes.text.trim().isEmpty)
+      _close(commit: false);
   }
 
   void _close({bool commit = true}) {
     if (commit && _editing) {
       setState(() => _editing = false);
-      KanbanStore.instance.edit(widget.card, title: _title.text, notes: _notes.text);
+      KanbanStore.instance
+          .edit(widget.card, title: _title.text, notes: _notes.text);
     }
     Navigator.of(context).pop();
   }
 
-  Widget _field(TextEditingController c, FocusNode f, {int maxLines = 1, TextInputAction action = TextInputAction.next, VoidCallback? onDone}) {
+  Widget _field(TextEditingController c, FocusNode f,
+      {int maxLines = 1,
+      TextInputAction action = TextInputAction.next,
+      VoidCallback? onDone}) {
     return TextField(
       controller: c,
       focusNode: f,
@@ -875,9 +1084,14 @@ class _CardSheetState extends State<_CardSheet> {
       textInputAction: action,
       onSubmitted: (_) => onDone?.call(),
       style: maxLines == 1
-          ? VType.callout(color: VColors.textPrimary, weight: FontWeight.w600).copyWith(height: 1.3)
-          : VType.footnote(color: _ink2, weight: FontWeight.w400).copyWith(height: 1.4),
-      decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.zero),
+          ? VType.callout(color: VColors.textPrimary, weight: FontWeight.w600)
+              .copyWith(height: 1.3)
+          : VType.footnote(color: _ink2, weight: FontWeight.w400)
+              .copyWith(height: 1.4),
+      decoration: const InputDecoration(
+          border: InputBorder.none,
+          isDense: true,
+          contentPadding: EdgeInsets.zero),
     );
   }
 
@@ -891,7 +1105,10 @@ class _CardSheetState extends State<_CardSheet> {
         child: _Plate(
           seed: c.id.hashCode,
           accent: widget.accent,
-          center: c.title.isEmpty ? const Icon(Icons.image_outlined, size: 28, color: VColors.textTertiary) : null,
+          center: c.title.isEmpty
+              ? const Icon(Icons.image_outlined,
+                  size: 28, color: VColors.textTertiary)
+              : null,
           overlay: const SizedBox.shrink(),
         ),
       ),
@@ -904,45 +1121,67 @@ class _CardSheetState extends State<_CardSheet> {
             child: Padding(
               padding: const EdgeInsets.all(VSpace.md),
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420, maxHeight: 620),
+                constraints:
+                    const BoxConstraints(maxWidth: 420, maxHeight: 620),
                 child: VGlass(
                   material: VMaterial.modal,
                   radius: VRadius.xl,
-                  padding: const EdgeInsets.fromLTRB(VSpace.md, VSpace.sm, VSpace.md, VSpace.md),
-                  child: EdgeFade(fadeHeight: 24, child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        picture,
-                        const SizedBox(height: VSpace.sm),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: VCircleButton(icon: Icons.close_rounded, tooltip: 'Close', onTap: _close),
+                  padding: const EdgeInsets.fromLTRB(
+                      VSpace.md, VSpace.sm, VSpace.md, VSpace.md),
+                  child: EdgeFade(
+                      fadeHeight: 24,
+                      child: SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            picture,
+                            const SizedBox(height: VSpace.sm),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: VCircleButton(
+                                  icon: Icons.close_rounded,
+                                  tooltip: 'Close',
+                                  onTap: _close),
+                            ),
+                            if (_editing)
+                              _field(_title, _titleFocus,
+                                  maxLines: 2,
+                                  onDone: () => _notesFocus.requestFocus())
+                            else
+                              GestureDetector(
+                                onTap: _startEdit,
+                                child: Text(
+                                    c.title.isEmpty ? 'Untitled' : c.title,
+                                    style: VType.title2(
+                                        color: c.title.isEmpty
+                                            ? VColors.textTertiary
+                                            : VColors.textPrimary)),
+                              ),
+                            const SizedBox(height: VSpace.xxs),
+                            if (_editing)
+                              _field(_notes, _notesFocus,
+                                  maxLines: 5,
+                                  action: TextInputAction.done,
+                                  onDone: () =>
+                                      FocusScope.of(context).unfocus())
+                            else
+                              GestureDetector(
+                                onTap: () {
+                                  _notesFirst = true;
+                                  _startEdit();
+                                },
+                                child: Text(
+                                    c.notes.isEmpty ? 'Add a note' : c.notes,
+                                    style: VType.footnote(
+                                            color: c.notes.isEmpty
+                                                ? VColors.textTertiary
+                                                : _ink2)
+                                        .copyWith(height: 1.4)),
+                              ),
+                          ],
                         ),
-                        if (_editing)
-                          _field(_title, _titleFocus, maxLines: 2, onDone: () => _notesFocus.requestFocus())
-                        else
-                          GestureDetector(
-                            onTap: _startEdit,
-                            child: Text(c.title.isEmpty ? 'Untitled' : c.title,
-                                style: VType.title2(color: c.title.isEmpty ? VColors.textTertiary : VColors.textPrimary)),
-                          ),
-                        const SizedBox(height: VSpace.xxs),
-                        if (_editing)
-                          _field(_notes, _notesFocus, maxLines: 5, action: TextInputAction.done, onDone: () => FocusScope.of(context).unfocus())
-                        else
-                          GestureDetector(
-                            onTap: () {
-                              _notesFirst = true;
-                              _startEdit();
-                            },
-                            child: Text(c.notes.isEmpty ? 'Add a note' : c.notes,
-                                style: VType.footnote(color: c.notes.isEmpty ? VColors.textTertiary : _ink2).copyWith(height: 1.4)),
-                          ),
-                      ],
-                    ),
-                  )),
+                      )),
                 ),
               ),
             ),

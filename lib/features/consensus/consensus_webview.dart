@@ -8,6 +8,7 @@ import 'consensus_scene_frame.dart';
 import 'consensus_view.dart';
 import '../../core/api/collider_api.dart' as api;
 import '../../models/model_def.dart';
+import '../../core/vision/cpane.dart';
 
 /// Consensus Topology screen.
 ///
@@ -304,10 +305,12 @@ class _ConsensusWebViewState extends State<ConsensusWebView> {
     if (isMobile) {
       // Source mobile layout: the scene IS the screen, edge to edge, on the
       // scene's own #07080b surface, with its own header and back control.
-      return Container(
-        color: const Color(0xFF07080B),
-        child: SafeArea(child: LayoutBuilder(builder: (context, c) => _scene(c))),
-      );
+      // v9.1.7: on CPane (centred, same width as every pane, one glass,
+      // shell reserve) instead of a full-screen black page.
+      return Stack(fit: StackFit.expand, children: [
+        GestureDetector(behavior: HitTestBehavior.opaque, onTap: widget.onClose),
+        CPane(child: LayoutBuilder(builder: (context, c) => _scene(c))),
+      ]);
     }
     return Stack(
       fit: StackFit.expand,

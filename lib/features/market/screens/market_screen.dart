@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/api/media_gen.dart';
+import '../../../core/vision/cpane.dart';
 import '../../../core/vision/vision_kit.dart';
 import '../../../models/media_specs.dart';
 import '../../../models/theme_def.dart';
@@ -115,7 +116,6 @@ class _MarketScreenState extends State<MarketScreen> {
     // v9.1.7 (#126): David's rule wins over the literal copy: Discover is a
     // centred floating pane the width of the other panes (Smart Gen), never
     // full width. Inside it, Grok Imagine's content and order are unchanged.
-    final paneW = (MediaQuery.sizeOf(context).width * 0.72).clamp(280.0, 520.0);
     // v9.1.7 (#18/#19): a literal copy of the Grok Imagine feed in black:
     // full-bleed black stage, floating top bar over the scrolling content,
     // "Create from template" portrait row, then the flush two-column grid
@@ -195,19 +195,8 @@ class _MarketScreenState extends State<MarketScreen> {
                 decoration: BoxDecoration(color: const Color(0x26FFFFFF), borderRadius: BorderRadius.circular(999)),
                 child: Text(_kind == 0 ? 'Discover' : _kinds[_kind], style: VType.callout(weight: FontWeight.w600, color: Colors.white)),
               ),
-              Align(
-                alignment: Alignment.centerRight,
-                child: VPress(
-                  tooltip: 'Close',
-                  onTap: widget.onClose,
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: const BoxDecoration(color: Color(0x26FFFFFF), shape: BoxShape.circle),
-                    child: const Icon(Icons.close_rounded, color: Colors.white, size: 22),
-                  ),
-                ),
-              ),
+              // v9.1.7: no close circle (David: no on-screen close controls;
+              // tap outside or swipe closes), so the general rule wins here too.
             ]),
           ),
         ),
@@ -215,21 +204,7 @@ class _MarketScreenState extends State<MarketScreen> {
     );
     return Stack(
       children: [
-        SafeArea(
-          bottom: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(0, 40, 0, 12),
-            child: Center(
-              child: SizedBox(
-                width: paneW,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(VRadius.xl), boxShadow: VElev.e6),
-                  child: ClipRRect(borderRadius: BorderRadius.circular(VRadius.xl), child: pane),
-                ),
-              ),
-            ),
-          ),
-        ),
+        CPane(child: pane),
         if (_open != null) Positioned.fill(child: _exploder(_open!)),
       ],
     );

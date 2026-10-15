@@ -4,6 +4,7 @@ import '../../../core/vision/vision_kit.dart';
 import '../models/browser_tab.dart';
 import '../browser_urls.dart';
 import '../web_frame.dart';
+import '../../../core/vision/cpane.dart';
 
 /// REQ-07 Durable In-App Browser (Apple VisionOS Apps Basic Design System
 /// 1:71 "Safari"): the address bar floats as a capsule ornament above the
@@ -14,6 +15,8 @@ import '../web_frame.dart';
 /// a dialog route put a scrim over the whole screen and a barrier over the nav
 /// dock, so the wallpaper went dark and dock taps died (R12).
 class InAppBrowserSheet extends StatefulWidget {
+  /// The pane itself, for the shell's tap-outside test.
+  static final GlobalKey paneKey = GlobalKey();
   final String initialTabId;
   final List<BrowserTab> tabs;
   final Function(BrowserTab updatedTab)? onTabUpdated;
@@ -123,23 +126,16 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
       _shownUrl = tab.url;
       _addr.text = _host(tab.url);
     }
-    final media = MediaQuery.sizeOf(context);
-    final safe = MediaQuery.paddingOf(context);
-    final w = VOverlay.toolWidth(context);
-    const chrome = _kOrnamentH + VSpace.sm * 2 + _kWindowBarH;
-    final room = media.height - (_kTopInset + safe.top) - (_kDockZone + safe.bottom) - chrome;
-    final h = room.clamp(180.0, VOverlay.toolMaxHeight(context));
-
-    // One width for the whole window: the ornament above the page window has to
-    // line up with it, and both stay inside the phone's edges.
-    return SizedBox(
-      width: w,
-      child: Column(
-      mainAxisSize: MainAxisSize.min,
+    // v9.1.7: on CPane (centred, same width as every pane, one glass,
+    // layer elevation, shell reserve). The address bar is the pane's header.
+    return CPane(
+      child: KeyedSubtree(
+        key: InAppBrowserSheet.paneKey,
+        child: Column(
       children: [
         // Address bar ornament
-        VOrnament(
-          padding: const EdgeInsets.all(VSpace.xxs + 1),
+        Padding(
+          padding: const EdgeInsets.all(VSpace.xs),
           child: Row(
             children: [
               VCircleButton(icon: Icons.close_rounded, size: 32, tooltip: 'Close', onTap: widget.onClose),
@@ -190,19 +186,10 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
             ],
           ),
         ),
-        const SizedBox(height: VSpace.sm),
-        SizedBox(
-          height: h,
-          child: VGlass(
-            material: VMaterial.work,
-            radius: VRadius.xl,
-            child: _overview ? _tabsOverview() : _page(tab),
-          ),
-        ),
-        const SizedBox(height: VSpace.sm),
-        const VWindowBar(),
+        Expanded(child: _overview ? _tabsOverview() : _page(tab)),
       ],
     ),
+      ),
     );
   }
 

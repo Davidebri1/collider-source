@@ -1,0 +1,108 @@
+{
+  "lib/features/apps/apps_popup_pane.dart": {
+    "shadow": 1,
+    "width": 1
+  },
+  "lib/features/browser/screens/in_app_browser_sheet.dart": {
+    "shadow": 1
+  },
+  "lib/features/consensus/consensus_webview.dart": {
+    "glass": 1,
+    "width": 3
+  },
+  "lib/features/drawers/model_ladder_drawer.dart": {
+    "glass": 1,
+    "width": 1
+  },
+  "lib/features/drawers/settings_drawer.dart": {
+    "blur": 6,
+    "width": 2
+  },
+  "lib/features/files/screens/files_screen.dart": {
+    "blur": 2,
+    "shadow": 2,
+    "glass": 4,
+    "width": 1
+  },
+  "lib/features/files/widgets/audio_player_view.dart": {
+    "glass": 1,
+    "width": 1
+  },
+  "lib/features/files/widgets/image_viewer_view.dart": {
+    "glass": 1,
+    "width": 1
+  },
+  "lib/features/files/widgets/pdf_viewer_view.dart": {
+    "shadow": 1,
+    "glass": 1,
+    "width": 1
+  },
+  "lib/features/files/widgets/text_reader_view.dart": {
+    "glass": 1,
+    "width": 1
+  },
+  "lib/features/files/widgets/unsupported_view.dart": {
+    "glass": 1,
+    "width": 1
+  },
+  "lib/features/files/widgets/video_player_view.dart": {
+    "blur": 2
+  },
+  "lib/features/market/screens/market_screen.dart": {
+    "glass": 1
+  },
+  "lib/features/mediagen/figma_media_stage.dart": {
+    "glass": 4
+  },
+  "lib/features/mediagen/gen_options_sheet.dart": {
+    "shadow": 1,
+    "glass": 3
+  },
+  "lib/features/mediagen/media_ticker.dart": {
+    "glass": 3,
+    "width": 1
+  },
+  "lib/features/mediagen/media_view.dart": {
+    "width": 1
+  },
+  "lib/features/music/music_widget.dart": {
+    "glass": 2
+  },
+  "lib/features/nav/contextual_side_nav.dart": {
+    "glass": 1
+  },
+  "lib/features/smartgen/screens/smartgen_screen.dart": {
+    "shadow": 2,
+    "glass": 1
+  },
+  "lib/features/theme/premium_market_ambient_io.dart": {
+    "blur": 1
+  },
+  "lib/features/theme/premium_theme_market_view.dart": {
+    "blur": 15,
+    "shadow": 3
+  },
+  "lib/features/theme/theme_living_media.dart": {
+    "blur": 1,
+    "width": 1
+  },
+  "lib/features/ticker/widgets/consensus_row.dart": {
+    "shadow": 1
+  },
+  "lib/features/ticker/widgets/figma_ticker.dart": {
+    "glass": 5
+  },
+  "lib/features/ticker/widgets/message_zoom_overlay.dart": {
+    "glass": 1,
+    "width": 1
+  },
+  "lib/features/ticker/widgets/model_pill.dart": {
+    "blur": 2,
+    "shadow": 3
+  },
+  "lib/features/wallpaper/widgets/windowless_theme_scroller.dart": {
+    "blur": 4,
+    "shadow": 1,
+    "width": 2
+  }
+}

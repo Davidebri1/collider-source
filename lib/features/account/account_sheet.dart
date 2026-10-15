@@ -12,6 +12,7 @@ import '../drawers/settings_drawer.dart';
 
 import '../../core/vision/vision_kit.dart';
 import '../../models/model_def.dart';
+import '../../core/vision/cpane.dart';
 
 class AccountSheet extends StatefulWidget {
   final ModelTier tier;
@@ -27,32 +28,21 @@ class _AccountSheetState extends State<AccountSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final w = (MediaQuery.sizeOf(context).width - 2 * VSpace.md).clamp(0.0, 480.0);
     return Stack(
       fit: StackFit.expand,
       children: [
         // v8.7: no scrim; Settings stays visible, stepped back behind.
         GestureDetector(behavior: HitTestBehavior.opaque, onTap: widget.onClose),
-        Center(
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 70),
-            // v8.7: a pane opened from Settings never exceeds Settings
-            // (the largest overlay): scaled as one unit to fit inside it.
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: SettingsDrawer.panel.width * 0.92, maxHeight: SettingsDrawer.panel.height * 0.92),
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: SizedBox(
-                  width: w,
-                  child: AnimatedSwitcher(
-                    duration: VMotion.base,
-                    child: _plans
-                        ? UpgradePlans(key: const ValueKey('plans'), tier: widget.tier, onBack: () => setState(() => _plans = false))
-                        : _account(),
-                  ),
-                ),
-              ),
-            ),
+        // v9.1.7: on CPane (centred, same width as every pane, one glass,
+        // modal elevation, shell reserve). It was the phone width minus 32.
+        CPane(
+          layer: CLayer.modal,
+          fit: CPaneFit.hug,
+          child: AnimatedSwitcher(
+            duration: VMotion.base,
+            child: _plans
+                ? UpgradePlans(key: const ValueKey('plans'), tier: widget.tier, onBack: () => setState(() => _plans = false))
+                : _account(),
           ),
         ),
       ],
@@ -169,30 +159,25 @@ class _GreySheet extends StatelessWidget {
   final List<Widget> children;
   const _GreySheet({super.key, required this.title, required this.leading, required this.children});
   @override
-  Widget build(BuildContext context) => VGlass(
-        material: VMaterial.modal,
-        radius: VRadius.sheet,
-        fill: const Color(0xB3505050),
+  // v9.1.7: the surface is the CPane around it; this is only the content.
+  Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.fromLTRB(VSpace.md, VSpace.md, VSpace.md, VSpace.lg),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.72),
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SizedBox(
-                  height: 48,
-                  child: Stack(alignment: Alignment.center, children: [
-                    Align(alignment: Alignment.centerLeft, child: leading),
-                    Text(title, style: VType.headline().copyWith(fontSize: 19, fontWeight: FontWeight.w700)),
-                  ]),
-                ),
-                const SizedBox(height: VSpace.md),
-                ...children,
-              ],
-            ),
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                height: 48,
+                child: Stack(alignment: Alignment.center, children: [
+                  Align(alignment: Alignment.centerLeft, child: leading),
+                  Text(title, style: VType.headline().copyWith(fontSize: 19, fontWeight: FontWeight.w700)),
+                ]),
+              ),
+              const SizedBox(height: VSpace.md),
+              ...children,
+            ],
           ),
         ),
       );

@@ -49,6 +49,7 @@ import 'features/theme/theme_living_media.dart';
 import 'core/media/theme_catalog.dart';
 import 'core/vision/keyboard_dof.dart';
 import 'core/vision/materialize.dart';
+import 'core/vision/cpane.dart';
 import 'core/media/first_frame.dart';
 import 'core/nav/back_guard.dart';
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
@@ -877,11 +878,15 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     });
     return false;
   }
-  bool get _tallPaneOpen => _browserOpen || const {'themes', 'premium', 'music', 'market'}.contains(_activeDrawer);
+  // v9.1.7 (CPane): the ticker docks under EVERY pane, built once here.
+  bool get _tallPaneOpen => _browserOpen || _settingsOpen || _activeDrawer != null;
   final GlobalKey _tickerWindowKey = GlobalKey();
   /// Distance from the screen bottom to the top of the docked ticker (0 when
   /// the ticker has no rows). Measured after layout.
   double _dockBand = 0;
+  // v9.1.7 (CPane): the one bottom reserve every pane inherits: the docked
+  // ticker band (which includes the composer), or the composer alone.
+  double get _paneReserve => math.max(_dockBand, 110.0);
   void _measureDockBand() {
     final ctx = _tickerWindowKey.currentContext;
     final box = ctx?.findRenderObject() as RenderBox?;
@@ -2023,11 +2028,11 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         // Tap outside the browser window: decided on the raw pointer, because
         // the page platform view swallows the gesture arena.
         if (_browserOpen && d.distance < 8) {
-          final box = _browserKey.currentContext?.findRenderObject() as RenderBox?;
+          final box = InAppBrowserSheet.paneKey.currentContext?.findRenderObject() as RenderBox?;
           if (box != null && box.hasSize && !(box.localToGlobal(Offset.zero) & box.size).contains(e.position)) _closeBrowser();
         } // distance + direction only: slow test rigs and slow swipes both count
       },
-      child: Stack(
+      child: CShell(bottomReserve: _paneReserve, child: Stack(
         fit: StackFit.expand,
         children: [
           // ================= PLANE 0: BACKGROUND WALLPAPER =================
@@ -2333,7 +2338,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
           // No songs in the catalog: no Music drawer (v8.3, D46).
           // v9.1.4 (playtest #14): dissolves out instead of a hard cut.
-            Positioned.fill(bottom: _activeDrawer == 'music' ? _dockBand : 0, child: MaterializeSwitch(show: _activeDrawer == 'music' && MusicPlayer.library.isNotEmpty, builder: (_) => MusicCollectionDrawer(
+            Positioned.fill(child: MaterializeSwitch(show: _activeDrawer == 'music' && MusicPlayer.library.isNotEmpty, builder: (_) => MusicCollectionDrawer(
                 collection: _musicCollection,
                 onClose: () => setState(() => _activeDrawer = null),
               ))),
@@ -2347,11 +2352,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // blurs and dims; a second pass blurred the ticker out of sight.
 
           if (_activeDrawer == 'smartgen')
-            Positioned(
-              left: isMobile ? 0 : 360,
-              right: 0,
-              top: 0,
-              bottom: 78,
+            Positioned.fill(
               child: SmartGenScreen(
                 section: _smartGenView,
                 onClose: () => _requestSwitchSurface(null),
@@ -2359,11 +2360,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             ),
 
           if (_activeDrawer == 'market')
-            Positioned(
-              left: isMobile ? 0 : 360,
-              right: 0,
-              top: 0,
-              bottom: _dockBand, // v9.1.7 (#121): ends above the docked ticker
+            Positioned.fill(
+              // CPane: centred, reserves the docked ticker and composer itself.
               child: MarketScreen(
                 feed: _marketCategory,
                 onClose: () => _requestSwitchSurface(null),
@@ -2377,11 +2375,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // were reachable only by deep link; both are deleted.
 
           if (_activeDrawer == 'files')
-            Positioned(
-              left: isMobile ? 0 : 360,
-              right: 0,
-              top: 0,
-              bottom: 78,
+            Positioned.fill(
               child: FilesScreen(
                 type: _filesCategory,
                 onClose: () => _requestSwitchSurface(null),
@@ -2390,8 +2384,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
           if (_activeDrawer == 'consensus')
             Positioned.fill(
-              // The app shell bar stays on every screen (requirement 7).
-              bottom: isMobile ? 78 : 0,
               child: ConsensusWebView(
                 job: _currentJobId == null ? null : _jobsById[_currentJobId],
                 onClose: () => setState(() => _activeDrawer = null),
@@ -2471,7 +2463,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             // Tap outside the window closes it (David: swipe and tap outside are the escapes).
             Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: _closeBrowser)),
             Positioned.fill(
-              bottom: _dockBand,
               child: Center(
                 child: InAppBrowserSheet(
                   key: _browserKey,
@@ -2567,7 +2558,7 @@ AnimatedScale(
           // it swallowed every tap meant for the pane under it. Removed; the
           // root Listener handles swipe-down and edge-swipe back.
         ],
-      ),
+      )),
       ),
     )));
   }
