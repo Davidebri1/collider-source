@@ -214,7 +214,7 @@ class ThemeCatalog extends ChangeNotifier {
     // v9.1.6g: full-resolution posters (qa/make_posters.py, frame at 1 s,
     // ffmpeg) live under posters/; they are covers, never themes.
     _posters = {for (final o in all) if ('${o['name']}'.startsWith('posters/')) '${o['name']}'.substring(8).replaceAll(RegExp(r'\.jpg$'), ''): o['url'] as String};
-    final maps = [for (final o in all) if (!'${o['name']}'.startsWith('posters/') && !'${o['name']}'.startsWith('thumbs/') && !_blocked.any('${o['name']}'.contains)) o];
+    final maps = [for (final o in all) if (!'${o['name']}'.startsWith('posters/') && !'${o['name']}'.startsWith('thumbs/') && !_blocked.contains('${o['name']}')) o];
     final songs = [for (final o in maps) if (_kind(o) == 'audio') o];
     final themes = [for (final o in maps) if (_kind(o) != 'audio') _r2Theme(o, songs)];
     // v9.1: every R2 song is in the music library, with the art of the
@@ -288,9 +288,77 @@ class ThemeCatalog extends ChangeNotifier {
 
   Map<String, String> _posters = const {};
 
-  /// Hidden until the source is replaced in R2 (decode errors, every frame
-  /// streaked; checked with ffmpeg outside the app).
-  static const _blocked = ['0_Winter_Moon_3840x2160'];
+  /// v9.1.7: live themes hidden because they are broken on Home (playback
+  /// freezes, black, or decode errors that show as streaks), found by
+  /// qa/set_wallpaper_check.py. Reasons and backup: qa/blocked-themes.json.
+  /// The files stay in R2; delete a name here to bring a theme back.
+  static const Set<String> _blocked = {
+    '0251d1e0-16a1-49ad-9807-19d1bceac3e9_1080_hd.mp4',
+    '0_Background_Backdrop_1920x1080.mp4',
+    '0_Beach_Waves_3840x2160.mp4',
+    '0_Bed_Sky_1280x720.mp4',
+    '0_Cat_Rain_1280x720.mp4',
+    '0_Cat_Window_1280x720.mp4',
+    '0_Cyberpunk_Cityscape_3840x2160.mp4',
+    '0_Flat_Stretch_Gatineau_River_3840x2160.mp4',
+    '0_Fog_Mist_1280x720 (1).mp4',
+    '0_Fog_Mist_1280x720.mp4',
+    '0_Futuristic_Sunset_1280x720 (1).mp4',
+    '0_Nebula_Space_1440x2560.mp4',
+    '0_New_York_City_Manhattan_1280x720.mp4',
+    '0_Ocean_Reflection_2160x3840.mp4',
+    '0_Reflection_Lake_3840x2160.mp4',
+    '0_Sky_Live_Wallpaper_1280x720.mp4',
+    '0_Sky_Moon_1280x720 (2).mp4',
+    '0_Sunset_Lake_1280x720.mp4',
+    '0_Sunset_Sunrise_3840x2160.mp4',
+    '0_Tree_Silhouette_2560x1440.mp4',
+    '0_Trees_Pine_1280x720.mp4',
+    '0_Urban_City_1080x1920.mp4',
+    '0_Vertical_Video_Fog_1080x1920.mp4',
+    '0_Vertical_Video_Glowing_1080x1920.mp4',
+    '0_Water_Lake_1280x720.mp4',
+    '0_Water_Light_720x1280.mp4',
+    '0_Winter_Moon_3840x2160.mp4',
+    '1118288_Magic_Magical_1280x720.mp4',
+    '111905-692674391_medium.mp4',
+    '1273984_Time_Lapse_1920x1080.mp4',
+    '138588-770315514_medium.mp4',
+    '16160-269534741_medium (1).mp4',
+    '1658358_Smoke_Liquid_Smoke_3840x2160.mp4',
+    '1664248_Fog_Mist_3840x2160.mp4',
+    '1764286_Sky_Cloudscape_3840x2160.mp4',
+    '2325412_Hurricane_Cloudscape_3840x2160 (1).mp4',
+    '2476941_Dark_Waves_1920x1080.mp4',
+    '25520a42-ed66-4e2e-ae2b-8f80eb53942f_1080_hd.mp4',
+    '28236-368501609_medium.mp4',
+    '335073_medium (1).mp4',
+    '335679_medium.mp4',
+    '340514_medium.mp4',
+    '340529_medium.mp4',
+    '369506_medium.mp4',
+    '372860_medium.mp4',
+    '372861_medium.mp4',
+    '372864_medium.mp4',
+    '4572947_Coastline_Ocean_1280x720 (2).mp4',
+    '4572947_Coastline_Ocean_1280x720.mp4',
+    '4572947_Coastline_Ocean_1920x1080 (2).mp4',
+    '4572947_Coastline_Ocean_1920x1080.mp4',
+    '4572947_Coastline_Ocean_3840x2160.mp4',
+    '5149477_Storm_Stormy_1920x1080.mp4',
+    '5558890_Coll_wavebreak_Animation_1280x720 (1).mp4',
+    '5558890_Coll_wavebreak_Animation_1280x720.mp4',
+    '623864_Background_Beautiful_1920x1080.mp4',
+    '6973867_Storm_Tempest_3840x2160.mp4',
+    '7020349_Template_Artwork_1280x720.mp4',
+    '7020362_Steamer_Flow_1280x720.mp4',
+    '7031195_Background_Bubble_1280x720.mp4',
+    '71122-537102350.mp4',
+    '71f8cc8b-7051-42b0-b6b0-a88f257118ea_1080_hd.mp4',
+    'Copper Kiln.mp4',
+    'GettyImages-1216668776.mp4',
+    'a3612b1a-ba58-4437-9515-779c1ee1fe9e_1080_hd.mp4',
+  };
 
   /// 48px placeholder (qa/make_thumbs.py) for any R2 image URL, or null.
   static String? thumbFor(String url) {
