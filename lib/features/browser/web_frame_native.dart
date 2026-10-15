@@ -6,7 +6,8 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 class WebFrame extends StatefulWidget {
   final String url;
-  const WebFrame({super.key, required this.url});
+  final double zoom;
+  const WebFrame({super.key, required this.url, this.zoom = 1});
 
   @override
   State<WebFrame> createState() => _WebFrameState();
@@ -54,7 +55,7 @@ class _WebFrameState extends State<WebFrame> {
   @override
   void didUpdateWidget(covariant WebFrame old) {
     super.didUpdateWidget(old);
-    if (old.url != widget.url) _ctrl.loadRequest(Uri.parse(widget.url));
+    if (old.url != widget.url || old.zoom != widget.zoom) _ctrl.loadRequest(Uri.parse(widget.url));
   }
 
   @override

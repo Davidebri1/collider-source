@@ -20,8 +20,8 @@ import 'features/music/floating_music.dart';
 import 'models/model_def.dart';
 import 'models/theme_def.dart';
 import 'models/ticker_item.dart';
+import 'features/ticker/widgets/glm_column_window.dart';
 import 'features/ticker/widgets/model_pill.dart';
-import 'features/ticker/widgets/consensus_row.dart';
 import 'features/ticker/widgets/message_zoom_overlay.dart';
 import 'features/ticker/widgets/local_history_pane.dart';
 import 'features/prompt/floating_prompt.dart';
@@ -896,13 +896,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     final band = (box == null || !box.hasSize || box.size.height < 1) ? 0.0 : (h - box.localToGlobal(Offset.zero).dy + 8).clamp(0.0, h * 0.5);
     if ((band - _dockBand).abs() > 1) setState(() => _dockBand = band);
   }
-  // v9.1.7: one compact row (name + one-line summary) plus its 6 px gap, so
-  // the window shows about four rows and scrolls to the rest.
-  static const double _rowSlot = 46;
-
-  /// The category strip that closes the window, with its gap.
-  static const double _chipStripHeight = 0;
-
   /// The composer needs more room than a ticker row, so it gets the full
   /// floatable width and keeps it in every state: summoning it must not
   /// resize it (that was the composer growing huge over the expanded card).
@@ -1354,72 +1347,37 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   /// Plain-word name for a category tab comes from [ModelCategoryX.label],
   /// so the tab strip and the roster can never drift apart.
 
-  /// The ticker window (R08). Dock width, centred, air on every side, and a
-  /// height that never passes 40% of the screen, whatever is open.
-  ///
-  /// The 40% is a ceiling rather than a target: the window is as tall as the
-  /// pinned row, the visible rows and the category strip need, so a ticker
-  /// holding one model is a small window instead of a slab (which is what the
-  /// old fixed 62%-of-the-screen block was). One width, one ceiling, every
-  /// state, so opening a card or the composer cannot resize the room.
+  /// GLM ticker (R08). A centred column, at most 40% of the screen, on its own
+  /// layer under every pane. Nothing above it reserves a band for it.
   Widget _buildTickerWindow() {
-    // v9.1.3: no consensus bubble until it has words.
-    final showConsensus = !_activeCategory.isMedia && _tickerItems.isNotEmpty && _consensusSummary.trim().isNotEmpty;
-    // R09: the window shows one, two or three rows. A slot is sized for a model
-    // name plus a wrapped one-line summary; anything longer scrolls behind the
-    // edge fade and the chevron.
-    final rowCount = _tickerRows(_activeCategory).length;
-    // v9.1.2: nothing asked yet -> nothing drawn, just the wallpaper.
-    if (rowCount == 0 && !showConsensus) return const SizedBox.shrink();
-    final visible = rowCount.clamp(1, _tallPaneOpen ? _dockedTickerRows : _maxTickerRows);
+    final rows = _tickerRows(_activeCategory);
+    if (rows.isEmpty && _consensusSummary.trim().isEmpty) return const SizedBox.shrink();
+    final order = _tickerOrder;
     final window = SizedBox(
-      // v9.1.2: chat bubbles span the screen like the reference.
-      // v9.1.6 (approved app-11): rows sit right of the side rail.
-      width: math.min(MediaQuery.sizeOf(context).width - 128, 520), // narrowed (not shifted) to clear the floating rail
+      width: math.min(260, MediaQuery.sizeOf(context).width - 48),
       child: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: _tickerHeight),
-        child: _windowSurface(
-          bare: true,
-          padding: const EdgeInsets.fromLTRB(VSpace.xs - 2, VSpace.xs - 2, VSpace.xs - 2, VSpace.xs - 2),
-          // v9.1.7 (#6/#7): CustomMultiChildLayout always sizes itself to the
-          // constraints, so the window was a fixed 40 % of the screen with the
-          // rows at its top and a blank band down to the composer. A min-size
-          // column is exactly as tall as the pinned row plus the visible rows,
-          // so the rail sits directly over the composer (app-11) and the band
-          // it occupies is small enough to dock under tall panes.
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: _tickerHeight * 0.40),
-                child: showConsensus
-                    ? ConsensusRow(
-                        score: _consensusRatio,
-                        summary: _consensusSummary,
-                        isGenerating: _isConsensusGenerating,
-                        onTap: () => _onTogglePill(_kConsensusId),
-                      )
-                    : const SizedBox.shrink(),
-              ),
-              if (showConsensus) const SizedBox(height: 6),
-              // Loose: the list takes its slots, or what is left of the 40 %
-              // ceiling when the consensus row is tall.
-              Flexible(child: SizedBox(height: visible * _rowSlot + _chipStripHeight, child: _buildTicker())),
-            ],
-          ),
+        child: GlmTickerColumn(
+          items: rows,
+          openId: _expandedModelIds.isEmpty ? null : _expandedModelIds.first,
+          onOpen: _onTogglePill,
+          consensusTitle: _consensusRatio.trim().isEmpty ? 'Consensus' : _consensusRatio,
+          consensusLine: _isConsensusGenerating ? 'Comparing answers' : (_consensusSummary.trim().isEmpty ? 'Where the models agree' : _consensusSummary),
+          onConsensus: () => setState(() => _activeDrawer = 'consensus'),
+          activeIds: _selectedModelIds.toSet(),
+          onToggle: (id) => _toggleSelect(_activeCategory, id),
+          categoryLabel: _activeCategory.label,
+          onCategorySwipe: (dir) {
+            final i = order.indexOf(_activeCategory);
+            setState(() {
+              _activeCategory = order[(i + dir + order.length) % order.length];
+              _expandedModelIds.clear();
+            });
+          },
         ),
       ),
     );
-    // Bug 10: summoning the composer has to push the rest of the room back.
-    // The wallpaper falls out of focus in the depth-of-field plane above; what
-    // was missing was the resting ticker going quiet with it instead of
-    // sitting sharp and still taking taps behind the writing surface.
-    return AnimatedOpacity(
-      duration: VMotion.base,
-      curve: Curves.easeOutCubic,
-      opacity: _isComposerSummoned ? 1.0 : 1,
-      child: IgnorePointer(ignoring: _isComposerSummoned, child: KeyedSubtree(key: _tickerWindowKey, child: window) /* David: centred; the side rail floats over it, never offsets it */),
-    );
+    return IgnorePointer(ignoring: _isComposerSummoned, child: window);
   }
 
   /// The one window that sits above the ticker.
@@ -2028,7 +1986,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     if (_activeDrawer != 'premium') { _premiumCovered = false; _premiumCoverTimer?.cancel(); _premiumCoverTimer = null; }
     final surfaceSig = '$_activeDrawer|${_expandedModelIds.join(',')}|$_settingsOpen|$_browserOpen|$_zoomedMessage|$_localHistoryModel';
     if (surfaceSig != _lastSurfaceSig) { _lastSurfaceSig = surfaceSig; }
-    WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) _measureDockBand(); });
     _guardPreview();
     // Max 9 active model rows filtered by active category with fallback
     var categoryPills = _tickerItems
@@ -2330,7 +2287,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               ))),
 
           // v9.1.4 (playtest #14): dissolves out instead of a hard cut.
-            Positioned.fill(bottom: _activeDrawer == 'themes' ? _dockBand : 0, child: MaterializeSwitch(show: _activeDrawer == 'themes', builder: (_) => WindowlessThemeScroller(
+            Positioned.fill(child: MaterializeSwitch(show: _activeDrawer == 'themes', builder: (_) => WindowlessThemeScroller(
                 currentTheme: _currentTheme,
                 // v8.3.1: browsing never changes the app background (only Set does).
                 onLivePreview: (_) {},
@@ -2347,7 +2304,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               ))),
 
           // v9.1.4 (playtest #14): dissolves out instead of a hard cut.
-            Positioned.fill(bottom: _activeDrawer == 'premium' ? _dockBand : 0, child: MaterializeSwitch(show: _activeDrawer == 'premium', builder: (_) => GestureDetector(
+            Positioned.fill(child: MaterializeSwitch(show: _activeDrawer == 'premium', builder: (_) => GestureDetector(
                 behavior: HitTestBehavior.translucent,
                 child: PremiumThemeMarketView(
                 // v9.1.4 (playtest #2): rebuild once the catalog arrives, so a
@@ -2532,23 +2489,13 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           Positioned.fill(
             child: MaterializeSwitch(
               show: _settingsOpen,
-              builder: (_) =>               // v8.7: a submenu opened from Settings sits on its own plane in
-              // front; Settings steps back (smaller, softer) behind it.
-AnimatedScale(
-                scale: _activeDrawer == 'account' ? 0.94 : 1,
-                duration: VMotion.base,
-                child: ImageFiltered(
-                  enabled: _activeDrawer == 'account',
-                  imageFilter: ui.ImageFilter.blur(sigmaX: 2, sigmaY: 2),
-                  child: SettingsDrawer(
+              builder: (_) => SettingsDrawer(
                 onClose: () => setState(() => _settingsOpen = false),
                 incognito: _incognito,
                 autosave: _autosave,
                 onIncognito: (v) => setState(() => _incognito = v),
                 onAutosave: (v) => setState(() => _autosave = v),
                 onAccount: () => setState(() => _activeDrawer = 'account'),
-              ),
-                ),
               ),
             ),
           ),

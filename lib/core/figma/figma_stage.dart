@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import '../theme/app_font.dart';
 import 'dart:ui' as ui;
 
@@ -22,6 +23,8 @@ class FigmaStage extends StatelessWidget {
     required this.center,
     required this.children,
     this.clip = true,
+    this.contentSize,
+    this.contentCenter,
   });
 
   /// The Figma frame's size (for the layout box of the children).
@@ -34,6 +37,12 @@ class FigmaStage extends StatelessWidget {
   final Offset center;
   final List<Widget> children;
   final bool clip;
+
+  /// When set with [contentCenter], the stage scales to fit this rect instead
+  /// of filling the width with [cropWidth]. The gallery uses it so the whole
+  /// window and strip stay on screen.
+  final Size? contentSize;
+  final Offset? contentCenter;
 
   static double scaleFor(Size screen, double cropWidth) => screen.width / cropWidth;
 
@@ -48,9 +57,16 @@ class FigmaStage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, c) {
-      final s = c.maxWidth / cropWidth;
-      final ox = center.dx - cropWidth / 2;
-      final oy = center.dy - c.maxHeight / s / 2;
+      var s = c.maxWidth / cropWidth;
+      var focus = center;
+      final content = contentSize;
+      final fitted = content != null && contentCenter != null && content.width > 0 && content.height > 0;
+      if (fitted) {
+        s = math.min(c.maxWidth / content.width, c.maxHeight / content.height);
+        focus = contentCenter!;
+      }
+      final ox = focus.dx - (fitted ? c.maxWidth / s / 2 : cropWidth / 2);
+      final oy = focus.dy - c.maxHeight / s / 2;
       final m = Matrix4.identity()
         ..scale(s, s, 1)
         ..translate(-ox, -oy);

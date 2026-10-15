@@ -19,7 +19,10 @@ final Set<String> _registered = {};
 
 class WebFrame extends StatefulWidget {
   final String url;
-  const WebFrame({super.key, required this.url});
+  /// Address-bar zoom. The page still loads through the JSON proxy; the
+  /// factor is kept so the glyph window can pass it without a second frame.
+  final double zoom;
+  const WebFrame({super.key, required this.url, this.zoom = 1});
 
   @override
   State<WebFrame> createState() => _WebFrameState();
@@ -41,7 +44,7 @@ class _WebFrameState extends State<WebFrame> {
   @override
   void didUpdateWidget(covariant WebFrame old) {
     super.didUpdateWidget(old);
-    if (old.url != widget.url) _load(widget.url);
+    if (old.url != widget.url || old.zoom != widget.zoom) _load(widget.url);
   }
 
   Future<void> _load(String url) async {
