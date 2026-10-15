@@ -58,7 +58,7 @@ class _SgClockState extends State<SgClock> {
       decoration: BoxDecoration(color: const Color(0xFF1A120F), borderRadius: BorderRadius.circular(4)),
       child: Text(
         overdue ? 'OVERDUE' : '$h:$m:$s',
-        style: const TextStyle(fontFamily: kAppFont, fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFFFF5A4A), letterSpacing: 0.6, fontFeatures: [FontFeature.tabularFigures()]),
+        style: appFont(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFFFF5A4A), letterSpacing: 0.6).copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
       ),
     );
   }

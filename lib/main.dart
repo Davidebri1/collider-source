@@ -172,13 +172,11 @@ class ColliderApp extends StatelessWidget {
       // every scroller and every custom drag surface ignored the mouse. The
       // default has no scrollbars, which also satisfies the no-scrollbar rule.
       scrollBehavior: const _MouseDraggableScrollBehavior(),
-      // v9.1.6d: Google Sans Flex is the app-wide family (and the fallback), so
-      // the engine never fetches Roboto for an unstyled Text.
-      theme: ThemeData(brightness: Brightness.dark, useMaterial3: true, fontFamily: 'GoogleSansFlex', fontFamilyFallback: const ['GoogleSansFlex']).copyWith(
+      // AUTHORITY S-C13: SF Pro on Apple (fontFamily null), Inter elsewhere.
+      theme: ThemeData(brightness: Brightness.dark, useMaterial3: true, fontFamily: kAppFont, fontFamilyFallback: const ['Inter']).copyWith(
         scaffoldBackgroundColor: const Color(0xFF07080B),
-        // v9.1.4 (playtest #15): every default text style is Google Sans Flex.
-        textTheme: ThemeData.dark().textTheme.apply(fontFamily: 'GoogleSansFlex'),
-        primaryTextTheme: ThemeData.dark().primaryTextTheme.apply(fontFamily: 'GoogleSansFlex'),
+        textTheme: ThemeData.dark().textTheme.apply(fontFamily: kAppFont ?? 'Inter', fontFamilyFallback: const ['Inter']),
+        primaryTextTheme: ThemeData.dark().primaryTextTheme.apply(fontFamily: kAppFont ?? 'Inter', fontFamilyFallback: const ['Inter']),
       ),
       // Remote theme posters resolve through the same bundle as local assets.
       builder: (context, child) => DefaultAssetBundle(
@@ -890,7 +888,10 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   double _dockBand = 0;
   // v9.1.7 (CPane): the one bottom reserve every pane inherits. It is at
   // least the composer, so a focused pane ends above the bar.
-  double get _paneReserve => math.max(_dockBand, 110.0);
+  /// The home composer sends a message. It has no job on another surface, so
+  /// those screens do not show it and do not reserve its band.
+  bool get _composerVisible => !_tallPaneOpen;
+  double get _paneReserve => _composerVisible ? math.max(_dockBand, 110.0) : 78.0;
   void _measureDockBand() {
     final box = _composerKey.currentContext?.findRenderObject() as RenderBox?;
     if (box == null || !box.attached || !box.hasSize || box.size.height < 1) return;
@@ -1079,13 +1080,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         padding: EdgeInsets.only(top: 6),
         child: Text(
           'Nothing here yet',
-          style: TextStyle(
-            fontFamily: 'GoogleSansFlex',
-            fontSize: 11,
-            height: 1.3,
-            fontWeight: FontWeight.w500,
-            color: Color(0x8AFFFFFF),
-          ),
+          style: appFont(fontSize: 11, height: 1.3, fontWeight: FontWeight.w500, color: const Color(0x8AFFFFFF)),
         ),
       );
     }
@@ -2168,9 +2163,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                     // Map row 13: a generation gets the room to show its media
                     // and its panel, so the media board keeps this plane to
                     // itself and only the composer floats in the floatable width.
-                    if (_mediaShowing)
+                    if (_mediaShowing && _composerVisible)
                       _buildComposer()
-                    else ...[
+                    else if (!_mediaShowing) ...[
                       // Bug 5: the opened answer is a tray anchored over the
                       // ticker, not a permanent block in the middle of it.
                       // v9.1.6: the approved layout (app-11): the rail sits
@@ -2201,7 +2196,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                       const SizedBox(height: _windowGap),
                       // Bug 7: the composer has its own slot now, so it cannot
                       // land on the category chips.
-                      _buildComposer(),
+                      if (_composerVisible) _buildComposer(),
                     ],
                     const SizedBox(height: _windowGap),
                   ],

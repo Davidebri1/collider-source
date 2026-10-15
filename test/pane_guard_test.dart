@@ -12,7 +12,7 @@ void main() {
     expect(r.exitCode, 0, reason: '${r.stdout}\n${r.stderr}');
   });
 
-  testWidgets('a focused pane does not intersect the composer', (tester) async {
+  testWidgets('Smart Gen hides the home composer', (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -25,11 +25,7 @@ void main() {
     await tester.pump();
 
     expect(find.byKey(CPane.bodyKey), findsOneWidget);
-    expect(find.byType(FloatingPrompt), findsOneWidget);
-    final pane = tester.getRect(find.byKey(CPane.bodyKey));
-    final composer = tester.getRect(find.byType(FloatingPrompt));
-    expect(pane.overlaps(composer), isFalse, reason: 'composer $composer intersects pane $pane');
-    expect(composer.top, greaterThanOrEqualTo(pane.bottom), reason: 'composer $composer must sit fully below pane $pane');
+    expect(find.byType(FloatingPrompt), findsNothing);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 50));

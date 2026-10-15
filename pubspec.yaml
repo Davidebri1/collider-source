@@ -56,3 +56,6 @@ flutter:
           weight: 600
         - asset: assets/fonts/GoogleSansFlex-700.ttf
           weight: 700
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/InterVariable.ttf

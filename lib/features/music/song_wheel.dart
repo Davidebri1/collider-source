@@ -133,6 +133,21 @@ class _SongWheelState extends State<SongWheel> {
         height: h,
         child: Stack(
           children: [
+            Positioned(
+              left: 6,
+              right: 6,
+              top: (h - ext) / 2 + 3,
+              height: ext - 6,
+              child: const IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Color(0x33FFFFFF),
+                    borderRadius: BorderRadius.all(Radius.circular(12)),
+                    border: Border.fromBorderSide(BorderSide(color: Color(0x66FFFFFF))),
+                  ),
+                ),
+              ),
+            ),
             Positioned.fill(
               child: NotificationListener<ScrollNotification>(
                 onNotification: (s) {
@@ -147,7 +162,15 @@ class _SongWheelState extends State<SongWheel> {
                 // v9.1: cinematic edges, rows fade out top and bottom (mask, no scrollbar).
                 child: ShaderMask(
                   blendMode: BlendMode.dstIn,
-                  shaderCallback: (b) => const LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0x00000000), Color(0xFF000000), Color(0xFF000000), Color(0x00000000)], stops: [0, 0.3, 0.7, 1]).createShader(b),
+                  shaderCallback: (b) {
+                    final fade = (60 / (b.height <= 0 ? 1 : b.height)).clamp(0.0, 0.42);
+                    return LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: const [Color(0x00000000), Color(0xFF000000), Color(0xFF000000), Color(0x00000000)],
+                      stops: [0, fade, 1 - fade, 1],
+                    ).createShader(b);
+                  },
                   child: ScrollConfiguration(
                   behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false, overscroll: false),
                   child: ListView.builder(

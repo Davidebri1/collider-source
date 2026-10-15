@@ -11,6 +11,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/audio/music_player.dart';
 import '../../core/media/theme_catalog.dart';
+import '../../core/theme/app_font.dart';
 import '../../core/theme/specular_border.dart';
 import '../../core/vision/vision_kit.dart';
 import '../../models/theme_def.dart';
@@ -166,7 +167,7 @@ const double _kGlassSigma = 28;
 // p-2 8 + h2 28 + mb-2 8 + song carousel (3 slots x 44) + mb-4 16 + action 36 + p-2 8
 // Rows are 44 px: each carries its own 44 px play button (v8.3, D37).
 const double _kSongRowExtent = 44;
-const int _kSongSlots = 3;
+const int _kSongSlots = 5;
 const double _kSongsBlockHeight = _kSongSlots * _kSongRowExtent;
 const double _kActionHeight = 36;
 const double _kNoSongsGap = 12;
@@ -457,7 +458,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
       final docked = h < MediaQuery.sizeOf(context).height - 1;
       final reserve = docked ? 0.0 : barReserve;
       final mainHeight = math.max(0.0, h - mainTop - reserve);
-      const labelsDocked = 8 + 28 + 8 + _kSongRowExtent + 16 + _kActionHeight + 8;
+      const labelsDocked = _kLabelsBlockHeight;
       final stageH = docked
           ? (mainHeight - _kLabelsMarginTop - labelsDocked).clamp(_kStageHeight * 0.55, _kStageHeight).toDouble()
           : _kStageHeight;
@@ -2073,7 +2074,7 @@ LinearGradient _cssLinearGradient(
 
 /// Export font is `ui-sans-serif, system-ui, sans-serif`; the platform
 /// substitute on web/Android/Windows is Inter (AUTHORITY S-C13).
-TextStyle _inter(TextStyle s) => s.copyWith(fontFamily: 'GoogleSansFlex');
+TextStyle _inter(TextStyle s) => appFont(textStyle: s, fontSize: s.fontSize, fontWeight: s.fontWeight, color: s.color, height: s.height, letterSpacing: s.letterSpacing ?? (s.fontSize != null && s.fontSize! <= 17 ? -0.4 : null));
 
 /// CSS drop-shadow(x y blur color): sigma = blur / 2.
 Shadow _cssDropShadow(double x, double y, double blur, Color color) {

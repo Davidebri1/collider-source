@@ -1,7 +1,33 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 
-/// v9.1.1: one bundled family, Google Sans Flex (static 400–700 instances).
-const String kAppFont = 'GoogleSansFlex';
+/// AUTHORITY S-C13. Apple uses SF Pro through the system font. Every other
+/// platform uses the bundled Inter variable font. Regular text is weight 510.
+String? get kAppFont {
+  if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.macOS)) {
+    return null;
+  }
+  return 'Inter';
+}
 
-TextStyle appFont({TextStyle? textStyle, double? fontSize, FontWeight? fontWeight, Color? color, double? height, double? letterSpacing, TextDecoration? decoration}) =>
-    (textStyle ?? const TextStyle()).copyWith(fontFamily: kAppFont, fontSize: fontSize, fontWeight: fontWeight, color: color, height: height, letterSpacing: letterSpacing, decoration: decoration);
+double _weightAxis(FontWeight? weight) {
+  if (weight == FontWeight.w700 || weight == FontWeight.w800 || weight == FontWeight.w900) return 700;
+  if (weight == FontWeight.w600) return 600;
+  if (weight == FontWeight.w300 || weight == FontWeight.w200 || weight == FontWeight.w100) return 400;
+  return 510;
+}
+
+TextStyle appFont({TextStyle? textStyle, double? fontSize, FontWeight? fontWeight, Color? color, double? height, double? letterSpacing, TextDecoration? decoration}) {
+  final axis = _weightAxis(fontWeight ?? textStyle?.fontWeight);
+  return (textStyle ?? const TextStyle()).copyWith(
+    fontFamily: kAppFont,
+    fontFamilyFallback: const ['Inter', 'Helvetica Neue', 'Arial'],
+    fontSize: fontSize,
+    fontWeight: fontWeight,
+    fontVariations: [FontVariation('wght', axis)],
+    color: color,
+    height: height,
+    letterSpacing: letterSpacing,
+    decoration: decoration,
+  );
+}

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/audio/music_player.dart';
+import '../../core/theme/app_font.dart';
 import '../../core/vision/vision_kit.dart';
 import 'contextual_side_nav.dart';
 
@@ -182,15 +183,13 @@ class _RailButton extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: 'GoogleSansFlex',
+                style: appFont(
                   fontSize: 11,
                   height: 1.1,
                   letterSpacing: -0.05,
                   fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                  color: Colors.white, // v9.1.4 (playtest #15): readable over bright wallpaper
-                  shadows: const [Shadow(color: Color(0xB3000000), blurRadius: 6)],
-                ),
+                  color: Colors.white,
+                ).copyWith(shadows: const [Shadow(color: Color(0xB3000000), blurRadius: 6)]),
               ),
             ],
           ),
