@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
+import '../../../core/vision/pane_rects.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import '../../../models/theme_def.dart';
@@ -51,7 +52,23 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
     ThemePackStore.instance.init();
   }
 
+  /// Until a pick, the window shows the theme that is on the wallpaper. The
+  /// shell can hand over the catalogue's placeholder (no name, no art) when
+  /// Gallery opens before the R2 list lands; resolve it against the list on
+  /// every build so the window never opens black.
+  bool _picked = false;
+  WallpaperTheme _resolveCurrent(List<WallpaperTheme> themes) {
+    final cur = widget.currentTheme;
+    for (final t in themes) {
+      if (t.id == cur.id) return t;
+    }
+    if (cur.name.isNotEmpty) return cur;
+    final d = WallpaperCatalog.defaultTheme;
+    return d.name.isNotEmpty ? d : (themes.isNotEmpty ? themes.first : cur);
+  }
+
   void _select(WallpaperTheme t) {
+    _picked = true;
     setState(() => _previewed = t);
     widget.onLivePreview(t);
   }
@@ -75,6 +92,7 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
       listenable: ThemePackStore.instance,
       builder: (context, _) {
         final themes = _themes;
+        if (!_picked) _previewed = _resolveCurrent(themes);
         return GestureDetector(
           behavior: HitTestBehavior.translucent,
           onVerticalDragEnd: (d) {
@@ -109,7 +127,7 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                   top: 0,
                   bottom: 0,
                   child: Center( // every window centred on the screen
-                    child: Column(
+                    child: PaneRect(child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         SizedBox(
@@ -156,7 +174,7 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                           ),
                         ),
                       ],
-                    ),
+                    )),
                   ),
                 ),
             ],
@@ -261,7 +279,7 @@ class _PreviewWindowState extends State<_PreviewWindow> {
             top: 12,
             child: Row(
               children: [
-                VCircleButton(icon: Icons.chevron_left_rounded, size: 32, floating: true, tooltip: 'Back', onTap: widget.onBack),
+                VCircleButton(icon: Icons.chevron_left_rounded, size: 32, floating: true, tooltip: 'Back', exit: true, onTap: widget.onBack),
                 // David (rejected before): no Expand View pill on the image.
                 const Spacer(),
                 VCircleButton(icon: Icons.check_rounded, size: 32, floating: true, tooltip: 'Set Wallpaper', onTap: widget.onSet),

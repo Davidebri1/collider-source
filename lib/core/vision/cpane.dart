@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/widgets.dart';
 import 'materialize.dart';
+import 'pane_rects.dart';
 import 'vision_kit.dart';
 import 'vision_tokens.dart';
 
@@ -100,11 +101,11 @@ class CPane extends StatelessWidget {
     // Centred on the whole screen: no top padding, no bottom reserve; the
     // equal margins live in maxHeight.
     return Center(
-      child: SizedBox(
+      child: PaneRect(child: SizedBox(
         width: w,
         height: fit == CPaneFit.fill ? maxH : null,
         child: fit == CPaneFit.fill ? glass : ConstrainedBox(constraints: BoxConstraints(maxHeight: maxH), child: glass),
-      ),
+      )),
     );
   }
 }

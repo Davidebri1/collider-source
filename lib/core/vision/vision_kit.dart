@@ -222,13 +222,18 @@ class VCircleButton extends StatelessWidget {
     this.floating = false,
     this.tooltip,
     this.iconColor,
+    this.exit = false,
   });
+
+  /// PRD R37 (David, Oct 15): a window that David's reference shows with a
+  /// Back circle keeps it (two exits: the circle and swipe / tap outside).
+  final bool exit;
 
   @override
   Widget build(BuildContext context) {
     // David: no on-screen back or close controls anywhere; every surface
     // leaves by swipe down or tap outside (one rule, enforced here).
-    if (isDismissTooltip(tooltip)) return const SizedBox.shrink();
+    if (!exit && isDismissTooltip(tooltip)) return const SizedBox.shrink();
     final core = Container(
       width: size,
       height: size,

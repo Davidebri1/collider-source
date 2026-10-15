@@ -1,3 +1,4 @@
+import '../../../core/vision/pane_rects.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -27,9 +28,12 @@ class FilesScreen extends StatefulWidget {
   const FilesScreen({super.key, required this.onClose, this.category = 'all'});
 
   static const frame = Size(1336.4, 835.2);
-  // The group's own width (rail at 0 .. main panel right 1336.4), no margin.
-  static const cropWidth = 1336.4;
-  static const center = Offset(668.2, 417.6);
+  // David (Oct 15): the window (sidebar 95.4 .. main panel right 1336.4) is
+  // centred on the screen with 8 pt each side, never full width; the frame's
+  // own rail column (0 .. 95.4) is left out because the shell's side nav sits
+  // clear of the pane (placeSideNav). 1241 + 2 x 8 x (1241 / 374) = 1294.1.
+  static const cropWidth = 1294.1;
+  static const center = Offset(715.9, 420.6);
 
   @override
   State<FilesScreen> createState() => _FilesScreenState();
@@ -110,6 +114,8 @@ class _FilesScreenState extends State<FilesScreen> {
           cropWidth: FilesScreen.cropWidth,
           center: FilesScreen.center,
           children: [
+            // The window's rect, for the side nav guard (pane_rects.dart).
+            const Positioned(left: 95.4, top: 0, width: 1241, height: 841.2, child: IgnorePointer(child: PaneRect(child: SizedBox.expand()))),
             // Sidebar 4253_frame at (95.4, 0), 295 x 740.
             Positioned(left: 95.4, top: 0, width: 295, height: 740, child: _sidebar(all)),
             // Main panel 3004_frame at (390.4, 0), 946 x 740.

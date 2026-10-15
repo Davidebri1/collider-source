@@ -50,6 +50,7 @@ import 'core/media/theme_catalog.dart';
 import 'core/vision/keyboard_dof.dart';
 import 'core/vision/materialize.dart';
 import 'core/vision/cpane.dart';
+import 'core/vision/pane_rects.dart';
 import 'core/media/first_frame.dart';
 import 'core/nav/back_guard.dart';
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
@@ -1835,6 +1836,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   }
 
   bool _browserOpen = false;
+  /// The collapsed side nav's menu is open (placeSideNav, collapsed slot).
+  bool _railMenuOpen = false;
   final _browserKey = GlobalKey();
   String _browserActiveTabId = 'user_default';
 
@@ -1858,7 +1861,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     });
   }
 
-  Widget _buildSideNav({required bool isMobile}) {
+  Widget _buildSideNav({required bool isMobile, bool labels = true, bool collapsed = false}) {
     // REQ-21 visual language: a slim detached rail of circular glass buttons sits at
     // the screen edge; the contextual panel content opens beside it when summoned.
     final surface = _currentActiveSurface;
@@ -1887,7 +1890,11 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           musicOpen: _activeDrawer == 'music',
           activeKey: railKey,
           compact: isMobile,
+          labels: labels,
+          collapsed: collapsed,
+          onExpand: () => setState(() => _railMenuOpen = true),
           onSelect: (key) {
+            if (_railMenuOpen) setState(() => _railMenuOpen = false);
             switch (surface) {
               case ActiveWorkSurface.chat:
                 if (key == 'new') {
@@ -2027,7 +2034,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         // v9.1.6: light enough that the rows stay clearly visible as rows
         // (sigma 8 plus the surface's own blur erased them).
         imageFilter: ui.ImageFilter.blur(sigmaX: _tickerBlur, sigmaY: _tickerBlur),
-        child: child,
+        // David (Oct 15): under a pane the ticker recedes so it never
+        // competes with the window above it.
+        child: AnimatedOpacity(duration: VMotion.base, opacity: off ? 0.45 : 1, child: child),
       ),
     );
   }
@@ -2470,11 +2479,40 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
             // REQ-21: the rail ornament is present on the resting canvas and every
             // durable work surface; focused overlays own the stage while open.
+            // David (Oct 15): the side nav never overlaps a pane. Every pane
+            // reports its rect (PaneRect); placeSideNav picks the slot (home
+            // above the composer, else bottom-left beside the dock under the
+            // panes, labelled or icons only). test/side_nav_clear_test.dart.
             if (_railVisible)
-              Positioned(
-                left: 10,
-                bottom: 230, // v9.1.3: above the nav column
-                child: _buildSideNav(isMobile: true),
+              Positioned.fill(
+                child: ValueListenableBuilder<Map<Object, Rect>>(
+                  valueListenable: PaneRects.rects,
+                  builder: (context, panes, _) {
+                    final size = MediaQuery.sizeOf(context);
+                    final slot = placeSideNav(
+                      screen: size,
+                      entries: sideRailEntries(_currentActiveSurface, musicOpen: _activeDrawer == 'music').length,
+                      panes: panes.values,
+                    );
+                    if (slot == null) return const SizedBox.shrink();
+                    if (slot.collapsed && _railMenuOpen) {
+                      // The nav opened as a menu from its corner button: the
+                      // user asked for it, so it may sit over the pane until
+                      // a pick or a tap outside closes it.
+                      return Stack(children: [
+                        Positioned.fill(child: VScrim(onTap: () => setState(() => _railMenuOpen = false))),
+                        Positioned(left: slot.rect.left, bottom: size.height - slot.rect.bottom, child: _buildSideNav(isMobile: true)),
+                      ]);
+                    }
+                    return Stack(children: [
+                      Positioned(
+                        left: slot.rect.left,
+                        top: slot.rect.top,
+                        child: _buildSideNav(isMobile: true, labels: slot.labels, collapsed: slot.collapsed),
+                      ),
+                    ]);
+                  },
+                ),
               ),
           ] else ...[
             if (_railVisible)

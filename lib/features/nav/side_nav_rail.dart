@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/audio/music_player.dart';
 import '../../core/vision/vision_kit.dart';
 import 'contextual_side_nav.dart';
+import '../../core/vision/pane_rects.dart';
 
 /// One affordance on the side nav. [key] is what the surface acts on.
 class SideRailEntry {
@@ -95,7 +96,17 @@ class SideNavRail extends StatelessWidget {
     required this.onSelect,
     this.compact = true,
     this.musicOpen = false,
+    this.labels = true,
+    this.collapsed = false,
+    this.onExpand,
   });
+  /// placeSideNav found no slot clear of the pane: one round button showing
+  /// the current section; [onExpand] opens the whole nav as a menu.
+  final bool collapsed;
+  final VoidCallback? onExpand;
+  /// Labels under the icons; off when the labelled stack would not clear
+  /// the open pane (placeSideNav).
+  final bool labels;
   /// v9.1.7 (#24): Music's collections show only while Music is open.
   final bool musicOpen;
 
@@ -104,8 +115,10 @@ class SideNavRail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final entries = sideRailEntries(surface, musicOpen: musicOpen);
-    final active = entries.indexWhere((e) => e.key == activeKey);
+    final all = sideRailEntries(surface, musicOpen: musicOpen);
+    final at = all.indexWhere((e) => e.key == activeKey);
+    final entries = collapsed && all.isNotEmpty ? [all[at < 0 ? 0 : at]] : all;
+    final active = collapsed ? 0 : at;
     return Recede(child: AnimatedSize(
       duration: VMotion.base,
       curve: Curves.easeOutCubic,
@@ -120,11 +133,15 @@ class SideNavRail extends StatelessWidget {
             children: [
               for (int i = 0; i < entries.length; i++) ...[
                 if (i > 0) const SizedBox(height: 1),
-                _RailButton(
-                  entry: entries[i],
-                  selected: i == active,
-                  dot: _dot,
-                  onTap: () => onSelect(entries[i].key),
+                SizedBox(
+                  height: labels && !collapsed ? sideNavEntryLabelled : sideNavEntryIcon,
+                  child: _RailButton(
+                    entry: entries[i],
+                    selected: i == active,
+                    dot: _dot,
+                    labels: labels && !collapsed,
+                    onTap: () => collapsed ? onExpand?.call() : onSelect(entries[i].key),
+                  ),
                 ),
               ],
             ],
@@ -139,12 +156,14 @@ class _RailButton extends StatelessWidget {
   final SideRailEntry entry;
   final bool selected;
   final double dot;
+  final bool labels;
   final VoidCallback onTap;
 
   const _RailButton({
     required this.entry,
     required this.selected,
     required this.dot,
+    required this.labels,
     required this.onTap,
   });
 
@@ -161,6 +180,7 @@ class _RailButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               AnimatedContainer(
                 duration: VMotion.base,
@@ -177,10 +197,10 @@ class _RailButton extends StatelessWidget {
                   color: selected ? const Color(0xFF0B0D12) : Colors.white.withValues(alpha: 0.82),
                 ),
               ),
-              const SizedBox(height: 3),
+              if (labels) const SizedBox(height: 3),
               // Named family, not GoogleFonts: this must never depend on a
               // network fetch to render in the same face as everything else.
-              Text(
+              if (labels) Text(
                 entry.label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

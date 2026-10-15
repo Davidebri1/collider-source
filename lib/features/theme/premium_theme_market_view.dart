@@ -1,3 +1,4 @@
+import '../../core/vision/pane_rects.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -208,13 +209,35 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
         ...WallpaperCatalog.freeThemes,
       ];
 
+  /// David (Oct 15): the market opens on real cover art, as in his v8.3
+  /// photo (Gilt Arcade). If that theme is gone, the premium theme with a
+  /// proper title nearest the middle of the premium run; never an untitled
+  /// file name like "snow ridge local".
+  int _openingIndex(List<WallpaperTheme> list) {
+    final gilt = list.indexWhere((t) => t.name.toLowerCase() == 'gilt arcade');
+    if (gilt >= 0) return gilt;
+    bool titled(WallpaperTheme t) => t.isPremium && t.name.isNotEmpty && t.name[0] == t.name[0].toUpperCase() && t.name[0] != t.name[0].toLowerCase();
+    final prem = [for (var i = 0; i < list.length; i++) if (list[i].isPremium) i];
+    if (prem.isEmpty) return list.length ~/ 2;
+    final mid = prem[prem.length ~/ 2];
+    var best = -1;
+    for (final i in prem) {
+      if (titled(list[i]) && (best < 0 || (i - mid).abs() < (best - mid).abs())) best = i;
+    }
+    return best >= 0 ? best : mid;
+  }
+
   /// A still (not premium) is free: it applies straight away.
   bool _owned(WallpaperTheme t) => !t.isPremium || _store.isUnlocked(t.id);
 
   void _onCatalogChanged() {
     if (!mounted) return;
-    _fetchThemes(_searchQuery, keepId: _selected?.id);
+    // Until the user moves the carousel, a late catalogue reopens on the
+    // opening cover (_openingIndex) instead of keeping a placeholder.
+    _fetchThemes(_searchQuery, keepId: _userMoved ? _selected?.id : null);
   }
+
+  bool _userMoved = false;
 
   @override
   void initState() {
@@ -257,7 +280,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
       _themes = results;
       final kept = keepId == null ? -1 : results.indexWhere((t) => t.id == keepId);
       _currentIndex =
-          results.isEmpty ? 0 : (kept >= 0 ? kept : results.length ~/ 2);
+          results.isEmpty ? 0 : (kept >= 0 ? kept : (q.isEmpty ? _openingIndex(results) : results.length ~/ 2));
       _selected = results.isEmpty ? null : results[_currentIndex];
     });
     final s = _selected;
@@ -279,6 +302,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
     if (index < 0) index += _themes.length;
     final changed = index != _currentIndex;
     if (!changed) return;
+    _userMoved = true;
     setState(() {
       _currentIndex = index;
       _selected = _themes[index];
@@ -413,6 +437,10 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
                   ),
                 ),
 
+              // The cover, name and price: the pane the side nav must clear
+              // (pane_rects.dart). Full width: the neighbour covers peek to
+              // the screen edges.
+              Positioned(left: 0, right: 0, top: contentTop + coverInset, height: visibleHeight, child: const IgnorePointer(child: PaneRect(child: SizedBox.expand()))),
               // No search results: an empty stage, no copy (v8.3, D45).
               if (_themes.isNotEmpty && selected != null) ...[
                 // Label form (z 250) sits under the CoverFlow wrapper (z 300)
