@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'dart:math' as math;
 import 'core/theme/app_font.dart';
 import 'features/smartgen/kanban_store.dart';
@@ -43,6 +44,7 @@ import 'features/browser/browser_urls.dart';
 import 'features/browser/models/browser_tab.dart';
 import 'features/browser/screens/in_app_browser_sheet.dart';
 import 'features/theme/premium_theme_market_view.dart';
+import 'features/theme/theme_pack_store.dart';
 import 'features/theme/theme_living_media.dart';
 import 'core/media/theme_catalog.dart';
 import 'core/vision/keyboard_dof.dart';
@@ -346,6 +348,14 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       // falls to the catalog's own default (an R2 theme).
       _currentTheme = cat.bySlug(_currentTheme.id) ?? cat.defaultTheme;
       _savedThemeBeforePreview = cat.bySlug(_savedThemeBeforePreview.id) ?? cat.defaultTheme;
+      // QA builds only: ?qa_theme=<theme id> sets that wallpaper on Home, the
+      // same state change as "Set as wallpaper" (qa/set_wallpaper_check.py).
+      final qt = ThemePackStore.qaUnlockAll ? Uri.base.queryParameters['qa_theme'] : null;
+      final q = qt == null ? null : cat.bySlug(qt);
+      if (q != null) {
+        _currentTheme = q;
+        _savedThemeBeforePreview = q;
+      }
     });
     // v9.1.6d (#3): start the current wallpaper's poster as soon as the
     // catalogue lands, so the Gallery frame is never empty while it decodes.
@@ -403,6 +413,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     if (Uri.base.queryParameters['genopts'] == '1' && _activeCategory.isMedia) _genOptionsOpen = true;
     if (Uri.base.queryParameters['rail'] == '1') _isMobileSideNavOpen = true;
     _initializeTickerItems();
+    WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) _qaSeedAnswers(); });
     _initializeHistorySessions();
     _initializeBrowserTabs();
     _boot().whenComplete(() {
@@ -422,6 +433,54 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     }
     if (qp['browser'] == '1') {
       WidgetsBinding.instance.addPostFrameCallback((_) => _openBrowserForTab('user_default'));
+    }
+  }
+
+  void _qaSeedAnswers() {
+    final qp = Uri.base.queryParameters;
+    // QA builds only: ?qa_files=1 puts one short R2 video in Files so the
+    // Player can be opened and checked.
+    if (ThemePackStore.qaUnlockAll && qp['qa_files'] == '1') {
+      () async {
+        final fs = FileStore.instance;
+        await fs.init();
+        if (fs.files.any((f) => f.name == 'QA clip.mp4')) return;
+        final r = await Dio().get<List<int>>('${ThemeCatalog.mediaBaseUrl}FARM%20SKY.mp4', options: Options(responseType: ResponseType.bytes));
+        if (r.data != null) await fs.addBytes('QA clip.mp4', Uint8List.fromList(r.data!), 'files');
+      }();
+    }
+    // QA builds only: ?qa_answers=1 fills the General ticker with sample
+    // answers so tap-to-expand, the inline composer and the long-press menu
+    // can be checked without spending model calls.
+    if (ThemePackStore.qaUnlockAll && qp['qa_answers'] == '1') {
+      final now = DateTime.now();
+      const lines = [
+        'Pack light: three outfits, one jacket, rain shell for Saturday.',
+        'Book the 9:40 train; it saves an hour over driving.',
+        'Saturday looks wet after 2 PM, so do the hike in the morning.',
+        'The cabin has a kitchen, so plan two dinners in.',
+        'Budget about \$420 for two nights including fuel.',
+        'Bring a power bank: the trail has no signal past the lake.',
+        'Reserve the lake kayaks the day before; they sell out.',
+        'Leave by 4 PM Sunday to beat traffic back.',
+      ];
+      setState(() {
+        _currentPrompt = 'Plan my weekend trip to the lake';
+        _promptTime = now;
+        var i = 0;
+        _tickerItems = [
+          for (final m in ModelRoster.forCategory(ModelCategory.general))
+            TickerItem(
+              modelDef: m,
+              relativeTime: _clock(now),
+              summary: lines[i % lines.length],
+              conversation: [
+                TickerMessage(id: 'qa-u-${m.id}', sender: 'user', text: _currentPrompt, timestamp: now),
+                TickerMessage(id: 'qa-m-${m.id}', sender: 'model', text: '${lines[i++ % lines.length]}\n\nSample answer for QA.', timestamp: now),
+              ],
+            ),
+        ];
+      });
     }
   }
 
@@ -797,7 +856,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   /// R09: "row count 1, 2 or 3." A slot is sized for a model name plus a
   /// wrapped one-line summary; longer answers scroll behind the edge fade.
   static const int _maxTickerRows = 4; // four shown, the rest scroll (v8.6)
-  static const double _rowSlot = 92;
+  // v9.1.7: one compact row (name + one-line summary) plus its 6 px gap, so
+  // the window shows about four rows and scrolls to the rest.
+  static const double _rowSlot = 46;
 
   /// The category strip that closes the window, with its gap.
   static const double _chipStripHeight = 0;
@@ -847,13 +908,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   /// Keeps the named category strip aligned with the paged ticker above it.
   late final ScrollController _catLabelCtl = ScrollController();
   final Map<ModelCategory, ScrollController> _tickerScroll = {for (final c in ModelCategory.values) c: ScrollController()};
-  // Grey-slab experiment switches (URL only, off by default):
-  // ?noguard=1 restores the old hasClients checks; ?freshsc=1 gives the
-  // ticker a fresh ScrollController per surface change.
-  static final bool _noGuard = Uri.base.queryParameters['noguard'] == '1';
-  static final bool _freshSc = Uri.base.queryParameters['freshsc'] == '1';
-  bool _one(ScrollController c) => _noGuard ? c.hasClients : c.positions.length == 1;
-  String _scSig = '';
+  // One attached scroll view per controller: reading .position with two
+  // attached throws in build (the grey-slab root cause, 9.1.6e).
+  bool _one(ScrollController c) => c.positions.length == 1;
 
   void _toggleSelect(ModelCategory c, String id) {
     setState(() {
@@ -968,10 +1025,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   /// ticker, so this method has one job.
   Widget _tickerPage(ModelCategory c) {
     final rows = _tickerRows(c);
-    if (_freshSc && _scSig != _lastSurfaceSig) {
-      _scSig = _lastSurfaceSig;
-      _tickerScroll[c] = ScrollController();
-    }
     final sc = _tickerScroll[c]!;
     // v9: nothing has been asked in this category yet. Say so once, quietly,
     // instead of leaving the column as bare glass.
@@ -2405,6 +2458,7 @@ AnimatedScale(
                   },
                   onHome: () {
                     _closeBrowser();
+                    if (_settingsOpen) setState(() => _settingsOpen = false);
                     if (_activeDrawer != null) {
                       _requestSwitchSurface(null);
                     } else {

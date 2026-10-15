@@ -99,9 +99,7 @@ class VScrim extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: blur
-          ? (Uri.base.queryParameters['clip'] == '1'
-              ? ClipRect(child: BackdropFilter(filter: ImageFilter.blur(sigmaX: VDepth.blur * k, sigmaY: VDepth.blur * k), child: dim))
-              : BackdropFilter(filter: ImageFilter.blur(sigmaX: VDepth.blur * k, sigmaY: VDepth.blur * k), child: dim))
+          ? BackdropFilter(filter: ImageFilter.blur(sigmaX: VDepth.blur * k, sigmaY: VDepth.blur * k), child: dim)
           : dim,
     );
   }

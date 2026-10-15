@@ -54,6 +54,12 @@ class ThemePackStore extends ChangeNotifier {
 
   static const bool purchasesAvailable = bool.fromEnvironment('COLLIDER_STORE');
 
+  /// QA builds only (`--dart-define=COLLIDER_QA_UNLOCK=true`): the team owns
+  /// every theme, so each premium live wallpaper can be set on Home and
+  /// checked. A compile-time constant: the live build is compiled without it,
+  /// so no URL, storage value or user action can turn it on there.
+  static const bool qaUnlockAll = bool.fromEnvironment('COLLIDER_QA_UNLOCK');
+
   static const Map<String, String> productIds = {
     'obsidian-rain': 'collider.theme.obsidian-rain',
     'limestone-dust': 'collider.theme.limestone-dust',
@@ -95,7 +101,7 @@ class ThemePackStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  bool isUnlocked(String slug) => _unlocked.contains(slug);
+  bool isUnlocked(String slug) => qaUnlockAll || _unlocked.contains(slug);
 
   /// Store product id: `collider.theme.<slug>`.
   String productIdFor(String slug) => 'collider.theme.$slug';

@@ -328,7 +328,7 @@ class _FilesScreenState extends State<FilesScreen> {
     return FGlass(
       radius: phone ? const BorderRadius.all(Radius.circular(52.8)) : const BorderRadius.only(topRight: Radius.circular(52.8), bottomRight: Radius.circular(52.8)),
       blur: 6, // ticker stays visible, blurred, behind Files
-      gradient: const LinearGradient(begin: Alignment(-0.9, -1), end: Alignment(0.9, 1), colors: [Color(0x66262626), Color(0x66404040)]),
+      gradient: const LinearGradient(begin: Alignment(-0.9, -1), end: Alignment(0.9, 1), colors: [Color(0x80262626), Color(0x80404040)]),
       // overlay-ok: panel chrome; the thumbnails sit in the grid below, nothing over them
       child: Stack(children: [
         if (phone)
@@ -416,6 +416,21 @@ class _FilesScreenState extends State<FilesScreen> {
                         onPlay: t.playable ? () => isCur ? p.toggle() : p.playQueue(lib, i, id: 'library') : null,
                       );
                     }, childCount: lib.length),
+                  ),
+                ),
+              // v9.1.7: an empty pane says so, once, instead of bare glass.
+              if (files.isEmpty && lib.isEmpty)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 90),
+                    child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(_q.isNotEmpty ? Icons.search_off_rounded : Icons.folder_open_rounded, size: 44, color: const Color(0xB3FFFFFF)),
+                      const SizedBox(height: 12),
+                      FText(_q.isNotEmpty ? 'No matches' : 'No files yet', size: 22, weight: FontWeight.w700, color: const Color(0xFFFAF9F5)),
+                      const SizedBox(height: 6),
+                      FText(_q.isNotEmpty ? 'Try another name' : 'Upload adds photos, videos and documents', size: 16, weight: FontWeight.w500, color: const Color(0xB3FAF9F5)),
+                    ])),
                   ),
                 ),
               const SliverToBoxAdapter(child: SizedBox(height: 60)),
@@ -546,7 +561,9 @@ class _FilesScreenState extends State<FilesScreen> {
         // A proper child layer: the Files pane and its controls are blurred
         // out behind the Player, not merely dimmed.
         pageBuilder: (context, _, __) => Material(type: MaterialType.transparency, child: Stack(fit: StackFit.expand, children: [
-          ClipRect(child: BackdropFilter(filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24), child: const ColoredBox(color: Color(0x66000000)))),
+          // v9.1.7: the wallpaper video is a DOM layer, so a Flutter blur cannot reach the
+          // Files pane drawn over it; a 75% dim makes the Files controls recede.
+          ClipRect(child: BackdropFilter(filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24), child: const ColoredBox(color: Color(0xBF000000)))),
           VideoPlayerView(file: f, bytes: bytes),
         ])),
       );

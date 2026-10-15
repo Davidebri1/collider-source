@@ -412,8 +412,12 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
       child: Column(
         children: [
           Expanded(child: _hero(cards.isEmpty ? null : cards.first)),
-          const SizedBox(height: VSpace.sm),
-          SizedBox(height: _stripH, child: _stripRow(cards.skip(1).toList())),
+          // v9.1.7: an empty column says so once (the hero's empty state); the
+          // strip's second "nothing here" and second add button are dropped.
+          if (cards.isNotEmpty) ...[
+            const SizedBox(height: VSpace.sm),
+            SizedBox(height: _stripH, child: _stripRow(cards.skip(1).toList())),
+          ],
         ],
       ),
     );
