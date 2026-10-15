@@ -34,12 +34,11 @@ List<SideRailEntry> sideRailEntries(ActiveWorkSurface s) => switch (s) {
       // nav is Search, Library and Looks, and nothing else. The old prompts /
       // visuals / video / audio / gallery shelves were a prompt shelf, clips
       // and songs, which R27 and X5 both exclude.
+      // v9.1.7 (#24): the side nav carries the Discover feeds.
       ActiveWorkSurface.market => const [
-          SideRailEntry('search', Icons.search_rounded, 'Search'),
-          SideRailEntry('library', Icons.photo_library_outlined, 'Library'),
-          // Not Icons.auto_awesome_outlined: sparkle-shaped glyphs are banned. "Looks"
-// is a set of curated appearances, so it reads as a filter, not a wish.
-          SideRailEntry('looks', Icons.filter_list_rounded, 'Looks'),
+          SideRailEntry('stills', Icons.photo_outlined, 'Stills'),
+          SideRailEntry('templates', Icons.view_carousel_outlined, 'Looks'), // the 58pt rail cuts 'Templates'
+          SideRailEntry('night', Icons.nightlight_outlined, 'Night'),
         ],
       ActiveWorkSurface.themes => [
           const SideRailEntry('premium', Icons.workspace_premium_rounded, 'Market'),

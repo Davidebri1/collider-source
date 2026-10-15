@@ -313,7 +313,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   // Contextual work surface state
   String _smartGenView = 'cards';
   String _smartGenBoardType = 'kanban';
-  String _marketCategory = 'prompts';
+  String _marketCategory = 'stills';
   String _themeSection = 'gallery';
   String _filesCategory = 'all';
   String _chatSection = 'global';
@@ -328,7 +328,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     if (_activeDrawer == null && MediaQuery.of(context).size.width < 768 && _openPill(_tickerItems) != null) return false;
     // Home (chat) and themes only: the Smart Gen, Market and Files rails
     // selected nothing (no surface read their keys), so they are gone (D31).
-    const surfaces = {null, 'themes'};
+    const surfaces = {null, 'themes', 'market'}; // v9.1.7 (#24): Discover feeds
     return surfaces.contains(_activeDrawer);
   }
 
@@ -860,7 +860,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   /// composer with two rows showing; the rest still scroll.
   static const int _dockedTickerRows = 2;
   /// Panes tall enough to cover the ticker. Each one ends above the dock band.
-  bool get _tallPaneOpen => _browserOpen || const {'themes', 'premium', 'music'}.contains(_activeDrawer);
+  bool get _tallPaneOpen => _browserOpen || const {'themes', 'premium', 'music', 'market'}.contains(_activeDrawer);
   final GlobalKey _tickerWindowKey = GlobalKey();
   /// Distance from the screen bottom to the top of the docked ticker (0 when
   /// the ticker has no rows). Measured after layout.
@@ -1785,7 +1785,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     final String? railKey = switch (surface) {
       ActiveWorkSurface.chat => _isMobileSideNavOpen ? _chatSection : null,
       ActiveWorkSurface.smartgen => _smartGenView,
-      ActiveWorkSurface.market => _isMobileSideNavOpen ? 'search' : _marketCategory,
+      ActiveWorkSurface.market => _marketCategory,
       ActiveWorkSurface.themes => _activeDrawer == 'premium' ? 'premium' : (_activeDrawer == 'music' ? 'music' : 'gallery'),
       ActiveWorkSurface.browser => null,
       ActiveWorkSurface.files => _filesCategory,
@@ -1821,9 +1821,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                   if (key != 'new') _smartGenView = key;
                 });
               case ActiveWorkSurface.market:
-                if (key == 'search') {
-                  togglePanel(() {}, true);
-                } else {
+                {
                   setState(() {
                     _isMobileSideNavOpen = false;
                     _marketCategory = key;
@@ -2021,6 +2019,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             ),
           ),
           ],
+          // v9.1.7 (#18): Discover is black edge to edge, the dock band included;
+          // the docked ticker reads over black like it does under Premium.
+          Positioned.fill(child: MaterializeSwitch(show: _activeDrawer == 'market', builder: (_) => const IgnorePointer(child: ColoredBox(color: Colors.black)))),
 
           // Base ambient dim. Overlays and work surfaces bring their own VScrim
           // (kit overlay 0.35 + medium blur) so the wallpaper stays visible;
@@ -2325,8 +2326,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               left: isMobile ? 0 : 360,
               right: 0,
               top: 0,
-              bottom: 78,
+              bottom: _dockBand, // v9.1.7 (#121): ends above the docked ticker
               child: MarketScreen(
+                feed: _marketCategory,
                 onClose: () => _requestSwitchSurface(null),
                 onUsePrompt: (p) => _onSendPrompt(p),
                 onNotice: _notice,

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/api/media_gen.dart';
 import '../../../core/vision/vision_kit.dart';
-import '../../../core/vision/work_surface.dart';
 import '../../../models/media_specs.dart';
 import '../../../models/theme_def.dart';
 import '../../mediagen/media_view.dart';
@@ -23,7 +22,10 @@ class MarketScreen extends StatefulWidget {
   /// One quiet line (e.g. a generation that cannot run on this link).
   final void Function(String text)? onNotice;
 
-  const MarketScreen({super.key, required this.onClose, required this.onUsePrompt, this.onNotice});
+  /// The Discover feed picked on the side nav: stills, templates or night.
+  final String feed;
+
+  const MarketScreen({super.key, required this.onClose, required this.onUsePrompt, this.onNotice, this.feed = 'stills'});
 
   @override
   State<MarketScreen> createState() => _MarketScreenState();
@@ -107,115 +109,107 @@ class _MarketScreenState extends State<MarketScreen> {
   Widget build(BuildContext context) {
     final seed = _seed();
     if (seed.isEmpty && _generated.isEmpty) return const SizedBox.shrink();
-    final featured = seed.firstWhere((t) => RegExp('neon|alley4|blade|sanctuary', caseSensitive: false).hasMatch(t.id + t.title), orElse: () => seed.isNotEmpty ? seed.first : _generated.first);
-    final shelf = [..._generated.take(4), ...seed.where((t) => t.id != featured.id).take(8)];
-    final grid = _masonry(seed).where((t) => t.id != featured.id).toList();
+    _kind = switch (widget.feed) { 'templates' => 1, 'night' => 2, _ => 0 };
+    final shelf = [..._generated.take(4), ...seed.take(10)];
+    final grid = _masonry(seed);
+    final top = MediaQuery.paddingOf(context).top;
+    // v9.1.7 (#18/#19): a literal copy of the Grok Imagine feed in black:
+    // full-bleed black stage, floating top bar over the scrolling content,
+    // "Create from template" portrait row, then the flush two-column grid
+    // with hairline gaps and square corners. No promo banner (#18). Labels
+    // stay below images (David: nothing on top of an image). The feeds are
+    // on the overlaying side nav (#24); the app keeps its one composer.
     return Stack(
       children: [
-        VWorkSurface(
-          hug: true,
-          onClose: widget.onClose,
-          tabs: _kinds,
-          activeTab: _kind,
-          onTab: (i) => setState(() => _kind = i),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Flexible(
-                child: VFadeScroll(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Grok Imagine order: hero banner, "Create from template"
-                      // portrait row, then the flush masonry. Labels sit below
-                      // media (David: nothing on top of an image).
-                      _hero(featured, shelf),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(VSpace.md, VSpace.md, VSpace.md, VSpace.xs),
-                        child: Text('Create from template', style: VType.callout(weight: FontWeight.w600, color: Colors.white70)),
+        const Positioned.fill(child: ColoredBox(color: Colors.black)),
+        Positioned.fill(
+          child: CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(child: SizedBox(height: top + 64)),
+              if (_kind != 2) ...[
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+                    child: Text('Create from template', style: VType.callout(weight: FontWeight.w600, color: Colors.white70)),
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: 228,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: shelf.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 8),
+                      itemBuilder: (_, i) => VPress(
+                        onTap: () => _remix(shelf[i]),
+                        child: SizedBox(
+                          width: 132,
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            ClipRRect(borderRadius: BorderRadius.circular(16), child: SizedBox(width: 132, height: 196, child: _img(shelf[i]))),
+                            const SizedBox(height: 6),
+                            Text(shelf[i].title, maxLines: 1, overflow: TextOverflow.ellipsis, style: VType.caption(color: Colors.white)),
+                          ]),
+                        ),
                       ),
-                      // Three portrait templates that fit the pane (nothing clipped).
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: VSpace.md),
-                        child: LayoutBuilder(builder: (ctx, c) {
-                          final w = (c.maxWidth - 2 * VSpace.xs) / 3;
-                          return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            for (var i = 0; i < shelf.length && i < 3; i++) ...[
-                              if (i > 0) const SizedBox(width: VSpace.xs),
-                              VPress(
-                                onTap: () => _remix(shelf[i]),
-                                child: SizedBox(width: w, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                  ClipRRect(borderRadius: BorderRadius.circular(VRadius.md), child: SizedBox(width: w, height: w * 1.5, child: _img(shelf[i]))),
-                                  const SizedBox(height: 4),
-                                  Text(shelf[i].title, maxLines: 2, style: VType.caption(color: Colors.white)),
-                                ])),
-                              ),
-                            ],
-                          ]);
-                        }),
-                      ),
-                      // Flush photographic grid (PhotoMasonry), second beat.
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(VSpace.md, VSpace.md, VSpace.md, VSpace.sm),
-                        child: LayoutBuilder(builder: (ctx, c) {
-                          final w = (c.maxWidth - VSpace.xs) / 2;
-                          return Wrap(spacing: VSpace.xs, runSpacing: VSpace.xs, children: [
-                            for (var i = 0; i < grid.length; i++)
-                              VPress(
-                                onTap: () => setState(() => _open = grid[i]),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(VRadius.sm),
-                                  child: SizedBox(width: w, height: i % 3 == 0 ? w * 1.25 : w * 0.8, child: _img(grid[i])),
-                                ),
-                              ),
-                          ]);
-                        }),
-                      ),
-                    ],
+                    ),
+                  ),
+                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 16)),
+              ],
+              SliverGrid(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, mainAxisSpacing: 3, crossAxisSpacing: 3, childAspectRatio: 0.67),
+                delegate: SliverChildBuilderDelegate(
+                  (_, i) => VPress(onTap: () => setState(() => _open = grid[i]), child: _img(grid[i])),
+                  childCount: grid.length,
+                ),
+              ),
+              const SliverToBoxAdapter(child: SizedBox(height: 24)),
+            ],
+          ),
+        ),
+        // Floating top bar, as in Imagine: content scrolls under a black fade.
+        Positioned(
+          left: 0,
+          right: 0,
+          top: 0,
+          child: IgnorePointer(
+            child: Container(
+              height: top + 84,
+              decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xE6000000), Color(0x00000000)])),
+            ),
+          ),
+        ),
+        Positioned(
+          left: 16,
+          right: 16,
+          top: top + 10,
+          child: SizedBox(
+            height: 44,
+            child: Stack(alignment: Alignment.center, children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                decoration: BoxDecoration(color: const Color(0x26FFFFFF), borderRadius: BorderRadius.circular(999)),
+                child: Text(_kind == 0 ? 'Discover' : _kinds[_kind], style: VType.callout(weight: FontWeight.w600, color: Colors.white)),
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: VPress(
+                  tooltip: 'Close',
+                  onTap: widget.onClose,
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: const BoxDecoration(color: Color(0x26FFFFFF), shape: BoxShape.circle),
+                    child: const Icon(Icons.close_rounded, color: Colors.white, size: 22),
                   ),
                 ),
               ),
-              // v9.1.4 (playtest #12): no second input; the app has one composer.
-            ],
+            ]),
           ),
         ),
         if (_open != null) Positioned.fill(child: _exploder(_open!)),
       ],
-    );
-  }
-
-  /// Grok Imagine hero: a wide rounded banner of three bright stills, with
-  /// its line and the Continue pill under it instead of over it.
-  Widget _hero(_Tile t, List<_Tile> more) {
-    final trio = [t, ...more.take(2)];
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(VSpace.md, VSpace.sm, VSpace.md, 0),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        VPress(
-          onTap: () => setState(() => _open = t),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(VRadius.xl),
-            child: SizedBox(height: 168, child: Row(children: [for (final x in trio) Expanded(child: _img(x))])),
-          ),
-        ),
-        const SizedBox(height: VSpace.sm),
-        Row(children: [
-          Expanded(child: Text('Remix a wallpaper', style: VType.headline(color: Colors.white))),
-          VPress(
-            tooltip: 'Continue',
-            onTap: () => _remix(t),
-            child: Container(
-              height: 36,
-              padding: const EdgeInsets.symmetric(horizontal: 18),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(color: const Color(0x33FFFFFF), borderRadius: BorderRadius.circular(999)),
-              child: Text('Continue', style: VType.footnote(color: Colors.white, weight: FontWeight.w600)),
-            ),
-          ),
-        ]),
-      ]),
     );
   }
 
