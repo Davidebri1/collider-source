@@ -1136,9 +1136,8 @@ class GlassMenu extends StatelessWidget {
                 foregroundDecoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(24),
                   // v9.1: no outline (suspended frost).
-                  boxShadow: [
-                    ...VFrost.shadow,
-                  ],
+                  // v9.1.7 (#40): a menu is a floating surface: elevation 6.
+                  boxShadow: VElev.e6,
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,

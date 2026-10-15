@@ -112,20 +112,23 @@ class _MarketScreenState extends State<MarketScreen> {
     _kind = switch (widget.feed) { 'templates' => 1, 'night' => 2, _ => 0 };
     final shelf = [..._generated.take(4), ...seed.take(10)];
     final grid = _masonry(seed);
-    final top = MediaQuery.paddingOf(context).top;
+    // v9.1.7 (#126): David's rule wins over the literal copy: Discover is a
+    // centred floating pane the width of the other panes (Smart Gen), never
+    // full width. Inside it, Grok Imagine's content and order are unchanged.
+    final paneW = (MediaQuery.sizeOf(context).width * 0.72).clamp(280.0, 520.0);
     // v9.1.7 (#18/#19): a literal copy of the Grok Imagine feed in black:
     // full-bleed black stage, floating top bar over the scrolling content,
     // "Create from template" portrait row, then the flush two-column grid
     // with hairline gaps and square corners. No promo banner (#18). Labels
     // stay below images (David: nothing on top of an image). The feeds are
     // on the overlaying side nav (#24); the app keeps its one composer.
-    return Stack(
+    final pane = Stack(
       children: [
         const Positioned.fill(child: ColoredBox(color: Colors.black)),
         Positioned.fill(
           child: CustomScrollView(
             slivers: [
-              SliverToBoxAdapter(child: SizedBox(height: top + 64)),
+              SliverToBoxAdapter(child: SizedBox(height: 64)),
               if (_kind != 2) ...[
                 SliverToBoxAdapter(
                   child: Padding(
@@ -175,7 +178,7 @@ class _MarketScreenState extends State<MarketScreen> {
           top: 0,
           child: IgnorePointer(
             child: Container(
-              height: top + 84,
+              height: 84,
               decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xE6000000), Color(0x00000000)])),
             ),
           ),
@@ -183,7 +186,7 @@ class _MarketScreenState extends State<MarketScreen> {
         Positioned(
           left: 16,
           right: 16,
-          top: top + 10,
+          top: 10,
           child: SizedBox(
             height: 44,
             child: Stack(alignment: Alignment.center, children: [
@@ -206,6 +209,25 @@ class _MarketScreenState extends State<MarketScreen> {
                 ),
               ),
             ]),
+          ),
+        ),
+      ],
+    );
+    return Stack(
+      children: [
+        SafeArea(
+          bottom: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(0, 40, 0, 12),
+            child: Center(
+              child: SizedBox(
+                width: paneW,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(VRadius.xl), boxShadow: VElev.e6),
+                  child: ClipRRect(borderRadius: BorderRadius.circular(VRadius.xl), child: pane),
+                ),
+              ),
+            ),
           ),
         ),
         if (_open != null) Positioned.fill(child: _exploder(_open!)),

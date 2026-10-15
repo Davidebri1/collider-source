@@ -273,8 +273,22 @@ class _ConsensusWebViewState extends State<ConsensusWebView> {
   }
 
   // No real consensus job yet (or no model has answered): say so, with a way out.
+  // v9.1.7 (#123): an empty state, not a blank black screen.
   Widget _empty() => Stack(
         children: [
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: VSpace.xl),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.hub_outlined, size: 40, color: VColors.textSecondary),
+                const SizedBox(height: VSpace.sm),
+                Text('No roundup yet', style: VType.headline(), textAlign: TextAlign.center),
+                const SizedBox(height: VSpace.xs),
+                Text('Ask something with two or more models on. Where they agree shows up here.',
+                    style: VType.footnote(color: VColors.textSecondary), textAlign: TextAlign.center),
+              ]),
+            ),
+          ),
           if (MediaQuery.of(context).size.width < 768)
             Positioned(
               left: VSpace.sm,

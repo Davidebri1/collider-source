@@ -112,21 +112,9 @@ const double _kHighVelocityThreshold = 2.0;
 const double _kRadius = 10;
 // border border-gray-800/30  (#1E2939 @ 30%)
 const Color _kCoverBorder = Color(0x00000000); // no outline
-// img boxShadow: 0 25px 50px -12px rgba(0,0,0,0.9), 0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.1)
-const List<_CssShadow> _kCoverShadows = [
-  _CssShadow(0, 25, 50, -12, Color.fromRGBO(0, 0, 0, 0.9)),
-  _CssShadow(0, 8, 32, 0, Color.fromRGBO(0, 0, 0, 0.6)),
-  _CssShadow(0, 0, 0, 1, Color.fromRGBO(255, 255, 255, 0.1)),
-];
-// The two blurred layers (cached as one image) and the crisp 1px ring.
-const List<_CssShadow> _kCoverShadowsBlurred = [
-  _CssShadow(0, 25, 50, -12, Color.fromRGBO(0, 0, 0, 0.9)),
-  _CssShadow(0, 8, 32, 0, Color.fromRGBO(0, 0, 0, 0.6)),
-];
-// center border overlay: border-white/30 shadow-2xl (0 25px 50px -12px #00000040)
-const List<_CssShadow> _kShadow2xl = [
-  _CssShadow(0, 25, 50, -12, Color.fromRGBO(0, 0, 0, 0.25)),
-];
+// v9.1.7 (#40): the source's CSS cover shadows (and the 1px white ring that
+// read as a light outline, #37) were unused hand-made shadows; covers use
+// VElev.e6 / e12 (below).
 
 // ReflectionComponent
 const double _kReflectionOpacityCenter = 0.9;

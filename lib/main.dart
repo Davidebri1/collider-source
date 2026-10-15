@@ -862,6 +862,21 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   /// composer with two rows showing; the rest still scroll.
   static const int _dockedTickerRows = 2;
   /// Panes tall enough to cover the ticker. Each one ends above the dock band.
+  bool _premiumCovered = false;
+  // While Premium materializes, Plane 0 keeps the wallpaper David had: the
+  // market previews its first theme at once, and swapping Plane 0 to it
+  // flashed the dark loading fallback.
+  WallpaperTheme get _plane0Theme => _activeDrawer == 'premium' ? _savedThemeBeforePreview : _currentTheme;
+  Timer? _premiumCoverTimer;
+  bool _premiumCovers() {
+    if (_premiumCovered) return true;
+    _premiumCoverTimer ??= Timer(const Duration(milliseconds: 650), () {
+      if (!mounted) return;
+      _premiumCoverTimer = null;
+      if (_activeDrawer == 'premium') setState(() => _premiumCovered = true);
+    });
+    return false;
+  }
   bool get _tallPaneOpen => _browserOpen || const {'themes', 'premium', 'music', 'market'}.contains(_activeDrawer);
   final GlobalKey _tickerWindowKey = GlobalKey();
   /// Distance from the screen bottom to the top of the docked ticker (0 when
@@ -893,7 +908,10 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
   /// The tray takes what the ticker leaves, so the wallpaper still reads at
   /// the top of the screen when it is open (R36).
-  double get _trayHeight => (MediaQuery.sizeOf(context).height * 0.30).clamp(160.0, 340.0);
+  // v9.1.7 (#122): the opened conversation takes the open wallpaper above
+  // the ticker (it was 30 %, about one message under the header and tools);
+  // the tray is Flexible in the column, so it never runs under the top edge.
+  double get _trayHeight => (MediaQuery.sizeOf(context).height * 0.58).clamp(160.0, 600.0);
 
   /// Real elevation: a tight contact shadow grounds the plane, a wide ambient
   /// one lifts it off the wallpaper, and a faint white bounce says light is
@@ -1639,6 +1657,10 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   }
 
   Future<void> _onSendPrompt(String prompt, [List<String> files = const []]) async {
+    // v9.1.7 (#127): the composer closes after every send (direct, media,
+    // QA and backend paths alike), not only on a tap on the wallpaper.
+    if (_isComposerSummoned && mounted) setState(() => _isComposerSummoned = false);
+    FocusManager.instance.primaryFocus?.unfocus();
     if (_activeCategory.isMedia) return _onSendMedia(prompt);
     final models = _selectedModelIds.where((id) {
       final d = ModelRoster.byId(id);
@@ -1960,6 +1982,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   DateTime _swipeT = DateTime.now();
 
   Widget build(BuildContext context) {
+    if (_activeDrawer != 'premium') { _premiumCovered = false; _premiumCoverTimer?.cancel(); _premiumCoverTimer = null; }
     final surfaceSig = '$_activeDrawer|${_expandedModelIds.join(',')}|$_settingsOpen|$_browserOpen|$_zoomedMessage|$_localHistoryModel';
     if (surfaceSig != _lastSurfaceSig) { _lastSurfaceSig = surfaceSig; }
     WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) _measureDockBand(); });
@@ -2012,24 +2035,28 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // opaque #000 -> #111 root and its own ambient loop over the whole
           // viewport, so Plane 0 was invisible there while still decoding a
           // full-bleed still on every swipe during idle playback.
-          if (_activeDrawer != 'premium') ...[
+          // v9.1.7 (#36): the wallpaper stays until Premium has fully
+          // materialized over it; dropping it the moment Premium opened was a
+          // hard cut to black before the market faded in.
+          if (!(_activeDrawer == 'premium' && _premiumCovers())) ...[
           Positioned.fill(
             child: ThemeLivingBackdrop(
-              key: ValueKey('live-${_currentTheme.id}-${_currentTheme.videoPath ?? _currentTheme.assetPath}-${_activeDrawer == 'premium' ? 'ambient' : 'live'}'),
-              theme: _currentTheme,
+              key: ValueKey('live-${_plane0Theme.id}-${_plane0Theme.videoPath ?? _plane0Theme.assetPath}-live'),
+              theme: _plane0Theme,
               // Asset-swap: live loop + Builder BackgroundVideo filter when Premium Market
               // (supersedes prior H6 sharp-tint / preferVideo:false)
               // The premium market renders its own ambient loop of the focused theme;
               // Plane 0 stays on the poster there so only one stream is open.
               // The Theme Gallery paints its own room and preview (row 6).
               preferVideo: _activeDrawer != 'premium' && _activeDrawer != 'themes',
-              builderAmbient: _activeDrawer == 'premium',
+              builderAmbient: false, // never built under a settled Premium
             ),
           ),
           ],
           // v9.1.7 (#18): Discover is black edge to edge, the dock band included;
           // the docked ticker reads over black like it does under Premium.
-          Positioned.fill(child: MaterializeSwitch(show: _activeDrawer == 'market', builder: (_) => const IgnorePointer(child: ColoredBox(color: Colors.black)))),
+          // v9.1.7 (#126): no full-screen black behind Discover any more; the
+          // black is the centred pane itself.
 
           // Base ambient dim. Overlays and work surfaces bring their own VScrim
           // (kit overlay 0.35 + medium blur) so the wallpaper stays visible;
@@ -2148,7 +2175,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                       // with open wallpaper above it.
                       const Spacer(),
                       if (_buildTray() case final tray?) ...[
-                        tray,
+                        Flexible(flex: 40, child: tray),
                         const SizedBox(height: _windowGap),
                       ],
                       // Bug 10: this one dims when the composer is summoned.
