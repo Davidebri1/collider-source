@@ -63,3 +63,25 @@ Deviations from the reference, each because a standing rule wins:
 - Template labels sit below the image, not on it (David: nothing on top of an image).
 - The black continues behind the docked ticker band (#121), as it does under Premium.
 The previous file is kept at release/v91/v917/market_screen.v917pre.dart. Evidence: release/v91/v917/shots/disc_sbs2.png (the 3 Collider shots next to the 2 reference shots).
+
+## v9.1.7 — Discover was full width and not centred (MASTER-LIST #127) — owner: our team
+David rejected Discover (Oct 15 5:04 AM). Root cause: a literal-copy instruction ("copy Grok Imagine literally") was applied over a general layout rule (CONVENTIONS: panes are centred floating panes, never full width). A literal copy never overrides the general rules.
+Corrective action: Discover keeps Grok Imagine's content and order (black, template row, two-column grid, no promo, no grey backdrop) inside a centred CPane the width of every other pane, with the side nav over it (a2f217d, then 7686bc8). The full-screen black backdrop is gone. The top-bar close circle is removed too: David's rule is no on-screen close controls, so tap outside closes. This supersedes the "black edge to edge" and "top-right circle closes Discover" lines of the entry above.
+Evidence: release/v91/v917/cpane/sbs_market.png, market_after_final.png.
+
+## v9.1.7 — Composer stayed open after a send (MASTER-LIST #128) — owner: our team
+Root cause: only the backend send path tucked the composer. The direct, QA and media paths left it summoned, with the room blurred behind it.
+Corrective action: _onSendPrompt tucks the composer and drops focus at the start of every send (a2f217d). The shell builds the composer once, so every screen inherits this.
+Evidence: release/v91/v917/cpane/sbs_composer_send2.png.
+
+## v9.1.7 — Corrective action for the centring, glass, shadow and full-width rows (MASTER-LIST #129)
+David, Oct 15 5:08 AM: make the violations impossible to build, rather than check for them and correct them afterwards.
+- lib/core/vision/cpane.dart: CPane is the one pane. It is always centred. Its width and max height come from CPaneTokens (on a phone every pane is (w − 104) clamped to 260–300). It uses one glass (VFrost tint and blur) and takes elevation from CLayer base/panel/floating/modal → VElev e0/e2/e6/e12. It has no width, alignment, blur, colour or shadow parameters. CPaneWindow adds the window header. Built from SmartGenScreen's centred pane, VGlass/VFrost and VElev.
+- CShell (the shell, main.dart) hands every pane one bottom reserve: the docked ticker band, which contains the composer. The ticker now docks under every pane.
+- tool/pane_guard.dart runs before every build (tool/build_web.sh) and in test/pane_guard_test.dart. In lib/features it fails on BackdropFilter, ImageFilter.blur, BoxShadow, boxShadow:, VGlass, FGlass, VWindow, MediaQuery width and VOverlay widths; in main.dart it fails on raw Positioned panes. Existing uses are frozen in tool/pane_guard_baseline.json, and that count can only go down. A new file, or a higher count, fails the build. A probe file using BoxShadow( was rejected.
+- Moved onto CPane (7686bc8): Discover, Smart Gen, Files (phone), Music, Browser, Account, History, Local history, Roundup.
+- Not moved yet, with reasons:
+  - Settings: #97 rebuild, at the Figma 10:2193 frame scaled to 25–33 %.
+  - Gallery and Premium: these are windowless full-screen stages with phone-shaped previews, by David's earlier rules ("Gallery never dims or blurs the wallpaper"; Premium's own stage). Putting them in a glass pane needs his decision.
+  - Apps: a windowless launcher with no surface.
+  - Media and gen sheets, and ticker internals.

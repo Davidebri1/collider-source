@@ -13,3 +13,10 @@ Nothing here is live. Live is still v9.1.6h (main.dart.js a4171fc0…). Producti
 | Premium | Set as wallpaper path works with the QA unlock; owned pill seen | shots/ui_set2.png, shots/under4.png | Ticker hidden under the black stage (#6/#7); cover overlaps the name after a swipe (seen, not on the list) |
 | Gallery / Music | Theme list without 66 broken items | shots/under4.png, setwall/report.json | Ticker hidden under the hero card and the music list (#6/#7) |
 | Catalog | 65 broken or streaked videos plus 7.webp hidden (tool/qa/blocked-themes.json) | setwall/report.json, shots/ok_sheet_*.png, shots/removed_7webp.png | Default stays Reflection Lake 1280x720 because the 4K copy is broken (#79) |
+
+## Batch 3 (Oct 15, 5:40 AM): build vs before (build-qa3), 390x844
+Side-by-sides are in release/v91/v917/cpane/: sbs_market, sbs_smartgen, sbs_music, sbs_files3, sbs_consensus2, sbs_browser, sbs_history, sbs_settings, sbs_apps, sbs_themes, sbs_premium, sbs_row, sbs_composer_send2 and sbs_discfull.
+- Centred, same width, nothing cut off, not worse than before: Discover, Smart Gen (it was off-centre before), Files (it was full width before), Music, Browser, Roundup (it was a full-screen black page), and the opened conversation (#122).
+- Unchanged: Gallery, Premium, Settings, History (Global) and Apps. The ticker now docks under Apps.
+- Open: the Browser page shows a white strip at its right edge, as it did before (the site's own page). Settings is still ~80 % wide and waits for #97.
+- Motion (#36): see motion/run.log. On the box's software renderer, Premium cold open, Discover open, Files open and row open still show one-step stalls.
