@@ -129,6 +129,29 @@ void main() {
     expect(add.right, lessThanOrEqualTo(287));
   });
 
+  testWidgets('a fractional page rests between two lists', (tester) async {
+    final store = SgStore()..ensureStarter();
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SizedBox(
+          width: 286,
+          height: 520,
+          child: SgKanban(store: store, onOpen: (_) {}, initialPage: 0.5),
+        ),
+      ),
+    ));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    final todo = tester.getRect(find.text('To Do'));
+    final doing = tester.getRect(find.text('Doing'));
+    expect(todo.left, lessThan(0), reason: 'To Do should be sliding off');
+    expect(todo.right, greaterThan(40), reason: 'To Do should still be on screen');
+    expect(todo.right, lessThan(286));
+    expect(doing.left, greaterThan(todo.right));
+    expect(doing.left, lessThan(200));
+    expect(doing.right, greaterThan(286), reason: 'Doing should run off the right edge');
+  });
+
   testWidgets('every chip on the card sheet clears 4.5:1 and the actions are fully visible', (tester) async {
     tester.view.physicalSize = const Size(390, 6400);
     tester.view.devicePixelRatio = 1;

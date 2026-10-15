@@ -42,6 +42,8 @@ class _SgPaneState extends State<SgPane> {
   @override
   void initState() {
     super.initState();
+    final kp = Uri.base.queryParameters['kpage'];
+    if (kp != null && kp != 'last') _kanbanPage = double.tryParse(kp) ?? 0;
     store.addListener(_onStore);
     _boot();
   }

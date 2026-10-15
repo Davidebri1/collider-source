@@ -204,19 +204,51 @@ class SgKanban extends StatefulWidget {
 
 class _SgKanbanState extends State<SgKanban> {
   late final PageController _pages = PageController(viewportFraction: SgKanban.listFraction);
+  int _pageTries = 0;
+  int _stable = 0;
 
   @override
   void initState() {
     super.initState();
-    if (widget.initialPage != 0) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _showPage());
+    _schedulePage();
+  }
+
+  @override
+  void didUpdateWidget(SgKanban old) {
+    super.didUpdateWidget(old);
+    if (old.initialPage != widget.initialPage) {
+      _pageTries = 0;
+      _stable = 0;
+      _schedulePage();
     }
   }
 
+  void _schedulePage() {
+    if (widget.initialPage == 0) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _showPage());
+  }
+
+  /// A capture such as 0.5 must stay between snap points. [PageController.jumpTo]
+  /// ends in a ballistic settle, and page physics round 0.5 up to the next list.
+  bool get _holdBetween => (widget.initialPage - widget.initialPage.round()).abs() > 0.001;
+
+  /// The pane's width settles a frame or two after the first layout. Keep
+  /// placing the page until that width has held still, or a fractional page
+  /// drifts onto the next list.
   void _showPage() {
-    if (!mounted || !_pages.hasClients || _pages.position.viewportDimension == 0) return;
-    final target = widget.initialPage * _pages.position.viewportDimension * _pages.viewportFraction;
-    _pages.jumpTo(target.clamp(0, _pages.position.maxScrollExtent));
+    if (!mounted || widget.initialPage == 0 || _pageTries > 12) return;
+    _pageTries++;
+    if (_pages.hasClients && _pages.position.hasContentDimensions && _pages.position.viewportDimension > 0) {
+      final pos = _pages.position;
+      final target = (widget.initialPage * pos.viewportDimension * _pages.viewportFraction).clamp(0.0, pos.maxScrollExtent);
+      if ((pos.pixels - target).abs() <= 0.5) {
+        _stable++;
+      } else {
+        _stable = 0;
+        pos.jumpTo(target);
+      }
+    }
+    if (_stable < 3) _schedulePage();
   }
 
   @override
@@ -234,6 +266,7 @@ class _SgKanbanState extends State<SgKanban> {
       child: PageView.builder(
         controller: _pages,
         padEnds: false,
+        pageSnapping: !_holdBetween,
         itemCount: lists.length + 1,
         itemBuilder: (context, i) {
           return i == lists.length ? _addList() : _column(b, lists[i]);
