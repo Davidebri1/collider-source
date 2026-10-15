@@ -608,12 +608,14 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       if (r.status == 'error') return;
       final prev = _tickerItems.where((t) => t.modelDef.id == mid).toList();
       final waiting = r.status == 'pending';
+      final keepIsolated = prev.isNotEmpty && prev.first.isIsolated;
       items.add(TickerItem(
         modelDef: def,
         relativeTime: restored ? _ago(j.created) : 'just now',
         summary: r.essence.isNotEmpty ? r.essence : r.text.split('\n').first,
         isStreaming: waiting,
-        conversation: prev.isNotEmpty && prev.first.isIsolated
+        isIsolated: keepIsolated,
+        conversation: keepIsolated
             ? prev.first.conversation
             : [
                 TickerMessage(id: '${j.id}_u', sender: 'user', text: j.prompt, timestamp: j.created),
@@ -966,13 +968,20 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
   // Restored v8.6 (9f839b7): the rail is one row per model in the category,
   // answered or not, so every model can be seen and toggled.
-  List<TickerItem> _tickerRows(ModelCategory c) => [
-        for (final m in ModelRoster.forCategory(c))
-          _tickerItems.firstWhere(
-            (t) => t.modelDef.id == m.id,
-            orElse: () => TickerItem(modelDef: m, relativeTime: '', summary: '', conversation: const []),
-          ),
-      ];
+  List<TickerItem> _tickerRows(ModelCategory c) {
+    final rows = [
+      for (final m in ModelRoster.forCategory(c))
+        _tickerItems.firstWhere(
+          (t) => t.modelDef.id == m.id,
+          orElse: () => TickerItem(modelDef: m, relativeTime: '', summary: '', conversation: const []),
+        ),
+    ];
+    // R41: isolated models are a second block, after the shared query, so one
+    // hairline separates them. Roster order is kept inside each block.
+    final shared = [for (final t in rows) if (!t.isIsolated) t];
+    final isolated = [for (final t in rows) if (t.isIsolated) t];
+    return [...shared, ...isolated];
+  }
 
   /// Long-press on a ticker row: its context menu (tap outside closes it).
   void _rowMenu(ModelCategory c, TickerItem item) {
@@ -1100,7 +1109,33 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             physics: const BouncingScrollPhysics(),
             itemCount: rows.length,
             separatorBuilder: (_, __) => const SizedBox(height: 6),
-            itemBuilder: (_, i) => _tickerRow(c, rows[i], rows.length <= 1 ? 1.0 : 1.0 - i / (rows.length - 1)),
+            itemBuilder: (_, i) {
+              final row = _tickerRow(c, rows[i], rows.length <= 1 ? 1.0 : 1.0 - i / (rows.length - 1));
+              // Hairline where the shared block ends and the isolated block
+              // starts (feat/ticker-isolation-and-budget). No label.
+              final split = i > 0 && rows[i].isIsolated && !rows[i - 1].isIsolated;
+              if (!split) return row;
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 10),
+                  Container(
+                    height: 1,
+                    margin: const EdgeInsets.symmetric(horizontal: 2),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(colors: [
+                        Colors.white.withValues(alpha: 0),
+                        Colors.white.withValues(alpha: 0.16),
+                        Colors.white.withValues(alpha: 0),
+                      ]),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  row,
+                ],
+              );
+            },
           ),
           ),
           if (rows.length > 3 && _one(sc) && sc.position.maxScrollExtent > 0)
@@ -1173,12 +1208,15 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   bool _isErr(String t) => t.startsWith('Error: ') || _errTexts.contains(t);
 
   Future<void> _directConsensus(String prompt) async {
+    // R41: a direct reply takes that model out of the shared query. The score
+    // and the line count only the models still on it.
+    final shared = [for (final t in _tickerItems) if (!t.isIsolated) t];
     final answers = [
-      for (final t in _tickerItems)
+      for (final t in shared)
         if (t.conversation.isNotEmpty && t.conversation.last.sender == 'model' && !_isErr(t.conversation.last.text))
           (t.modelDef.label, t.conversation.last.text),
     ];
-    final total = _tickerItems.length;
+    final total = shared.length;
     if (answers.isEmpty) {
       setState(() {
         _isConsensusGenerating = false;

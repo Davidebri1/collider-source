@@ -18,10 +18,11 @@ class SideRailEntry {
 /// ellipsised into mush, which is what made it look broken.
 List<SideRailEntry> sideRailEntries(ActiveWorkSurface s, {bool musicOpen = false}) => switch (s) {
       ActiveWorkSurface.chat => const [
+          // R14: search is the first item. The consensus view stays the pinned ticker row.
+          SideRailEntry('search', Icons.search_rounded, 'Search'),
           SideRailEntry('new', Icons.add_rounded, 'New'),
           SideRailEntry('local', Icons.history_rounded, 'Local'),
           SideRailEntry('global', Icons.public_rounded, 'Global'),
-          SideRailEntry('consensus', Icons.balance_rounded, 'Roundup'),
         ],
       // v9.1.7 (#24): Smart Gen's own tools (were a bottom ornament).
       ActiveWorkSurface.smartgen => const [

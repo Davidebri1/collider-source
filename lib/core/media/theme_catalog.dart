@@ -389,6 +389,26 @@ class ThemeCatalog extends ChangeNotifier {
               audioUrl: s['url'] as String));
         }
       }
+      // R30, from feat/market-row21-window: a sold pack includes at least five
+      // tracks. Tag matches stay first. The rest are real songs from the live
+      // catalog, in catalog order, until the pack has five. The market branch
+      // stored five titles per pack in a bundled snapshot; those slugs are not
+      // the live wallpapers, so the count is applied here instead of swapping
+      // the catalog. The included starter is not a sold pack.
+      if (!_starter(name)) {
+        final used = {for (final t in tracks) t.audioUrl};
+        for (final s in songs) {
+          if (tracks.length >= 5) break;
+          final url = s['url'] as String;
+          if (!used.add(url)) continue;
+          tracks.add(AmbientTrack(
+              number: tracks.length + 1,
+              title: niceName('${s['name']}').replaceAll(RegExp(r'\s+song$'), ''),
+              duration: '',
+              mood: '',
+              audioUrl: url));
+        }
+      }
     }
     return WallpaperTheme(
       id: 'r2-$name',

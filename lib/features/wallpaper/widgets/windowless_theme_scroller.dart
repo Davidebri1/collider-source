@@ -221,8 +221,14 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                                     decoration: BoxDecoration(borderRadius: BorderRadius.circular(6), boxShadow: VShadow.medium),
                                     child: ClipRRect(
                                       borderRadius: BorderRadius.circular(6),
-                                                      child: Stack(fit: StackFit.expand, children: [
-                                        ThemePosterImage(theme: t, fit: BoxFit.cover, filterQuality: FilterQuality.high),
+                                      // R32, from feat/market-row21-window: the chip shows the
+                                      // whole subject. The letterbox blur stays inside the chip.
+                                      child: Stack(fit: StackFit.expand, children: [
+                                        ImageFiltered(
+                                          imageFilter: ImageFilter.blur(sigmaX: 8, sigmaY: 8, tileMode: TileMode.clamp),
+                                          child: ThemePosterImage(theme: t, fit: BoxFit.cover),
+                                        ),
+                                        ThemePosterImage(theme: t, fit: BoxFit.contain, filterQuality: FilterQuality.high),
                                       ]),
                                     ),
                                   ),

@@ -222,6 +222,12 @@ class _ModelPillState extends State<ModelPill> {
         // no outline.
         color: Color.alphaBlend(c.withValues(alpha: 0.06 + 0.08 * e), const Color(0xD018181E)),
         borderRadius: BorderRadius.circular(18),
+        // R41, from feat/ticker-isolation-and-budget: an isolated model stays
+        // fully lit. A left edge is the only mark that it is outside the
+        // shared query. The card keeps no other outline.
+        border: item.isIsolated
+            ? Border(left: BorderSide(color: c.withValues(alpha: 0.85), width: 2.5))
+            : null,
         boxShadow: VElev.e6,
       ),
       foregroundDecoration: BoxDecoration(
