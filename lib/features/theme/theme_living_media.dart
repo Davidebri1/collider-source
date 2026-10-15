@@ -233,7 +233,11 @@ class _ThemeLivingBackdropState extends State<ThemeLivingBackdrop> {
   Future<void> _boot() async {
     final gen = ++_generation;
     final path = widget.theme.videoPath;
-    if (!widget.preferVideo || path == null || path.isEmpty) return;
+    // Web plays the loop as an HTML video element. That element is a hole in
+    // the canvas: a BackdropFilter samples the hole and paints a black slab,
+    // while the video stays visible only in the uncovered margins. The poster
+    // is a real image, so the glass can read the same picture the room shows.
+    if (kIsWeb || !widget.preferVideo || path == null || path.isEmpty) return;
     final c = ThemeMedia.isNetwork(path)
         ? VideoPlayerController.networkUrl(
             Uri.parse(path),
@@ -276,14 +280,19 @@ class _ThemeLivingBackdropState extends State<ThemeLivingBackdrop> {
   Widget build(BuildContext context) {
     final c = _controller;
     final showVideo = _ready && c != null && c.value.isInitialized;
+    final poster = ThemePosterImage(theme: widget.theme, fullBleed: true, filterQuality: FilterQuality.high);
     final media = Stack(
       fit: StackFit.expand,
       children: [
         // v9.1 ambient: a still wallpaper drifts very slowly (Ken Burns, ~4%
         // over 40 s, eased back and forth). Videos already move, so no drift.
-        (c == null && !widget.builderAmbient)
-            ? _StillDrift(child: ThemePosterImage(theme: widget.theme, fullBleed: true, filterQuality: FilterQuality.high))
-            : ThemePosterImage(theme: widget.theme, fullBleed: true, filterQuality: FilterQuality.high),
+        // The drift is a Transform. On web that layer is what a BackdropFilter
+        // samples, and the sample is empty, so every glass pane paints black
+        // while the picture stays visible only in the margins. Web keeps the
+        // poster still so the glass can read it.
+        (c == null && !widget.builderAmbient && !kIsWeb)
+            ? _StillDrift(child: poster)
+            : poster,
         if (c != null)
           AnimatedOpacity(
             opacity: showVideo ? 1 : 0,

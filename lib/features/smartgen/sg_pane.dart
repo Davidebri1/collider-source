@@ -471,18 +471,17 @@ class _SgPaneState extends State<SgPane> {
   }
 
   Widget _quick(IconData icon, String label, VoidCallback onTap) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: OutlinedButton.icon(
-        onPressed: onTap,
-        icon: Icon(icon, size: 16, color: _ink),
-        label: Text(label, style: appFont(fontSize: 13, color: _ink)),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: _ink,
-          side: const BorderSide(color: Color(0xFFE4DDD4)),
-          visualDensity: VisualDensity.compact,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        ),
+    return OutlinedButton.icon(
+      onPressed: onTap,
+      icon: Icon(icon, size: 16, color: _ink),
+      label: Text(label, style: appFont(fontSize: 13, color: _ink)),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: _ink,
+        backgroundColor: const Color(0xFFF4EFE8),
+        side: const BorderSide(color: Color(0xFFD5CDC2)),
+        visualDensity: VisualDensity.compact,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
     );
   }
@@ -516,9 +515,39 @@ class _SgPaneState extends State<SgPane> {
     );
   }
 
+  /// Light chips on the cream sheet. The app theme is dark, so an unstyled
+  /// chip paints a near-black fill behind the dark label and the words
+  /// disappear. Selected uses the same light fill.
+  ChipThemeData _paperChips() {
+    const fill = Color(0xFFF4EFE8);
+    const selected = Color(0xFFE6DFD4);
+    final label = appFont(fontSize: 13, color: _ink);
+    return ChipThemeData(
+      backgroundColor: fill,
+      selectedColor: selected,
+      disabledColor: fill,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      pressElevation: 0,
+      side: const BorderSide(color: Color(0xFFD5CDC2)),
+      labelStyle: label,
+      secondaryLabelStyle: label,
+      checkmarkColor: _ink,
+      brightness: Brightness.light,
+      color: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) return selected;
+        return fill;
+      }),
+    );
+  }
+
   Widget _editor(SgBoard b, SgCard c) {
     final listTitle = b.lists.where((l) => l.id == c.listId).firstOrNull?.title ?? c.status;
-    return ColoredBox(
+    return Theme(
+      data: Theme.of(context).copyWith(chipTheme: _paperChips(), iconTheme: const IconThemeData(color: _ink, size: 18)),
+      child: ColoredBox(
+      color: _paper,
+      child: Material(
       color: _paper,
       child: ScrollConfiguration(
         behavior: const SgScroll(),
@@ -544,19 +573,17 @@ class _SgPaneState extends State<SgPane> {
               ),
             ),
             const SizedBox(height: 8),
-            SizedBox(
-              height: 40,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                children: [
-                  _quick(Icons.swap_horiz_rounded, 'Move', () => _reveal(_listKey)),
-                  _quick(Icons.label_outline, 'Labels', () => _reveal(_labelsKey)),
-                  _quick(Icons.people_outline, 'Members', () => _reveal(_membersKey)),
-                  _quick(Icons.check_box_outlined, 'Checklist', () => _reveal(_checkKey)),
-                  _quick(Icons.attach_file, 'Attachment', () => _reveal(_filesKey)),
-                  _quick(Icons.flag_outlined, 'Done', () => store.markDone(c)),
-                ],
-              ),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _quick(Icons.swap_horiz_rounded, 'Move', () => _reveal(_listKey)),
+                _quick(Icons.label_outline, 'Labels', () => _reveal(_labelsKey)),
+                _quick(Icons.people_outline, 'Members', () => _reveal(_membersKey)),
+                _quick(Icons.check_box_outlined, 'Checklist', () => _reveal(_checkKey)),
+                _quick(Icons.attach_file, 'Attachment', () => _reveal(_filesKey)),
+                _quick(Icons.flag_outlined, 'Done', () => store.markDone(c)),
+              ],
             ),
             _section(Icons.notes_rounded, 'Description', [
               _field('Description', c.description, (v) => store.touch(() => c.description = v), lines: 3, color: _ink),
@@ -608,26 +635,17 @@ class _SgPaneState extends State<SgPane> {
               }, color: _ink),
             ]),
             _section(Icons.category_outlined, 'Type', [
-              SizedBox(
-                height: 40,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: [
-                    for (final t in SgType.values)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 4),
-                        child: ChoiceChip(
-                          label: Text(t.label, style: appFont(fontSize: 12, color: _ink)),
-                          selected: c.type == t,
-                          onSelected: (_) => store.touch(() {
-                            c.type = t;
-                            c.color = t.argb;
-                          }),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
+              Wrap(spacing: 4, runSpacing: 4, children: [
+                for (final t in SgType.values)
+                  ChoiceChip(
+                    label: Text(t.label, style: appFont(fontSize: 12, color: _ink)),
+                    selected: c.type == t,
+                    onSelected: (_) => store.touch(() {
+                      c.type = t;
+                      c.color = t.argb;
+                    }),
+                  ),
+              ]),
             ]),
             _section(Icons.label_outline, 'Labels', [
               Wrap(spacing: 4, children: [
@@ -695,6 +713,8 @@ class _SgPaneState extends State<SgPane> {
           ],
         ),
       ),
+      ),
+    ),
     );
   }
 
@@ -848,9 +868,13 @@ class _OptionRowState extends State<_OptionRow> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(widget.label, style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: widget.color)),
         const SizedBox(height: 4),
-        Wrap(spacing: 4, children: [
+        Wrap(spacing: 4, runSpacing: 4, children: [
           for (final o in widget.options)
-            ChoiceChip(label: Text(o, style: appFont(fontSize: 13, color: widget.color)), selected: o == widget.current, onSelected: (_) => widget.onPick(o)),
+            ChoiceChip(
+              label: Text(o, style: appFont(fontSize: 13, color: widget.color)),
+              selected: o == widget.current,
+              onSelected: (_) => widget.onPick(o),
+            ),
         ]),
         TextButton(
           style: TextButton.styleFrom(

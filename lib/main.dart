@@ -1961,18 +1961,13 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   bool get _otherSurfaceFocused => _settingsOpen || _browserOpen || (_activeDrawer != null) || _zoomedMessage != null || _localHistoryModel != null;
   /// One blur for the ticker whenever something else has focus.
   static const double _tickerBlur = 3;
+  /// The blur stays on the ticker rows only. Wrapping the whole column
+  /// (including the spacer above the rows) builds a full-screen layer, and
+  /// on web a pane's backdrop filter samples that layer. The spacer is
+  /// empty, so the sample is black and the glass paints as a solid slab
+  /// instead of the wallpaper.
   Widget _tickerGate(Widget child) {
-    final off = _otherSurfaceFocused;
-    return IgnorePointer(
-      ignoring: off,
-      child: ImageFiltered(
-        enabled: off,
-        // v9.1.6: light enough that the rows stay clearly visible as rows
-        // (sigma 8 plus the surface's own blur erased them).
-        imageFilter: ui.ImageFilter.blur(sigmaX: _tickerBlur, sigmaY: _tickerBlur),
-        child: child,
-      ),
-    );
+    return IgnorePointer(ignoring: _otherSurfaceFocused, child: child);
   }
 
   @override
@@ -2072,37 +2067,31 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => setState(() { _browserOpen = false; _closeAllPanes(); }), child: const SizedBox.expand())),
 
           // Depth of field for the summoned composer: the world falls out of
-          // focus behind the writing surface. Previously summoning only
-          // reflowed the layout, so the composer read as a flat overlay stuck
-          // on top of the room rather than a nearer plane in it.
-          Positioned.fill(
-            child: IgnorePointer(
-              ignoring: !_isComposerSummoned,
-              child: AnimatedOpacity(
-                duration: VMotion.base,
-                curve: Curves.easeOutCubic,
-                opacity: _isComposerSummoned ? 1 : 0,
-                child: BackdropFilter(
-                  filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.black.withValues(alpha: 0.22),
-                          Colors.black.withValues(alpha: 0.34),
-                          Colors.black.withValues(alpha: 0.58),
-                        ],
-                        stops: const [0.0, 0.55, 1.0],
-                      ),
+          // focus behind the writing surface. The filter is not mounted while
+          // the composer is at rest. A backdrop filter inside a transparent
+          // opacity still paints on web, and every pane above it then samples
+          // that empty layer instead of the wallpaper.
+          if (_isComposerSummoned)
+            Positioned.fill(
+              child: BackdropFilter(
+                filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.black.withValues(alpha: 0.22),
+                        Colors.black.withValues(alpha: 0.34),
+                        Colors.black.withValues(alpha: 0.58),
+                      ],
+                      stops: const [0.0, 0.55, 1.0],
                     ),
-                    child: const SizedBox.expand(),
                   ),
+                  child: const SizedBox.expand(),
                 ),
               ),
             ),
-          ),
           // v8.7: depth of field while typing: the room behind goes soft.
           Positioned.fill(
             child: IgnorePointer(
@@ -2191,7 +2180,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                         // v9.1.7: the same blur the ticker gets under every pane (_tickerGate,
                         // sigma 3), so typing and panes push the rail back the same way.
                         builder: (_, on, child) => ImageFiltered(
-                          enabled: on && _isComposerSummoned && !_otherSurfaceFocused,
+                          enabled: _otherSurfaceFocused || (on && _isComposerSummoned),
                           imageFilter: ui.ImageFilter.blur(sigmaX: _tickerBlur, sigmaY: _tickerBlur),
                           child: AnimatedOpacity(duration: VMotion.base, opacity: on && _isComposerSummoned ? 0.6 : 1, child: child!),
                         ),

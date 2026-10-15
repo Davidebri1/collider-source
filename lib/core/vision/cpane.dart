@@ -1,8 +1,5 @@
-import 'dart:ui' show ImageFilter;
 import 'package:flutter/widgets.dart';
-import 'materialize.dart';
 import 'vision_kit.dart';
-import 'vision_tokens.dart';
 
 /// v9.1.7 (David, Oct 15 5:08 AM): the ONLY way to show a pane.
 ///
@@ -63,24 +60,23 @@ class CPane extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final r = BorderRadius.circular(CPaneTokens.radius);
-    final mat = Materialize.of(context);
     final w = CPaneTokens.width(context);
     final maxH = maxHeight(context);
-    // The shadow has to live inside the backdrop filter. A shadow on the
-    // parent is its own layer on web, and the filter then blurs that empty
-    // layer, so the pane paints as a flat black slab instead of the wallpaper.
-    final glass = ClipRRect(
-      borderRadius: r,
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: VFrost.blur * mat, sigmaY: VFrost.blur * mat),
-        child: DecoratedBox(
-          decoration: BoxDecoration(color: VFrost.tint, borderRadius: r),
-          child: DecoratedBox(
-            decoration: BoxDecoration(borderRadius: r, boxShadow: layer.elevation),
-            child: child,
-          ),
-        ),
-      ),
+    // Fill panes are the work surfaces (Smart Gen, Files, Market). They use
+    // the clearer work frost so the wallpaper stays readable through the
+    // header. A BackdropFilter cannot be used here: on web it samples an
+    // empty layer and paints an opaque black slab over the picture, which is
+    // why the header read as a solid bar while the same wallpaper stayed
+    // visible in the margins. The tint is ordinary translucency, so the
+    // picture composites through it. Hug panes keep the denser menu tint.
+    final fill = fit == CPaneFit.fill ? VFrost.workTint : VFrost.tint;
+    // Shadow stays off this decoration. A boxShadow on the same box as a
+    // translucent colour flattens the colour to an opaque slab on web, which
+    // hides the wallpaper. The tint is the only paint between the picture and
+    // the pane's content.
+    final glass = DecoratedBox(
+      decoration: BoxDecoration(color: fill, borderRadius: r),
+      child: ClipRRect(borderRadius: r, child: child),
     );
     return Padding(
       padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top + CPaneTokens.topGap),

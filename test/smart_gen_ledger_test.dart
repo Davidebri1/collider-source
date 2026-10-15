@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:collider_flutter/features/smartgen/screens/smartgen_screen.dart';
 import 'package:collider_flutter/features/smartgen/sg_model.dart';
 import 'package:collider_flutter/features/smartgen/sg_views.dart';
@@ -114,6 +116,61 @@ void main() {
     expect(find.text('Doing'), findsNothing);
   });
 
+  testWidgets('every chip on the card sheet clears 4.5:1 and the actions are fully visible', (tester) async {
+    tester.view.physicalSize = const Size(390, 6400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    SgStore.instance.debugReset();
+    SgStore.instance.ensureStarter();
+    addTearDown(SgStore.instance.debugReset);
+    await tester.pumpWidget(MaterialApp(
+      theme: ThemeData(brightness: Brightness.dark, useMaterial3: true),
+      home: const Scaffold(body: SmartGenScreen(onClose: _noop)),
+    ));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(find.text('Draft launch post'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    const paper = Color(0xFFFAF7F2);
+    final sheet = find.byWidgetPredicate((w) => w is ColoredBox && w.color == paper);
+    expect(sheet, findsOneWidget);
+
+    final sheetRect = tester.getRect(sheet);
+    for (final label in ['Move', 'Labels', 'Members', 'Checklist', 'Attachment', 'Done']) {
+      final finder = find.descendant(of: sheet, matching: find.text(label));
+      expect(finder, findsWidgets, reason: label);
+      final count = finder.evaluate().length;
+      for (var i = 0; i < count; i++) {
+        final rect = tester.getRect(finder.at(i));
+        expect(sheetRect.inflate(1).contains(rect.topLeft) && sheetRect.inflate(1).contains(rect.bottomRight), isTrue, reason: '$label is clipped on the card sheet');
+      }
+    }
+
+    final chips = find.descendant(of: sheet, matching: find.byWidgetPredicate((w) => w is ActionChip || w is ChoiceChip || w is FilterChip));
+    expect(chips, findsWidgets);
+    final element = chips.evaluate().toList();
+    expect(element, isNotEmpty);
+    for (final chip in element) {
+      final fill = _chipFill(chip);
+      expect(fill, isNotNull, reason: 'chip has no fill');
+      final background = _over(fill!, paper);
+      final paragraphs = <RenderParagraph>[];
+      _paragraphs(chip, paragraphs);
+      expect(paragraphs, isNotEmpty, reason: 'chip has no label');
+      for (final para in paragraphs) {
+        final ink = para.text.style?.color;
+        expect(ink, isNotNull, reason: para.text.toPlainText());
+        final ratio = _contrast(_over(ink!, background), background);
+        expect(ratio, greaterThanOrEqualTo(4.5), reason: '${para.text.toPlainText()} contrast ${ratio.toStringAsFixed(2)} ink $ink on $background');
+      }
+    }
+    expect(find.descendant(of: sheet, matching: find.text('Doing')), findsWidgets);
+    expect(find.descendant(of: sheet, matching: find.text('Done')), findsWidgets);
+  });
+
   test('genie mass-edits and refactors without calling a provider', () {
     final s = SgStore()..ensureStarter();
     final reply = s.askGenie('set all priority to high');
@@ -124,4 +181,52 @@ void main() {
     expect(s.board!.cards.where((c) => c.type == SgType.task), isEmpty);
     expect(callAiApi('hello', cards: 1, columns: 1), contains('not called'));
   });
+}
+
+void _noop() {}
+
+double _channel(double s) => s <= 0.03928 ? s / 12.92 : math.pow((s + 0.055) / 1.055, 2.4).toDouble();
+
+double _luminance(Color c) => 0.2126 * _channel(c.r) + 0.7152 * _channel(c.g) + 0.0722 * _channel(c.b);
+
+double _contrast(Color a, Color b) {
+  final l1 = _luminance(a);
+  final l2 = _luminance(b);
+  final lighter = math.max(l1, l2);
+  final darker = math.min(l1, l2);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+Color _over(Color fg, Color bg) {
+  final a = fg.a;
+  if (a >= 0.99) return fg.withValues(alpha: 1);
+  return Color.from(
+    alpha: 1,
+    red: fg.r * a + bg.r * (1 - a),
+    green: fg.g * a + bg.g * (1 - a),
+    blue: fg.b * a + bg.b * (1 - a),
+  );
+}
+
+Color? _chipFill(Element chip) {
+  Color? found;
+  void walk(Element e) {
+    final w = e.widget;
+    if (w is Ink && w.decoration is ShapeDecoration) {
+      final color = (w.decoration! as ShapeDecoration).color;
+      if (color != null && color.a > 0.05) found ??= color;
+    }
+    if (w is Material && w.color != null && w.color!.a > 0.05) {
+      found ??= w.color;
+    }
+    e.visitChildren(walk);
+  }
+  chip.visitChildren(walk);
+  return found;
+}
+
+void _paragraphs(Element e, List<RenderParagraph> out) {
+  final ro = e.renderObject;
+  if (ro is RenderParagraph) out.add(ro);
+  e.visitChildren((c) => _paragraphs(c, out));
 }
