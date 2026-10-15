@@ -52,3 +52,14 @@ Evidence: release/v91/v917/shots/composer_before_after.png, c_plusmenu_b_crop.pn
 Change: when Gallery, Premium, Music or the Browser is open, the pane ends above a band at the bottom, and the ticker sits in that band directly above the composer, blurred and tap-blocked, with two rows showing (the rest scroll). Gallery and Premium size themselves to the shorter room: the Premium stage scales down as one unit, and Gallery's name/Set row and strip keep a readable width that clears the side rail.
 Also fixed: the ticker window was always 40 % of the screen tall, because CustomMultiChildLayout sizes to its constraints, which left a blank gap between the rows and the composer. It now wraps its rows, so on Home the rows sit directly over the composer, as the v9.1.6 placement above intended.
 Evidence: release/v91/v917/shots/dock4v.png, dock3v.png, dock_interactions_v.png.
+
+## v9.1.7 — Discover as the Grok Imagine feed in black (MASTER-LIST #18/#19/#121)
+Copied literally from briefs/cinematic-refs/grok-imagine (01-masonry-detail, 02-templates-hero): a black stage edge to edge, a floating top bar that the content scrolls under, a "Create from template" portrait row (132 x 196, radius 16), then a flush two-column grid (3 px gaps, square corners, 0.67 aspect).
+Deviations from the reference, each because a standing rule wins:
+- No "Animate your photos" promo banner (#18: no promo headers).
+- No Ask | Imagine toggle (never title it Imagine; discover-imagine-dialect.md). The centre pill reads "Discover" or the feed name.
+- No hamburger circle: the feeds (Stills / Looks / Night) are on the overlaying side nav (#24). The top-right circle closes Discover instead of the reference's edit icon.
+- No Discover composer ("Type to imagine"): the app keeps one composer (v9.1.4 playtest #12), which sits blurred in the dock band.
+- Template labels sit below the image, not on it (David: nothing on top of an image).
+- The black continues behind the docked ticker band (#121), as it does under Premium.
+The previous file is kept at release/v91/v917/market_screen.v917pre.dart. Evidence: release/v91/v917/shots/disc_sbs2.png (the 3 Collider shots next to the 2 reference shots).
