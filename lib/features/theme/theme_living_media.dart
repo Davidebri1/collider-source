@@ -1,0 +1,373 @@
+import 'dart:ui' show ImageFilter;
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:video_player/video_player.dart';
+import '../../core/media/theme_catalog.dart';
+import '../../core/media/first_frame.dart';
+import '../../models/theme_def.dart';
+
+/// Media source helpers. A media string is either an absolute URL (streamed
+/// from the collider-media host) or a bundled asset path.
+class ThemeMedia {
+  ThemeMedia._();
+
+  static bool isNetwork(String? src) =>
+      src != null && (src.startsWith('https://') || src.startsWith('http://'));
+
+  /// Image provider for a poster/still. Network sources are cached
+  /// (memory + browser HTTP cache on web, disk cache on mobile).
+  static ImageProvider<Object> provider(String src) {
+    if (FirstFrames.isFrame(src)) return FirstFrameImage(src.substring(FirstFrames.scheme.length));
+    if (isNetwork(src)) return CachedNetworkImageProvider(src);
+    return AssetImage(src);
+  }
+
+}
+
+/// Warms the image cache for posters the user is about to see.
+class ThemeMediaPrefetch {
+  ThemeMediaPrefetch._();
+
+  /// Precache posters within [radius] of [index] in [ordered] (the order the
+  /// carousel shows). The focused poster itself is included.
+  static void precacheAround(BuildContext context, List<WallpaperTheme> ordered, int index, {int radius = 2}) {
+    if (ordered.isEmpty) return;
+    for (var d = -radius; d <= radius; d++) {
+      final i = index + d;
+      if (i < 0 || i >= ordered.length) continue;
+      final src = ordered[i].posterUrl;
+      precacheImage(ThemeMedia.provider(src), context, onError: (_, __) {});
+    }
+  }
+
+  /// Same as [precacheAround] but locates [focused] by slug.
+  static void precacheNeighbors(BuildContext context, List<WallpaperTheme> ordered, WallpaperTheme focused, {int radius = 2}) {
+    final i = ordered.indexWhere((t) => t.id == focused.id);
+    if (i >= 0) precacheAround(context, ordered, i, radius: radius);
+  }
+}
+
+/// Any theme image by source string (URL or asset). Shows the tiny bundled
+/// wallpaper while loading and on failure, so there is never an empty box.
+///
+/// Bug 5: [filterQuality] defaults to high. The medium default was the box
+/// filter behind the visibly pixelated posters and thumbnails: a 720x1280
+/// poster drawn into a 170pt cover was being box-sampled on the way down.
+class ThemeImage extends StatelessWidget {
+  final String src;
+  final BoxFit fit;
+  final double? width;
+  final double? height;
+  final FilterQuality filterQuality;
+  final Alignment alignment;
+
+  const ThemeImage(
+    this.src, {
+    super.key,
+    this.fit = BoxFit.cover,
+    this.width,
+    this.height,
+    this.filterQuality = FilterQuality.high,
+    this.alignment = Alignment.center,
+  });
+
+  Widget? _thumb() {
+    final t = ThemeCatalog.thumbFor(src);
+    if (t == null) return null;
+    return SizedBox(
+      width: width,
+      height: height,
+      child: ClipRect(
+        child: ImageFiltered(
+          imageFilter: ImageFilter.blur(sigmaX: 6, sigmaY: 6, tileMode: TileMode.clamp),
+          child: CachedNetworkImage(imageUrl: t, fit: fit, width: width, height: height, fadeInDuration: Duration.zero, placeholder: (_, __) => _fallback(), errorWidget: (_, __, ___) => _fallback()),
+        ),
+      ),
+    );
+  }
+
+  Widget _fallback() => SizedBox(width: width, height: height, child: const ColoredBox(color: Color(0xFF0E0F14)));
+
+  @override
+  Widget build(BuildContext context) {
+    if (src.isEmpty) return _fallback();
+    if (FirstFrames.isFrame(src)) {
+      return Image(image: ThemeMedia.provider(src), fit: fit, width: width, height: height, alignment: alignment, filterQuality: filterQuality, gaplessPlayback: true, errorBuilder: (_, __, ___) => _fallback());
+    }
+    if (ThemeMedia.isNetwork(src)) {
+      return CachedNetworkImage(
+        imageUrl: src,
+        fit: fit,
+        width: width,
+        height: height,
+        alignment: alignment,
+        filterQuality: filterQuality,
+        fadeInDuration: const Duration(milliseconds: 180),
+        fadeOutDuration: Duration.zero,
+        placeholderFadeInDuration: Duration.zero,
+        // Playtest #8: a blurred 48px placeholder shows at once while the
+        // full image loads (art took up to 15 s on a cold cache).
+        placeholder: (_, __) => _thumb() ?? _fallback(),
+        errorWidget: (_, __, ___) => _fallback(),
+      );
+    }
+    return Image.asset(
+      src,
+      fit: fit,
+      width: width,
+      height: height,
+      alignment: alignment,
+      filterQuality: filterQuality,
+      gaplessPlayback: true,
+      errorBuilder: (_, __, ___) => _fallback(),
+    );
+  }
+}
+
+/// Still poster for CoverFlow thumbs (lightweight).
+class ThemePosterImage extends StatelessWidget {
+  final WallpaperTheme theme;
+  final BoxFit fit;
+  final FilterQuality filterQuality;
+
+  /// Use the higher resolution still (full-bleed wallpaper) when available.
+  final bool fullBleed;
+
+  const ThemePosterImage({
+    super.key,
+    required this.theme,
+    this.fit = BoxFit.cover,
+    this.filterQuality = FilterQuality.high,
+    this.fullBleed = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ThemeImage(
+      fullBleed ? theme.wallpaperStill : theme.posterUrl,
+      fit: fit,
+      filterQuality: filterQuality,
+    );
+  }
+}
+
+/// Premium market ambient treatment: tint only (no blur), so the living
+/// wallpaper stays sharp behind the UI (quality standard H6).
+///
+/// Bug 6, "don't translucent on translucent": this used to stack four sheets
+/// over the same pixels — a black [ColoredBox], an [Opacity], a [ColorFiltered]
+/// and a second black [ColoredBox] — to arrive at one dim. Every extra sheet is
+/// another chance for the result to go muddy, and the wall behind is already
+/// blurred ambient. One [ColorFiltered] that both tints and darkens is the
+/// minimum that still reads as a held-back background, so that is all this is.
+class BuilderAmbientFilter {
+  BuilderAmbientFilter._();
+
+  /// Kept for API compatibility; blur is intentionally not applied.
+  static const double blurSigma = 0.0;
+  static const double layerOpacity = 0.85;
+  static const Color darkOverlay = Color(0x59000000); // rgba(0,0,0,0.35)
+
+  // Mild dim + slight desaturation, with the darkOverlay's black folded into
+  // the same matrix so the tint and the scrim are one layer, not two.
+  // A source pixel multiplied by ~0.6 then lifted by ~0.12 gives roughly the
+  // old stacked result (0.85 * 0.62 * 0.65 + 0.35 * 0.35) in one pass.
+  static const ColorFilter _tint = ColorFilter.matrix(<double>[
+    0.42, 0.07, 0.01, 0, 26,
+    0.03, 0.46, 0.01, 0, 26,
+    0.03, 0.07, 0.40, 0, 26,
+    0, 0, 0, 1, 0,
+  ]);
+
+  static Widget wrap(Widget child) {
+    return ColorFiltered(colorFilter: _tint, child: child);
+  }
+}
+
+/// Full-bleed living wallpaper. The poster shows immediately; the loop
+/// streams in over it (network source) and fades in once playing. Only the
+/// active theme owns a controller; it is disposed when the theme changes or
+/// the widget leaves the tree.
+class ThemeLivingBackdrop extends StatefulWidget {
+  final WallpaperTheme theme;
+  /// When false, always show poster.
+  final bool preferVideo;
+  /// Premium market ambient tint (no blur).
+  final bool builderAmbient;
+
+  const ThemeLivingBackdrop({
+    super.key,
+    required this.theme,
+    this.preferVideo = true,
+    this.builderAmbient = false,
+  });
+
+  @override
+  State<ThemeLivingBackdrop> createState() => _ThemeLivingBackdropState();
+}
+
+class _ThemeLivingBackdropState extends State<ThemeLivingBackdrop> {
+  VideoPlayerController? _controller;
+  bool _ready = false;
+  int _generation = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _boot();
+  }
+
+  @override
+  void didUpdateWidget(covariant ThemeLivingBackdrop oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.theme.id != widget.theme.id ||
+        oldWidget.theme.videoPath != widget.theme.videoPath ||
+        oldWidget.preferVideo != widget.preferVideo) {
+      _disposeController();
+      _ready = false;
+      _boot();
+    }
+  }
+
+  Future<void> _boot() async {
+    final gen = ++_generation;
+    final path = widget.theme.videoPath;
+    // Web plays the loop as an HTML video element. That element is a hole in
+    // the canvas: a BackdropFilter samples the hole and paints a black slab,
+    // while the video stays visible only in the uncovered margins. The poster
+    // is a real image, so the glass can read the same picture the room shows.
+    if (kIsWeb || !widget.preferVideo || path == null || path.isEmpty) return;
+    final c = ThemeMedia.isNetwork(path)
+        ? VideoPlayerController.networkUrl(
+            Uri.parse(path),
+            videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+          )
+        : VideoPlayerController.asset(path, videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true));
+    _controller = c;
+    try {
+      await c.setVolume(0);
+      await c.initialize();
+      if (gen != _generation || !mounted) {
+        c.dispose();
+        return;
+      }
+      await c.setLooping(true);
+      await c.setVolume(0);
+      await c.play();
+      if (gen != _generation || !mounted) return;
+      setState(() => _ready = true);
+    } catch (e) {
+      debugPrint('ThemeLivingBackdrop: video unavailable, poster only: $e');
+      if (identical(_controller, c)) _disposeController();
+    }
+  }
+
+  void _disposeController() {
+    _generation++;
+    final c = _controller;
+    _controller = null;
+    c?.dispose();
+  }
+
+  @override
+  void dispose() {
+    _disposeController();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = _controller;
+    final showVideo = _ready && c != null && c.value.isInitialized;
+    final poster = ThemePosterImage(theme: widget.theme, fullBleed: true, filterQuality: FilterQuality.high);
+    final media = Stack(
+      fit: StackFit.expand,
+      children: [
+        // v9.1 ambient: a still wallpaper drifts very slowly (Ken Burns, ~4%
+        // over 40 s, eased back and forth). Videos already move, so no drift.
+        // The drift is a Transform. On web that layer is what a BackdropFilter
+        // samples, and the sample is empty, so every glass pane paints black
+        // while the picture stays visible only in the margins. Web keeps the
+        // poster still so the glass can read it.
+        (c == null && !widget.builderAmbient && !kIsWeb)
+            ? _StillDrift(child: poster)
+            : poster,
+        if (c != null)
+          AnimatedOpacity(
+            opacity: showVideo ? 1 : 0,
+            duration: const Duration(milliseconds: 350),
+            child: showVideo
+                ? FittedBox(
+                    fit: BoxFit.cover,
+                    clipBehavior: Clip.hardEdge,
+                    child: SizedBox(
+                      width: c.value.size.width,
+                      height: c.value.size.height,
+                      child: VideoPlayer(c),
+                    ),
+                  )
+                : const SizedBox.shrink(),
+          ),
+      ],
+    );
+    if (widget.builderAmbient) return BuilderAmbientFilter.wrap(media);
+    return media;
+  }
+}
+
+/// Cover media: poster by default; optional video for the focused cover.
+/// Only pass playVideo: true for the single focused cover so at most one
+/// extra stream is open.
+class ThemeCoverMedia extends StatelessWidget {
+  final WallpaperTheme theme;
+  final bool playVideo;
+
+  const ThemeCoverMedia({
+    super.key,
+    required this.theme,
+    this.playVideo = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final useVideo = playVideo && theme.isLive && !kIsWeb;
+    if (useVideo) {
+      return ThemeLivingBackdrop(
+        key: ValueKey('cover-vid-${theme.id}'),
+        theme: theme,
+        preferVideo: true,
+      );
+    }
+    return ThemePosterImage(theme: theme);
+  }
+}
+
+
+class _StillDrift extends StatefulWidget {
+  final Widget child;
+  const _StillDrift({required this.child});
+  @override
+  State<_StillDrift> createState() => _StillDriftState();
+}
+
+class _StillDriftState extends State<_StillDrift> with SingleTickerProviderStateMixin {
+  late final AnimationController _a = AnimationController(vsync: this, duration: const Duration(seconds: 40))..repeat(reverse: true);
+  @override
+  void dispose() {
+    _a.dispose();
+    super.dispose();
+  }
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) return widget.child;
+    return AnimatedBuilder(
+      animation: _a,
+      child: RepaintBoundary(child: widget.child),
+      builder: (_, child) {
+        final t = Curves.easeInOutSine.transform(_a.value);
+        return Transform.scale(scale: 1.0 + 0.045 * t, alignment: Alignment(-0.3 + 0.6 * t, 0.2), child: child);
+      },
+    );
+  }
+}

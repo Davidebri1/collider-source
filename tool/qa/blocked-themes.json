@@ -1,0 +1,245 @@
+{
+ "created": "2026-10-15",
+ "source": "release/v91/v917/setwall/report.json",
+ "note": "Hidden in the app only (ThemeCatalog._blocked). Files stay untouched in R2, which is the backup. Unblock by deleting the name from the list.",
+ "blocked": {
+  "0251d1e0-16a1-49ad-9807-19d1bceac3e9_1080_hd.mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: cabac decode of qscale diff failed at 26 46"
+  ],
+  "0_Background_Backdrop_1920x1080.mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: left block unavailable for requested intra4x4 mode -1"
+  ],
+  "0_Beach_Waves_3840x2160.mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: left block unavailable for requested intra mode"
+  ],
+  "0_Bed_Sky_1280x720.mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: cabac decode of qscale diff failed at 36 11"
+  ],
+  "0_Cat_Rain_1280x720.mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: cabac decode of qscale diff failed at 21 36"
+  ],
+  "0_Cat_Window_1280x720.mp4": [
+   "h264 decode errors in the source: cabac decode of qscale diff failed at 36 35"
+  ],
+  "0_Cyberpunk_Cityscape_3840x2160.mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: cabac decode of qscale diff failed at 48 82"
+  ],
+  "0_Flat_Stretch_Gatineau_River_3840x2160.mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: left block unavailable for requested intra4x4 mode -1"
+  ],
+  "0_Fog_Mist_1280x720 (1).mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: cabac decode of qscale diff failed at 58 39"
+  ],
+  "0_Fog_Mist_1280x720.mp4": [
+   "h264 decode errors in the source: left block unavailable for requested intra mode"
+  ],
+  "0_Futuristic_Sunset_1280x720 (1).mp4": [
+   "h264 decode errors in the source: cabac decode of qscale diff failed at 79 29"
+  ],
+  "0_Nebula_Space_1440x2560.mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: left block unavailable for requested intra mode"
+  ],
+  "0_New_York_City_Manhattan_1280x720.mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: cabac decode of qscale diff failed at 63 17"
+  ],
+  "0_Ocean_Reflection_2160x3840.mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: left block unavailable for requested intra mode"
+  ],
+  "0_Reflection_Lake_3840x2160.mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: error while decoding MB 90 39, bytestream 440049"
+  ],
+  "0_Sky_Live_Wallpaper_1280x720.mp4": [
+   "h264 decode errors in the source: cabac decode of qscale diff failed at 55 43"
+  ],
+  "0_Sky_Moon_1280x720 (2).mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: cabac decode of qscale diff failed at 24 42"
+  ],
+  "0_Sunset_Lake_1280x720.mp4": [
+   "h264 decode errors in the source: left block unavailable for requested intra mode"
+  ],
+  "0_Sunset_Sunrise_3840x2160.mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: left block unavailable for requested intra mode"
+  ],
+  "0_Tree_Silhouette_2560x1440.mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: left block unavailable for requested intra mode"
+  ],
+  "0_Trees_Pine_1280x720.mp4": [
+   "h264 decode errors in the source: cabac decode of qscale diff failed at 58 14"
+  ],
+  "0_Urban_City_1080x1920.mp4": [
+   "h264 decode errors in the source: cabac decode of qscale diff failed at 12 46"
+  ],
+  "0_Vertical_Video_Fog_1080x1920.mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: cabac decode of qscale diff failed at 14 65"
+  ],
+  "0_Vertical_Video_Glowing_1080x1920.mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: left block unavailable for requested intra mode"
+  ],
+  "0_Water_Lake_1280x720.mp4": [
+   "h264 decode errors in the source: left block unavailable for requested intra mode"
+  ],
+  "0_Water_Light_720x1280.mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: left block unavailable for requested intra mode"
+  ],
+  "0_Winter_Moon_3840x2160.mp4": [
+   "h264 decode errors in the source: left block unavailable for requested intra mode"
+  ],
+  "1118288_Magic_Magical_1280x720.mp4": [
+   "black on Home at 4 s and 15 s"
+  ],
+  "111905-692674391_medium.mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: left block unavailable for requested intra4x4 mode -1"
+  ],
+  "1273984_Time_Lapse_1920x1080.mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: top block unavailable for requested intra mode -1"
+  ],
+  "138588-770315514_medium.mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: left block unavailable for requested intra mode"
+  ],
+  "16160-269534741_medium (1).mp4": [
+   "h264 decode errors in the source: cabac decode of qscale diff failed at 4 22"
+  ],
+  "1658358_Smoke_Liquid_Smoke_3840x2160.mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: top block unavailable for requested intra mode"
+  ],
+  "1664248_Fog_Mist_3840x2160.mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: left block unavailable for requested intra mode"
+  ],
+  "1764286_Sky_Cloudscape_3840x2160.mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: left block unavailable for requested intra mode"
+  ],
+  "2325412_Hurricane_Cloudscape_3840x2160 (1).mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: Reference 5 >= 4"
+  ],
+  "2476941_Dark_Waves_1920x1080.mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: left block unavailable for requested intra mode"
+  ],
+  "25520a42-ed66-4e2e-ae2b-8f80eb53942f_1080_hd.mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: Reference 4 >= 4"
+  ],
+  "28236-368501609_medium.mp4": [
+   "h264 decode errors in the source: cabac decode of qscale diff failed at 75 32"
+  ],
+  "335073_medium (1).mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: Reference 5 >= 4"
+  ],
+  "335679_medium.mp4": [
+   "h264 decode errors in the source: Reference 5 >= 4"
+  ],
+  "340514_medium.mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: Reference 3 >= 3"
+  ],
+  "340529_medium.mp4": [
+   "h264 decode errors in the source: left block unavailable for requested intra mode"
+  ],
+  "369506_medium.mp4": [
+   "h264 decode errors in the source: Reference 4 >= 4"
+  ],
+  "372860_medium.mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: Reference 4 >= 4"
+  ],
+  "372861_medium.mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: Reference 3 >= 3"
+  ],
+  "372864_medium.mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: left block unavailable for requested intra mode"
+  ],
+  "4572947_Coastline_Ocean_1280x720 (2).mp4": [
+   "visible vertical smear on Home (contact sheet ok_sheet_0.png #14-17)"
+  ],
+  "4572947_Coastline_Ocean_1280x720.mp4": [
+   "visible vertical smear on Home (contact sheet ok_sheet_0.png #14-17)"
+  ],
+  "4572947_Coastline_Ocean_1920x1080 (2).mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: left block unavailable for requested intra mode",
+   "visible vertical smear on Home (contact sheet ok_sheet_0.png #14-17)"
+  ],
+  "4572947_Coastline_Ocean_1920x1080.mp4": [
+   "visible vertical smear on Home (contact sheet ok_sheet_0.png #14-17)"
+  ],
+  "4572947_Coastline_Ocean_3840x2160.mp4": [
+   "visible vertical smear on Home (contact sheet ok_sheet_0.png #14-17)"
+  ],
+  "5149477_Storm_Stormy_1920x1080.mp4": [
+   "h264 decode errors in the source: left block unavailable for requested intra mode"
+  ],
+  "5558890_Coll_wavebreak_Animation_1280x720 (1).mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: left block unavailable for requested intra mode"
+  ],
+  "5558890_Coll_wavebreak_Animation_1280x720.mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: left block unavailable for requested intra mode"
+  ],
+  "623864_Background_Beautiful_1920x1080.mp4": [
+   "h264 decode errors in the source: left block unavailable for requested intra4x4 mode -1"
+  ],
+  "6973867_Storm_Tempest_3840x2160.mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: cabac decode of qscale diff failed at 175 67"
+  ],
+  "7020349_Template_Artwork_1280x720.mp4": [
+   "black on Home at 4 s and 15 s"
+  ],
+  "7020362_Steamer_Flow_1280x720.mp4": [
+   "h264 decode errors in the source: left block unavailable for requested intra4x4 mode -1"
+  ],
+  "7031195_Background_Bubble_1280x720.mp4": [
+   "h264 decode errors in the source: cabac decode of qscale diff failed at 19 13"
+  ],
+  "71122-537102350.mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: cabac decode of qscale diff failed at 237 15"
+  ],
+  "71f8cc8b-7051-42b0-b6b0-a88f257118ea_1080_hd.mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: cabac decode of qscale diff failed at 37 27"
+  ],
+  "Copper Kiln.mp4": [
+   "black on Home at 4 s and 15 s"
+  ],
+  "GettyImages-1216668776.mp4": [
+   "h264 decode errors in the source: cabac decode of qscale diff failed at 1 42"
+  ],
+  "a3612b1a-ba58-4437-9515-779c1ee1fe9e_1080_hd.mp4": [
+   "frozen: playback stops in Chrome (PIPELINE_ERROR_DECODE)",
+   "h264 decode errors in the source: Reference 3 >= 2"
+  ],
+  "7.webp": [
+   "not a wallpaper: a screenshot of an app interface (MASTER-LIST #76)"
+  ]
+ }
+}
