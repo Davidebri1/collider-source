@@ -2,7 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import '../../../core/figma/figma_stage.dart';
-import '../../../core/theme/conjured.dart';
+import '../../../core/vision/depth_of_field.dart';
 import 'package:video_player/video_player.dart';
 import '../../../models/theme_def.dart';
 import '../../../core/vision/vision_kit.dart';
@@ -47,8 +47,6 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
   late WallpaperTheme _previewed;
   bool _expanded = false;
   ThemeShelf _shelf = ThemeShelf.free;
-
-  static const _shadow = [Shadow(color: Color(0x99000000), blurRadius: 16)];
 
   @override
   void initState() {
@@ -108,7 +106,21 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
       final t = themes[i];
       final left = k == 0 ? 921.6 : (k < 0 ? 904.6 - 50 - (-k - 1) * 60 : 1024.6 + (k - 1) * 60);
       final w = k == 0 ? 86.0 : 50.0;
-      final fade = k.abs() <= 3 ? 1.0 : (k.abs() == 4 ? 0.6 : 0.3);
+      // Distance from the focused thumb. The stage scales this down on a
+      // wide frame; the phone layout applies the same falloff in screen px.
+      final fade = k.abs() <= 1 ? 1.0 : (k.abs() == 2 ? 0.78 : (k.abs() == 3 ? 0.55 : 0.32));
+      final dist = (k.abs() / 5).clamp(0.0, 1.0);
+      Widget tile = ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            const ColoredBox(color: Color(0x33FFFFFF)),
+            ThemePosterImage(theme: t, fit: BoxFit.cover, filterQuality: FilterQuality.medium),
+          ],
+        ),
+      );
+      tile = DepthOfField(distance: dist, nearSigma: 0, farSigma: 22, child: tile);
       out.add(Positioned(
         left: left,
         top: 845,
@@ -126,26 +138,96 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
               final j = (sel + (v < 0 ? 1 : -1)).clamp(0, themes.length - 1);
               _select(themes[j]);
             },
-            child: Opacity(
-              opacity: fade,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    // Backing so a theme whose poster is still loading, or
-                    // missing, still reads as a tile instead of a hole.
-                    const ColoredBox(color: Color(0x33FFFFFF)),
-                    ThemePosterImage(theme: t, fit: BoxFit.cover, filterQuality: FilterQuality.medium),
-                  ],
-                ),
-              ),
-            ),
+            child: Opacity(opacity: fade, child: tile),
           ),
         ),
       ));
     }
     return out;
+  }
+
+  /// Phone gallery. The window is centred, 16pt off each screen edge, and
+  /// stops above the side nav so the rail overlays the wallpaper only.
+  Widget _phoneGallery(List<WallpaperTheme> themes, EdgeInsets pad) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, pad.top + 12, 16, 278),
+      child: Column(
+        children: [
+          Expanded(
+            child: _PreviewWindow(
+              key: ValueKey('win-${_previewed.id}'),
+              theme: _previewed,
+              phone: true,
+              onBack: widget.onCancel,
+              onExpand: () => setState(() => _expanded = true),
+              onSet: () => widget.onConfirmTheme(_previewed),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 68,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                SizedBox(
+                  width: 148,
+                  height: 40,
+                  child: _ShelfPill(shelf: _shelf, onChanged: _setShelf, labelSize: 14),
+                ),
+                const SizedBox(width: 8),
+                Expanded(child: _phoneStrip(themes)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _phoneStrip(List<WallpaperTheme> themes) {
+    if (themes.isEmpty) return const SizedBox.shrink();
+    var sel = themes.indexWhere((t) => t.id == _previewed.id);
+    if (sel < 0) sel = 0;
+    final tiles = <Widget>[];
+    // Five thumbs, sized to sit in the slot beside the pill: the centre one
+    // larger, the outer pair visibly soft. Nothing is clipped off the screen.
+    for (var k = -2; k <= 2; k++) {
+      final i = sel + k;
+      if (i < 0 || i >= themes.length) continue;
+      final t = themes[i];
+      final centre = k == 0;
+      final w = centre ? 46.0 : (k.abs() == 1 ? 36.0 : 32.0);
+      final h = centre ? 64.0 : (k.abs() == 1 ? 52.0 : 46.0);
+      final dist = (k.abs() / 2).clamp(0.0, 1.0);
+      final fade = k.abs() == 0 ? 1.0 : (k.abs() == 1 ? 0.82 : 0.38);
+      Widget tile = ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Stack(fit: StackFit.expand, children: [
+          const ColoredBox(color: Color(0x33FFFFFF)),
+          ThemePosterImage(theme: t, fit: BoxFit.cover, filterQuality: FilterQuality.medium),
+        ]),
+      );
+      tile = DepthOfField(distance: dist, nearSigma: 0, farSigma: 16, child: tile);
+      tiles.add(Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 3),
+        child: Semantics(
+          button: true,
+          selected: centre,
+          label: t.name,
+          child: GestureDetector(
+            onTap: () => _select(t),
+            onHorizontalDragEnd: (d) {
+              final v = d.primaryVelocity ?? 0;
+              if (v.abs() < 80) return;
+              final j = (sel + (v < 0 ? 1 : -1)).clamp(0, themes.length - 1);
+              _select(themes[j]);
+            },
+            child: Opacity(opacity: fade, child: SizedBox(width: w, height: h, child: tile)),
+          ),
+        ),
+      ));
+    }
+    return Row(mainAxisAlignment: MainAxisAlignment.end, crossAxisAlignment: CrossAxisAlignment.end, children: tiles);
   }
 
   @override
@@ -188,13 +270,13 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                   top: pad.top + VSpace.sm,
                   child: VCircleButton(icon: Icons.fullscreen_exit_rounded, floating: true, tooltip: 'Back', onTap: () => setState(() => _expanded = false)),
                 ),
-              // v8.4: Photos - Memories 69:1926 (1920 x 1080) at its own
-              // geometry, scaled as one unit: window 725 x 730 at (597.5, 95),
-              // thumbnail strip at y 845, window controls at (855.6, 971);
-              // crop = the window's own width (725), centred, no margin.
+              // Phone: the window is centred with a 16pt margin, at phone
+              // sizes. Wide frames keep the v8.4 stage.
               if (!_expanded)
                 Positioned.fill(
-                  child: FigmaStage(
+                  child: LayoutBuilder(builder: (context, box) {
+                    if (box.maxWidth < 768) return _phoneGallery(themes, pad);
+                    return FigmaStage(
                     frame: const Size(1920, 1080),
                     cropWidth: 725,
                     center: const Offset(960, 540),
@@ -219,49 +301,16 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                         ),
                       ),
                       Positioned(
-                        left: 358,
-                        top: 352,
-                        width: 212,
-                        child: _ShelfSelector(
-                          shelf: _shelf,
-                          freeCount: _freeShelf.length,
-                          premiumCount: _premiumShelf.length,
-                          onChanged: _setShelf,
-                        ),
+                        left: 392,
+                        top: 862,
+                        width: 210,
+                        height: 52,
+                        child: _ShelfPill(shelf: _shelf, onChanged: _setShelf),
                       ),
                       ..._strip(themes),
-                      // Window controls: dot = close, bar = swipe down to close.
-                      Positioned(
-                        left: 855.6,
-                        top: 966,
-                        width: 181,
-                        height: 24,
-                        child: Row(children: [
-                          Semantics(
-                            button: true,
-                            label: 'Close',
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTap: widget.onCancel,
-                              child: Container(
-                                width: 24,
-                                height: 24,
-                                alignment: Alignment.centerLeft,
-                                child: Container(width: 14, height: 14, decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0x99FFFFFF))),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          GestureDetector(
-                            onVerticalDragEnd: (d) {
-                              if ((d.primaryVelocity ?? 0) > 200) widget.onCancel();
-                            },
-                            child: Container(width: 143, height: 12, decoration: BoxDecoration(color: const Color(0x99FFFFFF), borderRadius: BorderRadius.circular(6))),
-                          ),
-                        ]),
-                      ),
                     ],
-                  ),
+                  );
+                  }),
                 ),
             ],
           ),
@@ -271,57 +320,32 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
   }
 }
 
-/// The floating shelf switch: Free Themes with Premium Themes just below it.
-///
-/// The group dissolves into the room above and below rather than sitting on a
-/// hard edge, and the shelf you are not looking at recedes instead of
-/// disappearing, so the switch reads as one object with two ends.
-class _ShelfSelector extends StatelessWidget {
+/// One embedded glass pill, in line with the carousel: Free / Premium.
+class _ShelfPill extends StatelessWidget {
   final ThemeShelf shelf;
-  final int freeCount;
-  final int premiumCount;
   final ValueChanged<ThemeShelf> onChanged;
+  final double labelSize;
+  const _ShelfPill({required this.shelf, required this.onChanged, this.labelSize = 15});
 
-  const _ShelfSelector({
-    required this.shelf,
-    required this.freeCount,
-    required this.premiumCount,
-    required this.onChanged,
-  });
-
-  Widget _pill(ThemeShelf s, String label, int count) {
-    final active = shelf == s;
-    return Semantics(
-      button: true,
-      selected: active,
-      label: '$label, $count themes',
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => onChanged(s),
-        child: AnimatedOpacity(
-          duration: VMotion.base,
-          curve: Curves.easeOutCubic,
-          opacity: active ? 1.0 : 0.46,
+  Widget _half(ThemeShelf s, String label) {
+    final on = shelf == s;
+    return Expanded(
+      child: Semantics(
+        button: true,
+        selected: on,
+        label: label,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => onChanged(s),
           child: AnimatedContainer(
             duration: VMotion.base,
             curve: Curves.easeOutCubic,
-            height: 46,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            alignment: Alignment.center,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(VRadius.full),
-              color: active ? const Color(0x4DFFFFFF) : const Color(0x26FFFFFF),
-              border: Border.all(
-                color: active ? const Color(0x66FFFFFF) : const Color(0x1FFFFFFF),
-                width: 1,
-              ),
+              color: on ? const Color(0xF2F7F4EF) : const Color(0x00000000),
+              borderRadius: BorderRadius.circular(22),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                FText(label, size: 15, height: 20, weight: active ? FontWeight.w700 : FontWeight.w500),
-                FText('$count', size: 13, height: 18, weight: FontWeight.w600, opacity: active ? 0.72 : 0.5),
-              ],
-            ),
+            child: FText(label, size: labelSize, height: labelSize + 4, weight: FontWeight.w600, letterSpacing: -0.3, color: on ? const Color(0xFF1C1B19) : Colors.white),
           ),
         ),
       ),
@@ -330,17 +354,24 @@ class _ShelfSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Conjured: the switch assembles in the air beside the preview window and
-    // dissolves at its ends — no hard edge, no card behind it.
-    return VConjured(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _pill(ThemeShelf.free, 'Free Themes', freeCount),
-          const SizedBox(height: 10),
-          _pill(ThemeShelf.premium, 'Premium Themes', premiumCount),
-        ],
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(26),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: const Color(0x4D808080),
+            borderRadius: BorderRadius.circular(26),
+            border: Border.all(color: const Color(0x99FFFFFF), width: 1),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(4),
+            child: Row(children: [
+              _half(ThemeShelf.free, 'Free'),
+              _half(ThemeShelf.premium, 'Premium'),
+            ]),
+          ),
+        ),
       ),
     );
   }
@@ -353,7 +384,8 @@ class _PreviewWindow extends StatefulWidget {
   final VoidCallback onBack;
   final VoidCallback onExpand;
   final VoidCallback onSet;
-  const _PreviewWindow({super.key, required this.theme, required this.onBack, required this.onExpand, required this.onSet});
+  final bool phone;
+  const _PreviewWindow({super.key, required this.theme, required this.onBack, required this.onExpand, required this.onSet, this.phone = false});
 
   @override
   State<_PreviewWindow> createState() => _PreviewWindowState();
@@ -361,7 +393,6 @@ class _PreviewWindow extends StatefulWidget {
 
 class _PreviewWindowState extends State<_PreviewWindow> {
   VideoPlayerController? _c;
-  double? _scrub;
 
   @override
   void initState() {
@@ -405,15 +436,15 @@ class _PreviewWindowState extends State<_PreviewWindow> {
         ),
       );
 
-  Widget _circle(IconData icon, String label, VoidCallback onTap, {double iconSize = 24}) => Semantics(
+  Widget _circle(IconData icon, String label, VoidCallback onTap, {double iconSize = 24, double side = 50}) => Semantics(
         button: true,
         label: label,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: onTap,
           child: Container(
-            width: 50,
-            height: 50,
+            width: side,
+            height: side,
             alignment: Alignment.center,
             decoration: const BoxDecoration(
               color: Color(0x4D808080),
@@ -432,126 +463,71 @@ class _PreviewWindowState extends State<_PreviewWindow> {
     final t = widget.theme;
     final c = _c;
     final ready = c != null && c.value.isInitialized;
-    final dur = ready ? c.value.duration.inMilliseconds : 0;
-    final frac = _scrub ?? (dur > 0 ? c!.value.position.inMilliseconds / dur : 0.0);
-    final sub = [if (t.collection.isNotEmpty) t.collection, t.isLive ? 'Live wallpaper' : 'Still'].join(' · ');
+    final picture = Stack(
+      fit: StackFit.expand,
+      children: [
+        ThemePosterImage(theme: t, fit: BoxFit.cover, fullBleed: true),
+        if (ready)
+          FittedBox(
+            fit: BoxFit.cover,
+            clipBehavior: Clip.hardEdge,
+            child: SizedBox(width: c.value.size.width, height: c.value.size.height, child: VideoPlayer(c)),
+          ),
+      ],
+    );
+    final expand = Semantics(
+      button: true,
+      label: 'Expand View',
+      child: GestureDetector(
+        onTap: widget.onExpand,
+        child: Container(
+          height: widget.phone ? 36 : 46,
+          padding: EdgeInsets.symmetric(horizontal: widget.phone ? 12 : 0),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: const Color(0x4D808080),
+            borderRadius: BorderRadius.circular(widget.phone ? 18 : 23),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.open_in_full_rounded, size: widget.phone ? 16 : 20, color: Colors.white),
+            const SizedBox(width: 8),
+            FText('Expand View', size: widget.phone ? 15 : 16, height: 20, weight: FontWeight.w600),
+          ]),
+        ),
+      ),
+    );
+    if (widget.phone) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            picture,
+            Positioned(
+              left: 12,
+              right: 12,
+              top: 12,
+              child: Row(children: [
+                _circle(Icons.chevron_left_rounded, 'Back', widget.onBack, iconSize: 22, side: 36),
+                const Spacer(),
+                expand,
+                const Spacer(),
+                _circle(Icons.check_rounded, 'Set Wallpaper', widget.onSet, iconSize: 20, side: 36),
+              ]),
+            ),
+          ],
+        ),
+      );
+    }
     return ClipRRect(
       borderRadius: BorderRadius.circular(46),
       child: Stack(
         fit: StackFit.expand,
         children: [
-          ThemePosterImage(theme: t, fit: BoxFit.cover, fullBleed: true),
-          if (ready)
-            FittedBox(
-              fit: BoxFit.cover,
-              clipBehavior: Clip.hardEdge,
-              child: SizedBox(width: c.value.size.width, height: c.value.size.height, child: VideoPlayer(c)),
-            ),
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0x26000000), Color(0x00000000), Color(0x00000000), Color(0x80000000)],
-                stops: [0, 0.2, 0.65, 1],
-              ),
-            ),
-          ),
+          picture,
           Positioned(left: 27.1, top: 29.5, child: _circle(Icons.chevron_left_rounded, 'Back', widget.onBack, iconSize: 28)),
-          Positioned(
-            left: 275.1,
-            top: 31.5,
-            width: 180,
-            height: 46,
-            child: Semantics(
-              button: true,
-              label: 'Expand View',
-              child: GestureDetector(
-                onTap: widget.onExpand,
-                child: Container(
-                  alignment: Alignment.centerLeft,
-                  decoration: BoxDecoration(
-                    color: const Color(0x4D808080),
-                    borderRadius: BorderRadius.circular(23),
-                  ),
-                  child: Row(children: const [
-                    SizedBox(width: 12),
-                    Icon(Icons.open_in_full_rounded, size: 20, color: Colors.white),
-                    SizedBox(width: 12),
-                    FText('Expand View', size: 16, height: 20, weight: FontWeight.w600),
-                  ]),
-                ),
-              ),
-            ),
-          ),
+          Positioned(left: 275.1, top: 31.5, height: 46, child: expand),
           Positioned(left: 653.1, top: 29.5, child: _circle(Icons.check_rounded, 'Set Wallpaper', widget.onSet)),
-          Positioned(
-            left: 45.1,
-            top: 589,
-            width: 640,
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              FText(t.name, size: 22, height: 28, weight: FontWeight.w700),
-              const SizedBox(height: 10),
-              FText(sub, size: 14, height: 16, opacity: 0.7),
-            ]),
-          ),
-          if (ready)
-            Positioned(
-              left: 45.1,
-              top: 673,
-              width: 646,
-              height: 22,
-              child: Row(children: [
-                Semantics(
-                  button: true,
-                  label: c.value.isPlaying ? 'Pause' : 'Play',
-                  child: GestureDetector(
-                    onTap: () => c.value.isPlaying ? c.pause() : c.play(),
-                    child: SizedBox(width: 21, height: 22, child: Icon(c.value.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, size: 24, color: Colors.white)),
-                  ),
-                ),
-                const SizedBox(width: 39),
-                SizedBox(
-                  width: 524,
-                  height: 22,
-                  child: LayoutBuilder(builder: (ctx, bc) {
-                    void seek(double x) {
-                      final v = (x / bc.maxWidth).clamp(0.0, 1.0);
-                      setState(() => _scrub = v);
-                    }
-                    return GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onHorizontalDragUpdate: (d) => seek(d.localPosition.dx),
-                      onTapDown: (d) => seek(d.localPosition.dx),
-                      onHorizontalDragEnd: (_) {
-                        c.seekTo(Duration(milliseconds: (dur * (_scrub ?? 0)).round()));
-                        setState(() => _scrub = null);
-                      },
-                      onTapUp: (_) {
-                        c.seekTo(Duration(milliseconds: (dur * (_scrub ?? 0)).round()));
-                        setState(() => _scrub = null);
-                      },
-                      child: Stack(alignment: Alignment.centerLeft, children: [
-                        Container(height: 4, decoration: BoxDecoration(color: const Color(0x4DFFFFFF), borderRadius: BorderRadius.circular(2))),
-                        FractionallySizedBox(
-                          widthFactor: frac.clamp(0.0, 1.0),
-                          child: Container(height: 4, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(2))),
-                        ),
-                      ]),
-                    );
-                  }),
-                ),
-                const SizedBox(width: 34),
-                Semantics(
-                  button: true,
-                  label: c.value.volume > 0 ? 'Mute' : 'Sound',
-                  child: GestureDetector(
-                    onTap: () => c.setVolume(c.value.volume > 0 ? 0 : 1),
-                    child: SizedBox(width: 28, height: 21, child: Icon(c.value.volume > 0 ? Icons.volume_up_rounded : Icons.volume_off_rounded, size: 22, color: Colors.white)),
-                  ),
-                ),
-              ]),
-            ),
         ],
       ),
     );

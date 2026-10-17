@@ -1175,7 +1175,7 @@ class GlassMenu extends StatelessWidget {
           height: 40,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(48),
-            gradient: r.on ? const LinearGradient(colors: [Color(0x29FFFFFF), Color(0x00FFFFFF)], stops: [0.005, 1.4]) : null,
+            color: r.on ? const Color(0x29FFFFFF) : null,
           ),
           child: Row(
             children: [

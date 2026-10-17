@@ -916,7 +916,7 @@ class SgStore extends ChangeNotifier {
       c.status = b.statuses[i + 1];
       final lists = b.orderedLists;
       if (i + 1 < lists.length) c.listId = lists[i + 1].id;
-      c.activity.add(SgActivity(at: DateTime.now().millisecondsSinceEpoch, text: 'Hourly trigger moved status to ${c.status}'));
+      c.activity.add(SgActivity(at: DateTime.now().millisecondsSinceEpoch, text: 'Moved to ${c.status}'));
       n++;
     }
     if (n > 0) _commit();

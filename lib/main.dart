@@ -172,13 +172,11 @@ class ColliderApp extends StatelessWidget {
       // every scroller and every custom drag surface ignored the mouse. The
       // default has no scrollbars, which also satisfies the no-scrollbar rule.
       scrollBehavior: const _MouseDraggableScrollBehavior(),
-      // v9.1.6d: Google Sans Flex is the app-wide family (and the fallback), so
-      // the engine never fetches Roboto for an unstyled Text.
-      theme: ThemeData(brightness: Brightness.dark, useMaterial3: true, fontFamily: 'GoogleSansFlex', fontFamilyFallback: const ['GoogleSansFlex']).copyWith(
+      // AUTHORITY S-C13: SF Pro on Apple (fontFamily null), Inter elsewhere.
+      theme: ThemeData(brightness: Brightness.dark, useMaterial3: true, fontFamily: kAppFont, fontFamilyFallback: const ['Inter']).copyWith(
         scaffoldBackgroundColor: const Color(0xFF07080B),
-        // v9.1.4 (playtest #15): every default text style is Google Sans Flex.
-        textTheme: ThemeData.dark().textTheme.apply(fontFamily: 'GoogleSansFlex'),
-        primaryTextTheme: ThemeData.dark().primaryTextTheme.apply(fontFamily: 'GoogleSansFlex'),
+        textTheme: ThemeData.dark().textTheme.apply(fontFamily: kAppFont ?? 'Inter', fontFamilyFallback: const ['Inter']),
+        primaryTextTheme: ThemeData.dark().primaryTextTheme.apply(fontFamily: kAppFont ?? 'Inter', fontFamilyFallback: const ['Inter']),
       ),
       // Remote theme posters resolve through the same bundle as local assets.
       builder: (context, child) => DefaultAssetBundle(
@@ -191,7 +189,10 @@ class ColliderApp extends StatelessWidget {
 }
 
 class ColliderHomeScreen extends StatefulWidget {
-  const ColliderHomeScreen({super.key});
+  /// Opens this drawer on the first frame. Screenshot links use `?app=`.
+  /// Tests pass it here because the test binding has no query string.
+  const ColliderHomeScreen({super.key, this.initialDrawer});
+  final String? initialDrawer;
 
   @override
   State<ColliderHomeScreen> createState() => _ColliderHomeScreenState();
@@ -334,7 +335,10 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     // Smart Gen's pane is centred and the rail would cover its left edge, so
     // the rail yields while that pane is open. Cards, canvases, boards and
     // Genie stay inside the pane.
-    const surfaces = {null, 'themes', 'market', 'files', 'music'};
+    // Files paints its own sidebar inside the pane. A second labelled rail
+    // (Recent / Images / Videos / …) sat on the wallpaper beside it and
+    // shoved the pane off centre.
+    const surfaces = {null, 'themes', 'market', 'music'};
     return surfaces.contains(_activeDrawer);
   }
 
@@ -418,6 +422,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     if (cq != null) _activeCategory = ModelCategory.values.firstWhere((c) => c.name == cq, orElse: () => ModelCategory.general);
     if (Uri.base.queryParameters['genopts'] == '1' && _activeCategory.isMedia) _genOptionsOpen = true;
     if (Uri.base.queryParameters['rail'] == '1') _isMobileSideNavOpen = true;
+    _activeDrawer ??= widget.initialDrawer;
     _initializeTickerItems();
     WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) _qaSeedAnswers(); });
     _initializeHistorySessions();
@@ -880,18 +885,22 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   }
   // v9.1.7 (CPane): the ticker docks under EVERY pane, built once here.
   bool get _tallPaneOpen => _browserOpen || _settingsOpen || _activeDrawer != null;
-  final GlobalKey _tickerWindowKey = GlobalKey();
-  /// Distance from the screen bottom to the top of the docked ticker (0 when
-  /// the ticker has no rows). Measured after layout.
+  final GlobalKey _composerKey = GlobalKey();
+  /// Distance from the screen bottom to just above the composer. Measured
+  /// after layout. The ticker may sit behind a pane; the composer may not.
   double _dockBand = 0;
-  // v9.1.7 (CPane): the one bottom reserve every pane inherits: the docked
-  // ticker band (which includes the composer), or the composer alone.
-  double get _paneReserve => math.max(_dockBand, 110.0);
+  // v9.1.7 (CPane): the one bottom reserve every pane inherits. It is at
+  // least the composer, so a focused pane ends above the bar.
+  /// The home composer sends a message. It has no job on another surface, so
+  /// those screens do not show it and do not reserve its band.
+  bool get _composerVisible => !_tallPaneOpen;
+  double get _paneReserve => _composerVisible ? math.max(_dockBand, 110.0) : 78.0;
   void _measureDockBand() {
-    final ctx = _tickerWindowKey.currentContext;
-    final box = ctx?.findRenderObject() as RenderBox?;
+    final box = _composerKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.attached || !box.hasSize || box.size.height < 1) return;
     final h = MediaQuery.sizeOf(context).height;
-    final band = (box == null || !box.hasSize || box.size.height < 1) ? 0.0 : (h - box.localToGlobal(Offset.zero).dy + 8).clamp(0.0, h * 0.5);
+    // 12px of wallpaper between the pane's bottom edge and the composer.
+    final band = (h - box.localToGlobal(Offset.zero).dy + 12).clamp(0.0, h * 0.5);
     if ((band - _dockBand).abs() > 1) setState(() => _dockBand = band);
   }
   /// The composer needs more room than a ticker row, so it gets the full
@@ -1074,13 +1083,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         padding: EdgeInsets.only(top: 6),
         child: Text(
           'Nothing here yet',
-          style: TextStyle(
-            fontFamily: 'GoogleSansFlex',
-            fontSize: 11,
-            height: 1.3,
-            fontWeight: FontWeight.w500,
-            color: Color(0x8AFFFFFF),
-          ),
+          style: appFont(fontSize: 11, height: 1.3, fontWeight: FontWeight.w500, color: const Color(0x8AFFFFFF)),
         ),
       );
     }
@@ -1365,6 +1368,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           activeIds: _selectedModelIds.toSet(),
           onToggle: (id) => _toggleSelect(_activeCategory, id),
           categoryLabel: _activeCategory.label,
+          falloff: _otherSurfaceFocused,
           onCategorySwipe: (dir) {
             final i = order.indexOf(_activeCategory);
             setState(() {
@@ -1412,6 +1416,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   /// huge whenever an answer was expanded. It keeps one width now, in front of
   /// a frosted plane, and never inside the ticker's layout.
   Widget _buildComposer() => SizedBox(
+        key: _composerKey,
         width: _composerWidth,
         child: _windowSurface(
           bare: true,
@@ -1959,20 +1964,23 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   }
 
   bool get _otherSurfaceFocused => _settingsOpen || _browserOpen || (_activeDrawer != null) || _zoomedMessage != null || _localHistoryModel != null;
-  /// One blur for the ticker whenever something else has focus.
-  static const double _tickerBlur = 3;
+  /// Black 38% behind a modal. The gallery is not in this set: its wallpaper
+  /// preview stays sharp and undimmed (R32).
+  bool get _cinemaDim {
+    if (_activeDrawer == 'themes') return false;
+    return _settingsOpen || _browserOpen || _activeDrawer != null || _zoomedMessage != null || _localHistoryModel != null;
+  }
+  /// Floor for home rows behind a focused pane. Farther rows add more on top
+  /// (see GlmTickerColumn.falloff), so the blur grows with distance and the
+  /// words stop being readable.
+  static const double _tickerBlur = 26;
+  /// The blur stays on the ticker rows only. Wrapping the whole column
+  /// (including the spacer above the rows) builds a full-screen layer, and
+  /// on web a pane's backdrop filter samples that layer. The spacer is
+  /// empty, so the sample is black and the glass paints as a solid slab
+  /// instead of the wallpaper.
   Widget _tickerGate(Widget child) {
-    final off = _otherSurfaceFocused;
-    return IgnorePointer(
-      ignoring: off,
-      child: ImageFiltered(
-        enabled: off,
-        // v9.1.6: light enough that the rows stay clearly visible as rows
-        // (sigma 8 plus the surface's own blur erased them).
-        imageFilter: ui.ImageFilter.blur(sigmaX: _tickerBlur, sigmaY: _tickerBlur),
-        child: child,
-      ),
-    );
+    return IgnorePointer(ignoring: _otherSurfaceFocused, child: child);
   }
 
   @override
@@ -1985,6 +1993,12 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     final surfaceSig = '$_activeDrawer|${_expandedModelIds.join(',')}|$_settingsOpen|$_browserOpen|$_zoomedMessage|$_localHistoryModel';
     if (surfaceSig != _lastSurfaceSig) { _lastSurfaceSig = surfaceSig; }
     _guardPreview();
+    // The composer is wider than a phone pane. Measure it after layout and
+    // keep the pane's bottom edge above it, or the + and send buttons sit on
+    // the pane's corners.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _measureDockBand();
+    });
     // Max 9 active model rows filtered by active category with fallback
     var categoryPills = _tickerItems
         .where((it) => it.modelDef.categories.contains(_activeCategory) && _selectedModelIds.contains(it.modelDef.id))
@@ -2065,40 +2079,38 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // away the background's capability) and dims (cinematic focus) what
           // is behind it. Nothing sits flat over the main view.
           // v9.1.4 (playtest #14): dissolves out instead of a hard cut.
-            Positioned.fill(child: MaterializeSwitch(show: _browserOpen || const {'files', 'smartgen', 'history', 'music', 'apps', 'consensus', 'market'}.contains(_activeDrawer), builder: (_) => GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => setState(() { _browserOpen = false; _closeAllPanes(); }), child: const SizedBox.expand()))),
+            // A Materialize Opacity here is invisible, but on web it is the layer
+            // the pane's backdrop filter samples, so the glass paints as a flat
+            // black slab instead of the wallpaper. The catch is a bare target.
+            if (_browserOpen || const {'files', 'smartgen', 'history', 'music', 'apps', 'consensus', 'market'}.contains(_activeDrawer))
+              Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => setState(() { _browserOpen = false; _closeAllPanes(); }), child: const SizedBox.expand())),
 
           // Depth of field for the summoned composer: the world falls out of
-          // focus behind the writing surface. Previously summoning only
-          // reflowed the layout, so the composer read as a flat overlay stuck
-          // on top of the room rather than a nearer plane in it.
-          Positioned.fill(
-            child: IgnorePointer(
-              ignoring: !_isComposerSummoned,
-              child: AnimatedOpacity(
-                duration: VMotion.base,
-                curve: Curves.easeOutCubic,
-                opacity: _isComposerSummoned ? 1 : 0,
-                child: BackdropFilter(
-                  filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.black.withValues(alpha: 0.22),
-                          Colors.black.withValues(alpha: 0.34),
-                          Colors.black.withValues(alpha: 0.58),
-                        ],
-                        stops: const [0.0, 0.55, 1.0],
-                      ),
+          // focus behind the writing surface. The filter is not mounted while
+          // the composer is at rest. A backdrop filter inside a transparent
+          // opacity still paints on web, and every pane above it then samples
+          // that empty layer instead of the wallpaper.
+          if (_isComposerSummoned)
+            Positioned.fill(
+              child: BackdropFilter(
+                filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.black.withValues(alpha: 0.22),
+                        Colors.black.withValues(alpha: 0.34),
+                        Colors.black.withValues(alpha: 0.58),
+                      ],
+                      stops: const [0.0, 0.55, 1.0],
                     ),
-                    child: const SizedBox.expand(),
                   ),
+                  child: const SizedBox.expand(),
                 ),
               ),
             ),
-          ),
           // v8.7: depth of field while typing: the room behind goes soft.
           Positioned.fill(
             child: IgnorePointer(
@@ -2163,9 +2175,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                     // Map row 13: a generation gets the room to show its media
                     // and its panel, so the media board keeps this plane to
                     // itself and only the composer floats in the floatable width.
-                    if (_mediaShowing)
+                    if (_mediaShowing && _composerVisible)
                       _buildComposer()
-                    else ...[
+                    else if (!_mediaShowing) ...[
                       // Bug 5: the opened answer is a tray anchored over the
                       // ticker, not a permanent block in the middle of it.
                       // v9.1.6: the approved layout (app-11): the rail sits
@@ -2186,17 +2198,21 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                         // closes. The wallpaper DOF plane already blurs; the rail just quiets.
                         // v9.1.7: the same blur the ticker gets under every pane (_tickerGate,
                         // sigma 3), so typing and panes push the rail back the same way.
-                        builder: (_, on, child) => ImageFiltered(
-                          enabled: on && _isComposerSummoned && !_otherSurfaceFocused,
-                          imageFilter: ui.ImageFilter.blur(sigmaX: _tickerBlur, sigmaY: _tickerBlur),
-                          child: AnimatedOpacity(duration: VMotion.base, opacity: on && _isComposerSummoned ? 0.6 : 1, child: child!),
-                        ),
+                        builder: (_, on, child) {
+                          final focused = _otherSurfaceFocused;
+                          final sigma = focused ? _tickerBlur : 3.0;
+                          return ImageFiltered(
+                            enabled: focused || (on && _isComposerSummoned),
+                            imageFilter: ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+                            child: AnimatedOpacity(duration: VMotion.base, opacity: on && _isComposerSummoned && !focused ? 0.6 : 1, child: child!),
+                          );
+                        },
                         child: _buildTickerWindow(),
                       ),
                       const SizedBox(height: _windowGap),
                       // Bug 7: the composer has its own slot now, so it cannot
                       // land on the category chips.
-                      _buildComposer(),
+                      if (_composerVisible) _buildComposer(),
                     ],
                     const SizedBox(height: _windowGap),
                   ],
@@ -2211,6 +2227,11 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // v8.3.1: row 13 media gen window ported from v8.4 (Figma 2013:71).
           if (!_browserOpen && !(isMobile && _isMobileSideNavOpen) && !const {'premium', 'themes', 'apps', 'smartgen', 'market', 'files', 'consensus', 'music'}.contains(_activeDrawer) && _mediaStageOn)
             Positioned.fill(bottom: 210, child: _buildMediaStage()),
+
+          // Cinema dim behind a modal (black ~38%). The gallery is excluded so
+          // its wallpaper stays sharp. Home text is blurred separately.
+          if (_cinemaDim)
+            Positioned.fill(child: const IgnorePointer(child: ColoredBox(color: Color(0x61000000)))),
 
           // ================= PLANE 2: APPS POPUP PANE =================
           // Middle neutral area, no visible canvas, blurred background, clickaway + close icon
@@ -2416,7 +2437,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             if (_railVisible)
               Positioned(
                 left: 10,
-                bottom: 230, // v9.1.3: above the nav column
+                // Gallery: sit the rail on the wallpaper under the window, so
+                // the labels clear the strip and the Free / Premium pill.
+                bottom: _activeDrawer == 'themes' ? 86 : 230,
                 child: _buildSideNav(isMobile: true),
               ),
           ] else ...[

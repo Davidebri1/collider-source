@@ -123,34 +123,36 @@ class VShadow {
   static const List<BoxShadow> recessed = VElev.e6;
 }
 
-/// Kit type scale. Instrument Sans stands in for SF Pro Text.
+/// Figma type. Body 17/22 −0.4, Note 15/20 −0.4. Window titles match the
+/// visionOS "Albums" token (29/34 bold). Section titles match "My Albums" (22).
+/// Nothing on a surface uses a display size above that.
 class VType {
   VType._();
   static const double xs = 11;
   static const double sm = 13;
-  static const double md = 15;
+  static const double md = 17;
   static const double lg = 17;
-  static const double xl = 20;
-  static const double xxl = 24;
-  static const double displaySm = 28;
-  static const double displayMd = 34;
-  static const double displayLg = 40;
+  static const double xl = 22;
+  static const double xxl = 29;
+  static const double displaySm = 29;
+  static const double displayMd = 29;
+  static const double displayLg = 29;
 
-  static const double tight = 1.1;
-  static const double normal = 1.3;
-  static const double relaxed = 1.45;
+  static const double tight = 34 / 29;
+  static const double normal = 22 / 17;
+  static const double relaxed = 22 / 17;
 
-  static TextStyle _t(double size, FontWeight w, Color c, double h) =>
-      appFont(fontSize: size, fontWeight: w, color: c, height: h, letterSpacing: -0.1);
+  static TextStyle _t(double size, FontWeight w, Color c, double h, {double tracking = 0}) =>
+      appFont(fontSize: size, fontWeight: w, color: c, height: h, letterSpacing: tracking);
 
-  static TextStyle display({Color color = VColors.textPrimary}) => _t(displaySm, FontWeight.w700, color, tight);
-  static TextStyle title({Color color = VColors.textPrimary}) => _t(xxl, FontWeight.w700, color, tight);
-  static TextStyle title2({Color color = VColors.textPrimary}) => _t(xl, FontWeight.w700, color, normal);
-  static TextStyle headline({Color color = VColors.textPrimary}) => _t(lg, FontWeight.w600, color, normal);
-  static TextStyle body({Color color = VColors.textPrimary, FontWeight weight = FontWeight.w400}) => _t(md, weight, color, relaxed);
-  static TextStyle callout({Color color = VColors.textPrimary, FontWeight weight = FontWeight.w500}) => _t(sm, weight, color, normal);
-  static TextStyle footnote({Color color = VColors.textSecondary, FontWeight weight = FontWeight.w400}) => _t(sm, weight, color, normal);
-  static TextStyle caption({Color color = VColors.textTertiary, FontWeight weight = FontWeight.w400}) => _t(xs, weight, color, normal);
+  static TextStyle display({Color color = VColors.textPrimary}) => _t(29, FontWeight.w700, color, 34 / 29);
+  static TextStyle title({Color color = VColors.textPrimary}) => _t(29, FontWeight.w700, color, 34 / 29);
+  static TextStyle title2({Color color = VColors.textPrimary}) => _t(22, FontWeight.w700, color, 26 / 22);
+  static TextStyle headline({Color color = VColors.textPrimary}) => _t(17, FontWeight.w600, color, 22 / 17, tracking: -0.4);
+  static TextStyle body({Color color = VColors.textPrimary, FontWeight weight = FontWeight.w500}) => _t(17, weight, color, 22 / 17, tracking: -0.4);
+  static TextStyle callout({Color color = VColors.textPrimary, FontWeight weight = FontWeight.w500}) => _t(15, weight, color, 20 / 15, tracking: -0.4);
+  static TextStyle footnote({Color color = VColors.textSecondary, FontWeight weight = FontWeight.w500}) => _t(15, weight, color, 20 / 15, tracking: -0.4);
+  static TextStyle caption({Color color = VColors.textTertiary, FontWeight weight = FontWeight.w500}) => _t(13, weight, color, 16 / 13, tracking: -0.2);
 }
 
 /// Overlay law: an overlay is a pause menu — small, temporary, content-hugging.

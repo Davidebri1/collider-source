@@ -1,8 +1,5 @@
-import 'dart:ui' show ImageFilter;
 import 'package:flutter/widgets.dart';
-import 'materialize.dart';
 import 'vision_kit.dart';
-import 'vision_tokens.dart';
 
 /// v9.1.7 (David, Oct 15 5:08 AM): the ONLY way to show a pane.
 ///
@@ -52,6 +49,8 @@ class CPane extends StatelessWidget {
   final Widget child;
   final CLayer layer;
   final CPaneFit fit;
+  /// The glass body, not the top gap. Layout tests use this rect.
+  static const Key bodyKey = ValueKey<String>('cpane-body');
   const CPane({super.key, required this.child, this.layer = CLayer.floating, this.fit = CPaneFit.fill});
 
   /// The rectangle a pane occupies, for screens that must lay out inside it.
@@ -63,24 +62,30 @@ class CPane extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final r = BorderRadius.circular(CPaneTokens.radius);
-    final mat = Materialize.of(context);
     final w = CPaneTokens.width(context);
     final maxH = maxHeight(context);
+    // Fill panes are the work surfaces (Smart Gen, Files, Market). They use
+    // the clearer work frost so the wallpaper stays readable through the
+    // header. A BackdropFilter cannot be used here: on web it samples an
+    // empty layer and paints an opaque black slab over the picture, which is
+    // why the header read as a solid bar while the same wallpaper stayed
+    // visible in the margins. The tint is ordinary translucency, so the
+    // picture composites through it. Hug panes keep the denser menu tint.
+    final fill = fit == CPaneFit.fill ? VFrost.workTint : VFrost.tint;
+    // Shadow stays off this decoration. A boxShadow on the same box as a
+    // translucent colour flattens the colour to an opaque slab on web, which
+    // hides the wallpaper. The tint is the only paint between the picture and
+    // the pane's content.
     final glass = DecoratedBox(
-      decoration: BoxDecoration(borderRadius: r, boxShadow: layer.elevation),
-      child: ClipRRect(
-        borderRadius: r,
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: VFrost.blur * mat, sigmaY: VFrost.blur * mat),
-          child: DecoratedBox(decoration: BoxDecoration(color: VFrost.tint, borderRadius: r), child: child),
-        ),
-      ),
+      decoration: BoxDecoration(color: fill, borderRadius: r),
+      child: ClipRRect(borderRadius: r, child: child),
     );
     return Padding(
       padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top + CPaneTokens.topGap),
       child: Align(
         alignment: Alignment.topCenter,
         child: SizedBox(
+          key: bodyKey,
           width: w,
           height: fit == CPaneFit.fill ? maxH : null,
           child: fit == CPaneFit.fill ? glass : ConstrainedBox(constraints: BoxConstraints(maxHeight: maxH), child: glass),

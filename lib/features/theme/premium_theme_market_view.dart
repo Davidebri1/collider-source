@@ -11,9 +11,11 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/audio/music_player.dart';
 import '../../core/media/theme_catalog.dart';
+import '../../core/theme/app_font.dart';
 import '../../core/theme/specular_border.dart';
 import '../../core/vision/vision_kit.dart';
 import '../../models/theme_def.dart';
+import '../../core/vision/depth_of_field.dart';
 import '../music/song_wheel.dart';
 import 'premium_market_ambient.dart';
 import 'theme_living_media.dart';
@@ -166,7 +168,7 @@ const double _kGlassSigma = 28;
 // p-2 8 + h2 28 + mb-2 8 + song carousel (3 slots x 44) + mb-4 16 + action 36 + p-2 8
 // Rows are 44 px: each carries its own 44 px play button (v8.3, D37).
 const double _kSongRowExtent = 44;
-const int _kSongSlots = 3;
+const int _kSongSlots = 5;
 const double _kSongsBlockHeight = _kSongSlots * _kSongRowExtent;
 const double _kActionHeight = 36;
 const double _kNoSongsGap = 12;
@@ -455,18 +457,26 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
       // ticker band, so the bottom bar is no longer inside it and the stage
       // scales down (as one unit) until the name, song and action still fit.
       final docked = h < MediaQuery.sizeOf(context).height - 1;
-      final reserve = docked ? 0.0 : barReserve;
+      // Phone: pin a glass song band above the dock and give the coverflow
+      // whatever height is left. The band is opaque, so reflections and the
+      // home text cannot show through the titles.
+      const phoneBand = 252.0;
+      final topChrome = MediaQuery.paddingOf(context).top + 112;
+      final reserve = isMobile ? barReserve : (docked ? 0.0 : barReserve);
       final mainHeight = math.max(0.0, h - mainTop - reserve);
-      const labelsDocked = 8 + 28 + 8 + _kSongRowExtent + 16 + _kActionHeight + 8;
-      final stageH = docked
-          ? (mainHeight - _kLabelsMarginTop - labelsDocked).clamp(_kStageHeight * 0.55, _kStageHeight).toDouble()
-          : _kStageHeight;
+      const labelsDocked = _kLabelsBlockHeight;
+      final stageH = isMobile
+          ? (h - topChrome - reserve - phoneBand - 12).clamp(200.0, 460.0)
+          : docked
+              ? (mainHeight - _kLabelsMarginTop - labelsDocked).clamp(_kStageHeight * 0.55, _kStageHeight).toDouble()
+              : _kStageHeight;
       final contentHeight =
           stageH + _kLabelsMarginTop + (docked ? labelsDocked : _kLabelsBlockHeight);
       final contentTop =
           mainTop + math.max(0.0, (mainHeight - contentHeight) / 2);
-      final stageTop = contentTop;
-      final labelsTop = stageTop + stageH + _kLabelsMarginTop;
+      final stageTop = isMobile ? topChrome : contentTop;
+      final labelsTop = isMobile ? h - reserve - phoneBand : stageTop + stageH + _kLabelsMarginTop;
+      final labelsH = isMobile ? phoneBand : _kLabelsBlockHeight;
       final contentWidth = w - _kMainPadX * 2;
       final searchWidth = math.min(w - _kSearchPad * 2, _kSearchMaxWidth);
 
@@ -561,16 +571,25 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
               if (_themes.isNotEmpty && selected != null) ...[
                 // Label form (z 250) sits under the CoverFlow wrapper (z 300)
                 Positioned(
-                  left: 0,
-                  right: 0,
+                  left: isMobile ? 16 : 0,
+                  right: isMobile ? 16 : 0,
                   top: labelsTop,
-                  height: _kLabelsBlockHeight,
+                  height: labelsH,
                   // Top-aligned: with songs the column fills the block exactly
                   // (as before); without songs it ends under the name.
                   // Hidden under the detail view so the name shows once.
                   child: Opacity(opacity: _exploded ? 0 : 1, child: Align(
                     alignment: Alignment.topCenter,
-                    child: _buildLabels(selected, contentWidth),
+                    child: isMobile
+                        ? DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: const Color(0xF2161820),
+                              borderRadius: BorderRadius.circular(22),
+                              border: Border.all(color: const Color(0x66FFFFFF)),
+                            ),
+                            child: _buildLabels(selected, contentWidth, band: true),
+                          )
+                        : _buildLabels(selected, contentWidth),
                   )),
                 ),
                 // CoverFlow wrapper
@@ -581,7 +600,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
                   right: _kMainPadX,
                   top: stageTop,
                   height: stageH,
-                  child: FittedBox(
+                  child: ClipRect(child: FittedBox(
                     fit: BoxFit.contain,
                     alignment: Alignment.topCenter,
                     child: SizedBox(
@@ -606,6 +625,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
                         },
                       ),
                     ),
+                  ),
                   ),
                 ),
               ],
@@ -723,8 +743,9 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
   // distance; it fades in on each theme
   // change. No carousel at all for a theme without songs: the Buy / Apply /
   // action then sits _kNoSongsGap under the name.
-  Widget _buildLabels(WallpaperTheme t, double maxWidth) {
+  Widget _buildLabels(WallpaperTheme t, double maxWidth, {bool band = false}) {
     final tracks = MusicPlayer.themeTracks(t.id);
+    final slots = band ? 3 : _kSongSlots;
     final wheelWidth = math.min(maxWidth - 16, 340.0);
     return ConstrainedBox(
       constraints: BoxConstraints(maxWidth: maxWidth),
@@ -749,8 +770,13 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
                 )),
               )),
             ),
-            if (tracks.isNotEmpty) ...[
+            if (band) ...[
+              const SizedBox(height: 6),
+              Container(width: 72, height: 1, color: const Color(0x55FFFFFF)),
               const SizedBox(height: 8),
+            ],
+            if (tracks.isNotEmpty) ...[
+              if (!band) const SizedBox(height: 8),
               // Cinematic fade-in per theme: a slow ease-out rise from 0, run on
               // every theme change (keyed by theme, so it restarts even when
               // the previous theme had no songs and the wheel was absent).
@@ -769,7 +795,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
                   queueId: 'theme:${t.id}',
                   width: wheelWidth,
                   itemExtent: _kSongRowExtent,
-                  maxVisible: _kSongSlots,
+                  maxVisible: slots,
                   centerStyle: _inter(TextStyle(
                     fontSize: 16,
                     height: 24 / 16,
@@ -1318,13 +1344,15 @@ class _CoverFlowState extends State<_CoverFlow> {
                         if (!_onScreen(pose, coverSize, originX)) {
                           return const SizedBox.shrink();
                         }
+                        final dist = (_rel(i).abs() / 4).clamp(0.0, 1.0);
+                        final face = dist < 0.05 ? child! : DepthOfField(distance: dist, nearSigma: 0, farSigma: 5.5, child: child!);
                         return Opacity(
                           opacity: pose.opacity.clamp(0.0, 1.0),
                           child: Transform(
                             // transform-origin: centre of the cover box
                             alignment: const Alignment(0, -0.5),
                             transform: pose.matrix(),
-                            child: child,
+                            child: face,
                           ),
                         );
                       },
@@ -2073,7 +2101,7 @@ LinearGradient _cssLinearGradient(
 
 /// Export font is `ui-sans-serif, system-ui, sans-serif`; the platform
 /// substitute on web/Android/Windows is Inter (AUTHORITY S-C13).
-TextStyle _inter(TextStyle s) => s.copyWith(fontFamily: 'GoogleSansFlex');
+TextStyle _inter(TextStyle s) => appFont(textStyle: s, fontSize: s.fontSize, fontWeight: s.fontWeight, color: s.color, height: s.height, letterSpacing: s.letterSpacing ?? (s.fontSize != null && s.fontSize! <= 17 ? -0.4 : null));
 
 /// CSS drop-shadow(x y blur color): sigma = blur / 2.
 Shadow _cssDropShadow(double x, double y, double blur, Color color) {
