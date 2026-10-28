@@ -57,6 +57,19 @@ class _SgPaneState extends State<SgPane> {
     if (surface != null) store.board!.surface = surface;
     if (sg == 'flip') _forceFlip = true;
     if (sg == 'editor') _openId = store.board!.cards.firstOrNull?.id;
+    final cardId = q['card'];
+    if (cardId != null && store.board!.cards.any((c) => c.id == cardId)) _openId = cardId;
+    if (sg == 'cover') {
+      _openId ??= store.board!.cards.firstOrNull?.id;
+      _cover = true;
+    }
+    if (q['swatch'] == '1') {
+      const paints = [0xFF61BD4F, 0xFF0079BF, 0xFFEB5A46];
+      final cards = store.board!.cards;
+      for (var i = 0; i < paints.length && i < cards.length; i++) {
+        cards[i].color = paints[i];
+      }
+    }
     if (sg == 'search' || sg == 'stats' || sg == 'genie' || sg == 'create') _overlay = sg!;
     if (sg == 'menu') _menu = true;
     if (sg == 'multi') {
@@ -118,33 +131,25 @@ class _SgPaneState extends State<SgPane> {
         _openId = c.id;
         _overlay = '';
         _forceFlip = false;
+        _cover = false;
       });
-
-  /// The phone board hugs its lists. The card and the board menu fill the
-  /// band so their contents can scroll instead of being clipped.
-  bool _hugBoard(SgBoard? b) {
-    if (b == null || !CPaneTokens.phone(context)) return false;
-    if (_overlay.isNotEmpty || _menu || _openId != null || _multi) return false;
-    return b.surface == SgSurface.kanban;
-  }
 
   @override
   Widget build(BuildContext context) {
     final b = store.board;
-    final hug = _hugBoard(b);
     return CPane(
-      fit: hug ? CPaneFit.hug : CPaneFit.fill,
+      span: CPaneSpan.phoneBoard,
+      fit: CPaneFit.fill,
       child: b == null
           ? const SizedBox.shrink()
           : Stack(children: [
               Column(
-                mainAxisSize: hug ? MainAxisSize.min : MainAxisSize.max,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _header(b),
                   _viewChips(b),
                   if (b.surface == SgSurface.canvas) _canvasChips(b),
-                  if (hug) _body(b) else Expanded(child: _body(b)),
+                  Expanded(child: _body(b)),
                   if (_multi) _bulkBar(b),
                 ],
               ),
@@ -199,22 +204,34 @@ class _SgPaneState extends State<SgPane> {
   Widget _viewChips(SgBoard b) {
     return SizedBox(
       height: 40,
-      child: ScrollConfiguration(
-        behavior: const SgScroll(),
-        child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        children: [
-          for (final s in SgSurface.values)
-            Padding(
-              padding: const EdgeInsets.only(right: 4),
-              child: _glassChoice(
-                label: s.label,
-                selected: b.surface == s,
-                onSelected: (_) => store.touch(() => b.surface = s),
-              ),
-            ),
-        ],
+      child: ShaderMask(
+        blendMode: BlendMode.dstIn,
+        shaderCallback: (rect) {
+          return const LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: [Color(0x00FFFFFF), Color(0xFFFFFFFF), Color(0xFFFFFFFF), Color(0x00FFFFFF)],
+            stops: [0, 0.02, 0.93, 1],
+          ).createShader(rect);
+        },
+        child: ScrollConfiguration(
+          behavior: const SgScroll(),
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            children: [
+              for (final s in SgSurface.values)
+                Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: _glassChoice(
+                    label: s.label,
+                    selected: b.surface == s,
+                    size: 11,
+                    onSelected: (_) => store.touch(() => b.surface = s),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -235,7 +252,8 @@ class _SgPaneState extends State<SgPane> {
         selected: selected,
         showCheckmark: false,
         onSelected: onSelected,
-        visualDensity: VisualDensity.compact,
+        visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
+        labelPadding: const EdgeInsets.symmetric(horizontal: 6),
         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
         elevation: 0,
         pressElevation: 0,
@@ -244,7 +262,7 @@ class _SgPaneState extends State<SgPane> {
         selectedShadowColor: Colors.transparent,
         side: BorderSide(color: selected ? const Color(0xFFFFFFFF) : const Color(0xE6FFFFFF), width: 1),
         color: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) return const Color(0xFFF7F4EF);
+          if (states.contains(WidgetState.selected)) return const Color(0xFFF2F4F7);
           return const Color(0x14FFFFFF);
         }),
       ),
@@ -510,8 +528,12 @@ class _SgPaneState extends State<SgPane> {
   }
 
   static const Color _ink = Color(0xFF1C1B19);
-  static const Color _muted = Color(0xFF5C564E);
-  static const Color _paper = Color(0xFFFAF7F2);
+  static const Color _muted = Color(0xFF5C6570);
+  static const Color _paper = Color(0xFFF2F4F7);
+  static const Color _line = Color(0xFFD0D5DE);
+  static const Color _chip = Color(0xFFE8ECF2);
+  static const Color _chipOn = Color(0xFFDDE2EA);
+  bool _cover = false;
 
   Future<void> _pickDue(SgCard c) async {
     final initial = c.dueMs == null ? DateTime.now() : DateTime.fromMillisecondsSinceEpoch(c.dueMs!);
@@ -531,8 +553,8 @@ class _SgPaneState extends State<SgPane> {
       label: Text(label, style: appFont(fontSize: 13, color: _ink)),
       style: OutlinedButton.styleFrom(
         foregroundColor: _ink,
-        backgroundColor: const Color(0xFFF4EFE8),
-        side: const BorderSide(color: Color(0xFFD5CDC2)),
+        backgroundColor: _chip,
+        side: const BorderSide(color: _line),
         visualDensity: VisualDensity.compact,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -569,12 +591,12 @@ class _SgPaneState extends State<SgPane> {
     );
   }
 
-  /// Light chips on the cream sheet. The app theme is dark, so an unstyled
+  /// Light chips on the paper sheet. The app theme is dark, so an unstyled
   /// chip paints a near-black fill behind the dark label and the words
   /// disappear. Selected uses the same light fill.
   ChipThemeData _paperChips() {
-    const fill = Color(0xFFF4EFE8);
-    const selected = Color(0xFFE6DFD4);
+    const fill = _chip;
+    const selected = _chipOn;
     final label = appFont(fontSize: 13, color: _ink);
     return ChipThemeData(
       backgroundColor: fill,
@@ -583,7 +605,7 @@ class _SgPaneState extends State<SgPane> {
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       pressElevation: 0,
-      side: const BorderSide(color: Color(0xFFD5CDC2)),
+      side: const BorderSide(color: _line),
       labelStyle: label,
       secondaryLabelStyle: label,
       checkmarkColor: _ink,
@@ -595,26 +617,103 @@ class _SgPaneState extends State<SgPane> {
     );
   }
 
-  Widget _editor(SgBoard b, SgCard c) {
-    final listTitle = b.lists.where((l) => l.id == c.listId).firstOrNull?.title ?? c.status;
+  Color _sheet(SgCard c) => Color.alphaBlend(Color(c.color).withValues(alpha: 0.40), _paper);
+
+  static const List<int> _coverSwatches = [
+    0xFF61BD4F,
+    0xFFF2D600,
+    0xFFFF9F1A,
+    0xFFEB5A46,
+    0xFFC377E0,
+    0xFF0079BF,
+    0xFF00C2E0,
+    0xFF51E898,
+    0xFFFF78CB,
+    0xFF344563,
+  ];
+
+  Widget _coverSheet(SgCard c) {
+    final sheet = _sheet(c);
     return Theme(
       data: Theme.of(context).copyWith(chipTheme: _paperChips(), iconTheme: const IconThemeData(color: _ink, size: 18)),
       child: ColoredBox(
-      color: _paper,
+        key: const ValueKey('sg-cover-sheet'),
+        color: sheet,
+        child: Material(
+          color: sheet,
+          child: ScrollConfiguration(
+            behavior: const SgScroll(),
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+              children: [
+                Row(children: [
+                  Tooltip(
+                    message: 'Back',
+                    child: IconButton(
+                      onPressed: () => setState(() => _cover = false),
+                      icon: const Icon(Icons.arrow_back_rounded, color: _ink),
+                    ),
+                  ),
+                  Expanded(child: Text('Card cover', style: appFont(fontSize: 20, fontWeight: FontWeight.w700, color: _ink))),
+                ]),
+                SgCover(card: c, height: 120),
+                const SizedBox(height: 16),
+                Text('Colors', style: appFont(fontSize: 16, fontWeight: FontWeight.w700, color: _ink)),
+                const SizedBox(height: 8),
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  for (final argb in _coverSwatches)
+                    GestureDetector(
+                      onTap: () => store.touch(() => c.color = argb),
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: Color(argb),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: c.color == argb ? _ink : _line, width: c.color == argb ? 2 : 1),
+                        ),
+                      ),
+                    ),
+                ]),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    onPressed: () => store.touch(() => c.color = c.type.argb),
+                    child: Text('None', style: appFont(fontSize: 15, fontWeight: FontWeight.w600, color: _ink)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _editor(SgBoard b, SgCard c) {
+    if (_cover) return _coverSheet(c);
+    final listTitle = b.lists.where((l) => l.id == c.listId).firstOrNull?.title ?? c.status;
+    final sheet = _sheet(c);
+    return Theme(
+      data: Theme.of(context).copyWith(chipTheme: _paperChips(), iconTheme: const IconThemeData(color: _ink, size: 18)),
+      child: ColoredBox(
+      key: const ValueKey('sg-card-sheet'),
+      color: sheet,
       child: Material(
-      color: _paper,
+      color: sheet,
       child: ScrollConfiguration(
         behavior: const SgScroll(),
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
           children: [
             Row(children: [
-              Tooltip(message: 'Back', child: IconButton(onPressed: () => setState(() => _openId = null), icon: const Icon(Icons.arrow_back_rounded, color: _ink))),
+              Tooltip(message: 'Back', child: IconButton(onPressed: () => setState(() { _openId = null; _cover = false; }), icon: const Icon(Icons.arrow_back_rounded, color: _ink))),
               const Spacer(),
               if (c.hasHidden)
                 Tooltip(message: 'Hidden fields', child: IconButton(onPressed: () => setState(() => _forceFlip = !_forceFlip), icon: Icon(_forceFlip ? Icons.flip_rounded : Icons.flip_to_back_rounded, color: _ink))),
             ]),
-            if (_forceFlip) SgFace(card: c, board: b, back: true) else SgCover(card: c),
+            if (_forceFlip) SgFace(card: c, board: b, back: true) else SgCover(card: c, height: 96),
             _field('Title', c.title, (v) => store.touch(() => c.title = v), color: _ink),
             Text('in $listTitle on ${b.name}', style: appFont(fontSize: 13, color: _muted)),
             const SizedBox(height: 8),
@@ -631,6 +730,7 @@ class _SgPaneState extends State<SgPane> {
               spacing: 8,
               runSpacing: 8,
               children: [
+                _quick(Icons.image_outlined, 'Cover', () => setState(() => _cover = true)),
                 _quick(Icons.swap_horiz_rounded, 'Move', () => _reveal(_listKey)),
                 _quick(Icons.label_outline, 'Labels', () => _reveal(_labelsKey)),
                 _quick(Icons.people_outline, 'Members', () => _reveal(_membersKey)),
@@ -653,7 +753,7 @@ class _SgPaneState extends State<SgPane> {
               }, color: _ink),
               _statusControl(b, c, color: _ink),
             ], key: _listKey),
-            _section(Icons.tune_rounded, 'Custom Fields', [
+            _section(Icons.tune_rounded, 'Custom fields', [
               for (final f in b.fields) _custom(c, f, color: _ink),
               _field('New field', '', (v) {
                 if (v.trim().isNotEmpty) store.addField(v.trim(), SgFieldKind.text);
@@ -695,8 +795,9 @@ class _SgPaneState extends State<SgPane> {
                     label: Text(t.label, style: appFont(fontSize: 12, color: _ink)),
                     selected: c.type == t,
                     onSelected: (_) => store.touch(() {
+                      final old = c.type;
                       c.type = t;
-                      c.color = t.argb;
+                      if (c.color == old.argb) c.color = t.argb;
                     }),
                   ),
               ]),

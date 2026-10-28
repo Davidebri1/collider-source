@@ -61,7 +61,7 @@ extension SgTypeX on SgType {
         SgType.task => 'Task',
         SgType.reminder => 'Reminder',
         SgType.project => 'Project',
-        SgType.journal => 'Journal Entry',
+        SgType.journal => 'Journal entry',
         SgType.note => 'Note',
         SgType.listItem => 'List',
         SgType.feature => 'Feature',
@@ -92,13 +92,13 @@ extension SgSurfaceX on SgSurface {
         SgSurface.kanban => 'Kanban',
         SgSurface.calendar => 'Calendar',
         SgSurface.notebook => 'Notebook',
-        SgSurface.album => 'Photo Album',
+        SgSurface.album => 'Photo album',
         SgSurface.storyboard => 'Storyboard',
-        SgSurface.vision => 'Vision Board',
+        SgSurface.vision => 'Vision board',
         SgSurface.swimlane => 'Swimlane',
-        SgSurface.portfolio => 'Portfolio Desk',
-        SgSurface.usMap => 'US Map',
-        SgSurface.worldMap => 'World Map',
+        SgSurface.portfolio => 'Portfolio desk',
+        SgSurface.usMap => 'US map',
+        SgSurface.worldMap => 'World map',
         SgSurface.files => 'Files',
         SgSurface.corkboard => 'Corkboard',
         SgSurface.clipboard => 'Clipboard',
@@ -980,8 +980,8 @@ class SgStore extends ChangeNotifier {
         _checkpoint();
         var n = 0;
         for (final c in b.cards.where((c) => c.type == from)) {
+          if (c.color == from.argb) c.color = to.argb;
           c.type = to;
-          c.color = to.argb;
           n++;
         }
         reply = 'Refactored $n ${from.label} cards as ${to.label}.';

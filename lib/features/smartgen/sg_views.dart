@@ -84,21 +84,50 @@ class _SgPulseState extends State<SgPulse> with SingleTickerProviderStateMixin {
   Widget build(BuildContext context) => AnimatedBuilder(animation: c, builder: (_, __) => widget.child());
 }
 
-/// The card's cover image, full width, when a file is attached.
+/// A real photo, not the 10×10 seed that only exists so album cards have bytes.
+bool _hasPhoto(SgCard card) {
+  if (card.files.isEmpty) return false;
+  return card.files.first.dataUrl != kSeedPng;
+}
+
+/// The card cover. A photo fills the band. A colour-only cover is a solid
+/// banner of the card colour, so it reads as a cover rather than an empty box.
 class SgCover extends StatelessWidget {
-  const SgCover({super.key, required this.card});
+  const SgCover({super.key, required this.card, this.height = 96});
   final SgCard card;
+  final double height;
+
   @override
   Widget build(BuildContext context) {
-    if (card.files.isEmpty) return const SizedBox.shrink();
+    final radius = BorderRadius.circular(12);
+    if (!_hasPhoto(card)) return _banner(radius);
     return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: radius,
       child: Image.memory(
         _bytes(card.files.first.dataUrl),
-        height: 160,
+        height: height,
         width: double.infinity,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+        errorBuilder: (_, __, ___) => _banner(radius),
+      ),
+    );
+  }
+
+  Widget _banner(BorderRadius radius) {
+    final color = Color(card.color);
+    return Container(
+      height: height,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color.alphaBlend(Colors.white.withValues(alpha: 0.18), color),
+            color,
+          ],
+        ),
       ),
     );
   }
@@ -113,23 +142,24 @@ class SgFace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const paper = Color(0xFFFAF7F2);
+    const paper = Color(0xFFF2F4F7);
     const ink = Color(0xFF1C1B19);
+    const line = Color(0xFFD0D5DE);
     final accent = Color(card.color);
-    final wash = LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color.alphaBlend(accent.withValues(alpha: 0.22), paper), paper]);
+    final wash = Color.alphaBlend(accent.withValues(alpha: 0.40), paper);
     if (back) {
       return Container(
         padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(color: paper, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFE4DDD4))),
+        decoration: BoxDecoration(color: paper, borderRadius: BorderRadius.circular(16), border: Border.all(color: line)),
         child: Text(card.hiddenNotes.isEmpty ? 'Hidden fields' : card.hiddenNotes, style: appFont(fontSize: 12, color: ink)),
       );
     }
     final labels = [for (final id in card.labelIds) ...board.labels.where((l) => l.id == id)];
     return Container(
       padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(gradient: wash, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFE4DDD4))),
+      decoration: BoxDecoration(color: wash, borderRadius: BorderRadius.circular(16), border: Border.all(color: line)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-        if (card.files.isNotEmpty)
+        if (_hasPhoto(card))
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: Image.memory(_bytes(card.files.first.dataUrl), height: compact ? 36 : 56, width: double.infinity, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox(height: 36)),
@@ -141,9 +171,9 @@ class SgFace extends StatelessWidget {
         const SizedBox(height: 4),
         Text(card.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: ink)),
         if (!compact && card.description.isNotEmpty)
-          Text(card.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 11, color: const Color(0xFF4A453E))),
+          Text(card.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 11, color: const Color(0xFF5C6570))),
         if (card.type == SgType.job && card.company.isNotEmpty)
-          Text('${card.company} · ${card.positionTitle}', maxLines: 1, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 10, color: const Color(0xFF4A453E))),
+          Text('${card.company} · ${card.positionTitle}', maxLines: 1, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 10, color: const Color(0xFF5C6570))),
         const SizedBox(height: 4),
         Row(children: [
           if (card.urgent && card.dueMs != null) SgClock(dueMs: card.dueMs!),
@@ -438,7 +468,7 @@ class _KanbanColumnState extends State<_KanbanColumn> {
         child: TextButton(
           style: TextButton.styleFrom(alignment: Alignment.centerLeft, minimumSize: const Size(double.infinity, 44)),
           onPressed: _add,
-          child: Text('+ Add a card', style: appFont(fontSize: 16, color: const Color(0xFF5C564E))),
+          child: Text('+ Add a card', style: appFont(fontSize: 16, color: const Color(0xFF5C6570))),
         ),
       ),
     ]);
@@ -536,7 +566,7 @@ class _SgFlipState extends State<SgFlip> with SingleTickerProviderStateMixin {
             message: _back ? 'Flip back' : 'Hidden fields',
             child: IconButton(
               onPressed: _toggle,
-              icon: Icon(_back ? Icons.flip_to_front_rounded : Icons.flip_rounded, size: 16, color: const Color(0xFF5C564E)),
+              icon: Icon(_back ? Icons.flip_to_front_rounded : Icons.flip_rounded, size: 16, color: const Color(0xFF5C6570)),
             ),
           ),
         ),
