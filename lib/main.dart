@@ -1990,6 +1990,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => setState(_expandedModelIds.clear), child: const SizedBox.expand())),
           // The ticker is the core experience: ALWAYS present. When another
           // surface has focus it stays, blurred and non-interactive.
+          // Smart Gen is the exception: its centred board sits on the wallpaper,
+          // and the home composer is not part of that surface.
+          if (_activeDrawer != 'smartgen')
           Positioned.fill(
             bottom: 12 + 56 + 4, // docked on the bottom bar: one layer
             child: _tickerGate(SafeArea(
@@ -2006,7 +2009,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                     // Map row 13: a generation gets the room to show its media
                     // and its panel, so the media board keeps this plane to
                     // itself and only the composer floats in the floatable width.
-                    if (_mediaShowing)
+                    if (_mediaShowing && _activeDrawer != 'smartgen')
                       _buildComposer()
                     else ...[
                       // Bug 5: the opened answer is a tray anchored over the
@@ -2031,8 +2034,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                       ),
                       const SizedBox(height: _windowGap),
                       // Bug 7: the composer has its own slot now, so it cannot
-                      // land on the category chips.
-                      _buildComposer(),
+                      // land on the category chips. Smart Gen is a board, not a
+                      // prompt, so the home composer stays off that one surface.
+                      if (_activeDrawer != 'smartgen') _buildComposer(),
                     ],
                     const SizedBox(height: _windowGap),
                   ],
@@ -2180,11 +2184,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // blurs and dims; a second pass blurred the ticker out of sight.
 
           if (_activeDrawer == 'smartgen')
-            Positioned(
-              left: isMobile ? 0 : 360,
-              right: 0,
-              top: 0,
-              bottom: 78,
+            Positioned.fill(
               child: SmartGenScreen(
                 onClose: () => _requestSwitchSurface(null),
               ),
