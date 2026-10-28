@@ -57,6 +57,19 @@ class _SgPaneState extends State<SgPane> {
     if (surface != null) store.board!.surface = surface;
     if (sg == 'flip') _forceFlip = true;
     if (sg == 'editor') _openId = store.board!.cards.firstOrNull?.id;
+    final cardId = q['card'];
+    if (cardId != null && store.board!.cards.any((c) => c.id == cardId)) _openId = cardId;
+    if (sg == 'cover') {
+      _openId ??= store.board!.cards.firstOrNull?.id;
+      _cover = true;
+    }
+    if (q['swatch'] == '1') {
+      const paints = [0xFF61BD4F, 0xFF0079BF, 0xFFEB5A46];
+      final cards = store.board!.cards;
+      for (var i = 0; i < paints.length && i < cards.length; i++) {
+        cards[i].color = paints[i];
+      }
+    }
     if (sg == 'search' || sg == 'stats' || sg == 'genie' || sg == 'create') _overlay = sg!;
     if (sg == 'menu') _menu = true;
     if (sg == 'multi') {
@@ -198,7 +211,7 @@ class _SgPaneState extends State<SgPane> {
             begin: Alignment.centerLeft,
             end: Alignment.centerRight,
             colors: [Color(0x00FFFFFF), Color(0xFFFFFFFF), Color(0xFFFFFFFF), Color(0x00FFFFFF)],
-            stops: [0, 0.04, 0.90, 1],
+            stops: [0, 0.02, 0.93, 1],
           ).createShader(rect);
         },
         child: ScrollConfiguration(
@@ -213,6 +226,7 @@ class _SgPaneState extends State<SgPane> {
                   child: _glassChoice(
                     label: s.label,
                     selected: b.surface == s,
+                    size: 11,
                     onSelected: (_) => store.touch(() => b.surface = s),
                   ),
                 ),
@@ -238,7 +252,8 @@ class _SgPaneState extends State<SgPane> {
         selected: selected,
         showCheckmark: false,
         onSelected: onSelected,
-        visualDensity: VisualDensity.compact,
+        visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
+        labelPadding: const EdgeInsets.symmetric(horizontal: 6),
         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
         elevation: 0,
         pressElevation: 0,
@@ -247,7 +262,7 @@ class _SgPaneState extends State<SgPane> {
         selectedShadowColor: Colors.transparent,
         side: BorderSide(color: selected ? const Color(0xFFFFFFFF) : const Color(0xE6FFFFFF), width: 1),
         color: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) return const Color(0xFFF7F4EF);
+          if (states.contains(WidgetState.selected)) return const Color(0xFFF2F4F7);
           return const Color(0x14FFFFFF);
         }),
       ),
