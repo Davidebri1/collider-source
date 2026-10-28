@@ -5,7 +5,6 @@ import '../../core/vision/vision_kit.dart';
 import '../../core/audio/music_player.dart';
 import '../music/song_row_parts.dart';
 import '../theme/theme_living_media.dart';
-import '../../core/vision/cpane.dart';
 
 /// Music drawer (v8.3, DEVIATIONS.md D40): ported from the Figma music app
 /// (file YEuK4CL2uyECUhvGEcgCNS) instead of an own design:
@@ -18,37 +17,48 @@ import '../../core/vision/cpane.dart';
 /// library: theme songs (grouped by theme) and ambient tracks.
 class MusicCollectionDrawer extends StatelessWidget {
   final VoidCallback onClose;
-  /// v9.1.7 (#24): all, themes (pack songs) or ambient, from the side nav.
-  final String collection;
-  const MusicCollectionDrawer({super.key, required this.onClose, this.collection = 'all'});
+  const MusicCollectionDrawer({super.key, required this.onClose});
 
   static const double s = LibrarySongRow.scale;
 
   @override
   Widget build(BuildContext context) {
     final p = MusicPlayer.instance;
+    final size = MediaQuery.sizeOf(context);
+    final pad = MediaQuery.paddingOf(context);
+    final width = (size.width - 96).clamp(280.0, 460.0); // a pane, not full width
     return Stack(
       fit: StackFit.expand,
       children: [
         // v9.1.6: the shared depth scrim behind already blurs; tap-out only.
         GestureDetector(behavior: HitTestBehavior.opaque, onTap: onClose),
-        // v9.1.7: on CPane (centred, same width as every pane, one glass,
-        // layer elevation, shell reserve). Content unchanged.
-        CPane(child: AnimatedBuilder(animation: p, builder: (context, _) => _body(p))),
+        Positioned(
+          left: (size.width - width) / 2,
+          width: width,
+          top: pad.top + VSpace.xl,
+          bottom: pad.bottom + 84,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: const Color(0x4018181E), // lighter than workTint: the ticker reads through
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: AnimatedBuilder(animation: p, builder: (context, _) => _body(p)),
+              ),
+            ),
+          ),
+        ),
       ],
     );
   }
 
   Widget _body(MusicPlayer p) {
-    final all = MusicPlayer.library;
-    final lib = switch (collection) {
-      'themes' => [for (final t in all) if (t.themeId != null) t],
-      'ambient' => [for (final t in all) if (t.themeId == null) t],
-      _ => all,
-    };
+    final lib = MusicPlayer.library;
     final cur = p.current;
-    final qid = collection == 'all' ? 'library' : 'library_$collection';
-    final libActive = p.queueId == qid && p.index != null;
+    final libActive = p.queueId == 'library' && p.index != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -60,7 +70,7 @@ class MusicCollectionDrawer extends StatelessWidget {
             children: [
               const Icon(Icons.library_music_rounded, size: 28 * s, color: Colors.white),
               const SizedBox(width: 16 * s),
-              Expanded(child: Text(switch (collection) { 'themes' => 'Packs', 'ambient' => 'Ambient', _ => 'Music' }, style: VType.headline().copyWith(fontSize: 20 * s))),
+              Expanded(child: Text('Music', style: VType.headline().copyWith(fontSize: 20 * s))),
               SongPlayButton(playing: false, icon: Icons.close_rounded, tooltip: 'Close', onTap: onClose),
             ],
           ),
@@ -90,7 +100,7 @@ class MusicCollectionDrawer extends StatelessWidget {
                       title: 'Play all',
                       playing: libActive && p.playing,
                       tooltip: libActive && p.playing ? 'Pause' : 'Play all',
-                      onPlay: () => libActive ? p.toggle() : p.playQueue(lib, 0, id: qid),
+                      onPlay: () => libActive ? p.toggle() : p.playQueue(lib, 0, id: 'library'),
                     ),
                     for (var i = 0; i < lib.length; i++)
                       LibrarySongRow(
@@ -101,7 +111,7 @@ class MusicCollectionDrawer extends StatelessWidget {
                         current: cur != null && cur.key == lib[i].key && cur.themeId == lib[i].themeId,
                         playing: libActive && p.index == i && p.playing,
                         onPlay: lib[i].playable
-                            ? () => libActive && p.index == i ? p.toggle() : p.playQueue(lib, i, id: qid)
+                            ? () => libActive && p.index == i ? p.toggle() : p.playQueue(lib, i, id: 'library')
                             : null,
                       ),
                   ],

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../core/audio/music_player.dart';
-import '../../core/theme/app_font.dart';
 import '../../core/vision/vision_kit.dart';
 import 'contextual_side_nav.dart';
 
@@ -17,58 +16,48 @@ class SideRailEntry {
 ///
 /// Labels are short on purpose. The rail is a 58pt column; anything longer
 /// ellipsised into mush, which is what made it look broken.
-List<SideRailEntry> sideRailEntries(ActiveWorkSurface s, {bool musicOpen = false}) => switch (s) {
+List<SideRailEntry> sideRailEntries(ActiveWorkSurface s) => switch (s) {
       ActiveWorkSurface.chat => const [
-          // R14: search is the first item. The consensus view stays the pinned ticker row.
-          SideRailEntry('search', Icons.search_rounded, 'Search'),
           SideRailEntry('new', Icons.add_rounded, 'New'),
           SideRailEntry('local', Icons.history_rounded, 'Local'),
           SideRailEntry('global', Icons.public_rounded, 'Global'),
+          SideRailEntry('consensus', Icons.balance_rounded, 'Roundup'),
         ],
-      // v9.1.7 (#24): Smart Gen's own tools (were a bottom ornament).
       ActiveWorkSurface.smartgen => const [
-          SideRailEntry('tasks', Icons.view_kanban_outlined, 'Tasks'),
-          SideRailEntry('projects', Icons.folder_outlined, 'Projects'),
-          SideRailEntry('reminders', Icons.alarm_rounded, 'Remind'),
-          SideRailEntry('memories', Icons.psychology_outlined, 'Memory'),
-          SideRailEntry('artifacts', Icons.description_outlined, 'Outputs'),
+          SideRailEntry('cards', Icons.style_rounded, 'Cards'),
+          SideRailEntry('boards', Icons.dashboard_rounded, 'Boards'),
+          SideRailEntry('canvas', Icons.crop_free_rounded, 'Canvas'),
+          SideRailEntry('genie', Icons.assistant_rounded, 'Genie'),
         ],
       // R27: Discover is the image market. The Imagine layout is a row of
       // pictures, a row of labeled looks, then a two-column feed. So the side
       // nav is Search, Library and Looks, and nothing else. The old prompts /
       // visuals / video / audio / gallery shelves were a prompt shelf, clips
       // and songs, which R27 and X5 both exclude.
-      // v9.1.7 (#24): the side nav carries the Discover feeds.
       ActiveWorkSurface.market => const [
-          SideRailEntry('stills', Icons.photo_outlined, 'Stills'),
-          SideRailEntry('templates', Icons.view_carousel_outlined, 'Looks'), // the 58pt rail cuts 'Templates'
-          SideRailEntry('night', Icons.nightlight_outlined, 'Night'),
+          SideRailEntry('search', Icons.search_rounded, 'Search'),
+          SideRailEntry('library', Icons.photo_library_outlined, 'Library'),
+          // Not Icons.auto_awesome_outlined: sparkle-shaped glyphs are banned. "Looks"
+// is a set of curated appearances, so it reads as a filter, not a wish.
+          SideRailEntry('looks', Icons.filter_list_rounded, 'Looks'),
         ],
       ActiveWorkSurface.themes => [
           const SideRailEntry('premium', Icons.workspace_premium_rounded, 'Market'),
           const SideRailEntry('gallery', Icons.collections_rounded, 'Gallery'),
           // No songs in the catalog: no Music entry (v8.3, D46).
           if (MusicPlayer.library.isNotEmpty) const SideRailEntry('music', Icons.library_music_rounded, 'Music'),
-          // v9.1.7 (#24): Music's collections (pack songs, ambient tracks).
-          if (musicOpen && MusicPlayer.library.isNotEmpty) ...const [
-            SideRailEntry('music_themes', Icons.collections_bookmark_outlined, 'Packs'),
-            SideRailEntry('music_ambient', Icons.waves_rounded, 'Ambient'),
-          ],
         ],
       ActiveWorkSurface.browser => const [
           SideRailEntry('tabs', Icons.tab_rounded, 'Tabs'),
           SideRailEntry('engine', Icons.travel_explore_rounded, 'Engine'),
           SideRailEntry('clear', Icons.cleaning_services_outlined, 'Clear'),
         ],
-      // v9.1.7 (#24): the Files sidebar's own types, same order and icons,
-      // as the overlaying rail.
       ActiveWorkSurface.files => const [
-          SideRailEntry('all', Icons.schedule_rounded, 'Recent'),
-          SideRailEntry('image', Icons.image_outlined, 'Images'),
-          SideRailEntry('video', Icons.movie_outlined, 'Videos'),
-          SideRailEntry('document', Icons.description_outlined, 'Docs'),
-          SideRailEntry('writing', Icons.notes_rounded, 'Text'),
-          SideRailEntry('data', Icons.table_chart_outlined, 'Data'),
+          SideRailEntry('all', Icons.folder_open_rounded, 'All'),
+          SideRailEntry('artifacts', Icons.inventory_2_outlined, 'Artifacts'),
+          SideRailEntry('attachments', Icons.attach_file_rounded, 'Files'),
+          SideRailEntry('outputs', Icons.output_rounded, 'Outputs'),
+          SideRailEntry('system', Icons.settings_suggest_outlined, 'System'),
         ],
     };
 
@@ -92,17 +81,14 @@ class SideNavRail extends StatelessWidget {
     required this.activeKey,
     required this.onSelect,
     this.compact = true,
-    this.musicOpen = false,
   });
-  /// v9.1.7 (#24): Music's collections show only while Music is open.
-  final bool musicOpen;
 
   static const double _railWidth = 58;
   static const double _dot = 34;
 
   @override
   Widget build(BuildContext context) {
-    final entries = sideRailEntries(surface, musicOpen: musicOpen);
+    final entries = sideRailEntries(surface);
     final active = entries.indexWhere((e) => e.key == activeKey);
     return Recede(child: AnimatedSize(
       duration: VMotion.base,
@@ -183,13 +169,15 @@ class _RailButton extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
-                style: appFont(
+                style: TextStyle(
+                  fontFamily: 'GoogleSansFlex',
                   fontSize: 11,
                   height: 1.1,
                   letterSpacing: -0.05,
                   fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                  color: Colors.white,
-                ).copyWith(shadows: const [Shadow(color: Color(0xB3000000), blurRadius: 6)]),
+                  color: Colors.white, // v9.1.4 (playtest #15): readable over bright wallpaper
+                  shadows: const [Shadow(color: Color(0xB3000000), blurRadius: 6)],
+                ),
               ),
             ],
           ),

@@ -46,15 +46,7 @@ class PermanentNavBar extends StatelessWidget {
               selected: activeDrawer == 'settings',
               onTap: onSettings,
             ),
-            const SizedBox(width: VSpace.sm),
-            // v9.1.7: restored verbatim from v9-final (deea01d): Settings · Home · Apps.
-            VCircleButton(
-              icon: Icons.mode_comment_outlined, // S-N6 Compose glyph
-              tooltip: 'Compose / Home',
-              size: 44,
-              selected: activeDrawer == null || isComposerSummoned,
-              onTap: onHome,
-            ),
+            // The redundant Compose / Home button is gone (user ask); the bar stays.
             const SizedBox(width: VSpace.sm),
             VCircleButton(
               icon: Icons.apps_rounded,

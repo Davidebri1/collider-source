@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../../models/ticker_item.dart';
-import '../../../core/vision/cpane.dart';
 import '../../../core/vision/vision_kit.dart';
 import '../../../core/vision/selection.dart';
 
@@ -60,9 +59,14 @@ class _HistoryDrawerState extends State<HistoryDrawer> {
       fit: StackFit.expand,
       children: [
         VScrim(onTap: widget.onClose),
-        // v9.1.7: on CPane (centred, one glass, layer elevation, shell reserve).
-        CPaneWindow(
+        Align(
+          alignment: Alignment.topCenter,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(VSpace.md, 56, VSpace.md, 0),
+            child: VWindow(
               title: 'History',
+              maxWidth: VOverlay.menuWidth(context),
+              maxHeight: VOverlay.menuMaxHeight(context),
               actions: [VCircleButton(icon: Icons.close_rounded, tooltip: 'Close', onTap: widget.onClose)],
               child: HistorySessionList(
                 sessions: sessions,
@@ -73,6 +77,8 @@ class _HistoryDrawerState extends State<HistoryDrawer> {
                 onLongPress: (x) => _sel.toggle(x.id),
               ),
             ),
+          ),
+        ),
         if (_sel.active)
           Positioned(
             left: 0,

@@ -23,6 +23,7 @@ import 'models/ticker_item.dart';
 import 'features/ticker/widgets/glm_column_window.dart';
 import 'features/ticker/widgets/model_pill.dart';
 import 'features/ticker/widgets/message_zoom_overlay.dart';
+import 'features/ticker/widgets/consensus_row.dart';
 import 'features/ticker/widgets/local_history_pane.dart';
 import 'features/prompt/floating_prompt.dart';
 import 'features/nav/permanent_nav_bar.dart';
@@ -864,6 +865,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   /// R09: "row count 1, 2 or 3." A slot is sized for a model name plus a
   /// wrapped one-line summary; longer answers scroll behind the edge fade.
   static const int _maxTickerRows = 4; // four shown, the rest scroll (v8.6)
+  static const double _rowSlot = 92;
+  static const double _chipStripHeight = 0;
   /// v9.1.7 (#6/#7): under a tall pane the ticker docks in the band above the
   /// composer with two rows showing; the rest still scroll.
   static const int _dockedTickerRows = 2;
@@ -1348,34 +1351,37 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   /// Plain-word name for a category tab comes from [ModelCategoryX.label],
   /// so the tab strip and the roster can never drift apart.
 
-  /// GLM ticker (R08). A centred column, at most 40% of the screen, on its own
-  /// layer under every pane. Nothing above it reserves a band for it.
+  /// Live ticker: no consensus bubble until it has words, and the model rows
+  /// stay the separate pills from v9.1.6h.
   Widget _buildTickerWindow() {
-    final rows = _tickerRows(_activeCategory);
-    if (rows.isEmpty && _consensusSummary.trim().isEmpty) return const SizedBox.shrink();
-    final order = _tickerOrder;
+    final showConsensus = !_activeCategory.isMedia && _tickerItems.isNotEmpty && _consensusSummary.trim().isNotEmpty;
+    final rowCount = _tickerRows(_activeCategory).length;
+    if (rowCount == 0 && !showConsensus) return const SizedBox.shrink();
+    final visible = rowCount.clamp(1, _maxTickerRows);
     final window = SizedBox(
-      width: math.min(260, MediaQuery.sizeOf(context).width - 48),
+      width: math.min(MediaQuery.sizeOf(context).width - 128, 520),
       child: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: _tickerHeight),
-        child: GlmTickerColumn(
-          items: rows,
-          openId: _expandedModelIds.isEmpty ? null : _expandedModelIds.first,
-          onOpen: _onTogglePill,
-          consensusTitle: _consensusRatio.trim().isEmpty ? 'Consensus' : _consensusRatio,
-          consensusLine: _isConsensusGenerating ? 'Comparing answers' : (_consensusSummary.trim().isEmpty ? 'Where the models agree' : _consensusSummary),
-          onConsensus: () => setState(() => _activeDrawer = 'consensus'),
-          activeIds: _selectedModelIds.toSet(),
-          onToggle: (id) => _toggleSelect(_activeCategory, id),
-          categoryLabel: _activeCategory.label,
-          falloff: _otherSurfaceFocused,
-          onCategorySwipe: (dir) {
-            final i = order.indexOf(_activeCategory);
-            setState(() {
-              _activeCategory = order[(i + dir + order.length) % order.length];
-              _expandedModelIds.clear();
-            });
-          },
+        child: _windowSurface(
+          bare: true,
+          padding: const EdgeInsets.fromLTRB(VSpace.xs - 2, VSpace.xs - 2, VSpace.xs - 2, VSpace.xs - 2),
+          child: CustomMultiChildLayout(
+            delegate: _TickerWindowLayout(listSlots: visible * _rowSlot + _chipStripHeight),
+            children: [
+              LayoutId(
+                id: _TickerWindowLayout.pinned,
+                child: showConsensus
+                    ? ConsensusRow(
+                        score: _consensusRatio,
+                        summary: _consensusSummary,
+                        isGenerating: _isConsensusGenerating,
+                        onTap: () => _onTogglePill(_kConsensusId),
+                      )
+                    : const SizedBox.shrink(),
+              ),
+              LayoutId(id: _TickerWindowLayout.list, child: _buildTicker()),
+            ],
+          ),
         ),
       ),
     );
@@ -1832,7 +1838,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       children: [
         SideNavRail(
           surface: surface,
-          musicOpen: _activeDrawer == 'music',
           activeKey: railKey,
           compact: isMobile,
           onSelect: (key) {
@@ -2353,7 +2358,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // No songs in the catalog: no Music drawer (v8.3, D46).
           // v9.1.4 (playtest #14): dissolves out instead of a hard cut.
             Positioned.fill(child: MaterializeSwitch(show: _activeDrawer == 'music' && MusicPlayer.library.isNotEmpty, builder: (_) => MusicCollectionDrawer(
-                collection: _musicCollection,
                 onClose: () => setState(() => _activeDrawer = null),
               ))),
 
@@ -2377,7 +2381,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             Positioned.fill(
               // CPane: centred, reserves the docked ticker and composer itself.
               child: MarketScreen(
-                feed: _marketCategory,
                 onClose: () => _requestSwitchSurface(null),
                 onUsePrompt: (p) => _onSendPrompt(p),
                 onNotice: _notice,
@@ -2391,7 +2394,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           if (_activeDrawer == 'files')
             Positioned.fill(
               child: FilesScreen(
-                type: _filesCategory,
                 onClose: () => _requestSwitchSurface(null),
               ),
             ),
