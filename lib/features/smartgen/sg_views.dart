@@ -8,6 +8,7 @@ import 'package:flutter/rendering.dart';
 
 import '../../core/theme/app_font.dart';
 import 'sg_model.dart';
+import 'sg_power_kanban.dart';
 
 class SgScroll extends ScrollBehavior {
   const SgScroll();
@@ -145,28 +146,28 @@ class SgFace extends StatelessWidget {
     const paper = Color(0xFFF2F4F7);
     const ink = Color(0xFF1C1B19);
     const line = Color(0xFFD0D5DE);
-    final accent = Color(card.color);
-    final wash = Color.alphaBlend(accent.withValues(alpha: 0.40), paper);
+    final accent = card.color == 0 ? paper : Color(card.color);
+    final wash = card.color == 0 ? paper : Color.alphaBlend(accent.withValues(alpha: 0.40), paper);
     if (back) {
       return Container(
         padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(color: paper, borderRadius: BorderRadius.circular(16), border: Border.all(color: line)),
+        decoration: BoxDecoration(color: paper, borderRadius: BorderRadius.circular(10), border: Border.all(color: line)),
         child: Text(card.hiddenNotes.isEmpty ? 'Hidden fields' : card.hiddenNotes, style: appFont(fontSize: 12, color: ink)),
       );
     }
     final labels = [for (final id in card.labelIds) ...board.labels.where((l) => l.id == id)];
     return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(color: wash, borderRadius: BorderRadius.circular(16), border: Border.all(color: line)),
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+      decoration: BoxDecoration(color: wash, borderRadius: BorderRadius.circular(10), border: Border.all(color: line)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
         if (_hasPhoto(card))
           ClipRRect(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(6),
             child: Image.memory(_bytes(card.files.first.dataUrl), height: compact ? 36 : 56, width: double.infinity, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox(height: 36)),
           ),
         if (labels.isNotEmpty) ...[
           const SizedBox(height: 4),
-          Wrap(spacing: 4, children: [for (final l in labels) Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1), decoration: BoxDecoration(color: Color(l.color), borderRadius: BorderRadius.circular(4)), child: Text(l.title, style: appFont(fontSize: 9, color: Colors.white, fontWeight: FontWeight.w700)))]),
+          Wrap(spacing: 4, runSpacing: 4, children: [for (final l in labels) Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), decoration: BoxDecoration(color: Color(l.color), borderRadius: BorderRadius.circular(999)), child: Text(l.title, style: appFont(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w600)))]),
         ],
         const SizedBox(height: 4),
         Text(card.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: ink)),
@@ -177,6 +178,7 @@ class SgFace extends StatelessWidget {
         const SizedBox(height: 4),
         Row(children: [
           if (card.urgent && card.dueMs != null) SgClock(dueMs: card.dueMs!),
+          if (!card.urgent && card.dueMs != null) _dueChip(card.dueMs!),
           if (card.urgent && card.dueMs == null) _pulse(),
           const Spacer(),
           for (final m in card.members.take(3))
@@ -190,6 +192,16 @@ class SgFace extends StatelessWidget {
             ),
         ]),
       ]),
+    );
+  }
+
+  Widget _dueChip(int dueMs) {
+    final d = DateTime.fromMillisecondsSinceEpoch(dueMs);
+    final label = '${d.month}/${d.day}';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(color: const Color(0xFFE2E6EE), borderRadius: BorderRadius.circular(999)),
+      child: Text(label, style: appFont(fontSize: 10, fontWeight: FontWeight.w600, color: const Color(0xFF1C1B19))),
     );
   }
 
@@ -1162,7 +1174,7 @@ class SgSurfaceView extends StatelessWidget {
     }
     final s = store.board!.surface;
     return switch (s) {
-      SgSurface.kanban => SgKanban(store: store, onOpen: onOpen, multi: multi, selected: selected, onSelect: onSelect, initialPage: kanbanPage),
+      SgSurface.kanban => SgPowerKanban(store: store, onOpen: onOpen, multi: multi, selected: selected, onSelect: onSelect),
       SgSurface.calendar => SgCalendar(store: store, onOpen: onOpen),
       SgSurface.notebook => SgNotebook(store: store, onOpen: onOpen),
       SgSurface.album => SgAlbum(store: store, onOpen: onOpen),
@@ -1178,7 +1190,7 @@ class SgSurfaceView extends StatelessWidget {
       SgSurface.ledger => SgLedger(store: store, onOpen: onOpen),
       SgSurface.binder => SgBinder(store: store, onOpen: onOpen),
       SgSurface.slate => SgSlate(store: store, onOpen: onOpen),
-      SgSurface.whiteboard => Container(color: const Color(0xFFF7F7F4), child: SgKanban(store: store, onOpen: onOpen)),
+      SgSurface.whiteboard => Container(color: const Color(0xFFF7F7F4), child: SgPowerKanban(store: store, onOpen: onOpen)),
       SgSurface.canvas => SgCanvasBoard(store: store, onOpen: onOpen),
     };
   }

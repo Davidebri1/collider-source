@@ -573,37 +573,85 @@ class SgStore extends ChangeNotifier {
   static final SgStore instance = SgStore();
   static const int maxCards = 999;
   static const int maxCanvases = 10;
-  static const String _blobId = 'smartgen/board.json';
+  static const String _blobId = 'smartgen/boards.json';
 
-  SgBoard? board;
+  /// All boards. Smart Gen opens empty — no seed boards or cards.
+  final List<SgBoard> boards = [];
+  String? activeBoardId;
   final List<SgMessage> genie = [];
   final List<String> _undo = [];
   final List<String> _redo = [];
   String notice = '';
   bool loaded = false;
+  bool atHome = true;
   int _seq = 0;
+
+  SgBoard? get board {
+    final id = activeBoardId;
+    if (id == null) return null;
+    for (final b in boards) {
+      if (b.id == id) return b;
+    }
+    return null;
+  }
+
+  set board(SgBoard? value) {
+    if (value == null) {
+      activeBoardId = null;
+      return;
+    }
+    final i = boards.indexWhere((b) => b.id == value.id);
+    if (i >= 0) {
+      boards[i] = value;
+    } else {
+      boards.add(value);
+    }
+    activeBoardId = value.id;
+  }
 
   int get cardCount => board?.cards.length ?? 0;
 
   String _id(String prefix) => '$prefix${DateTime.now().microsecondsSinceEpoch}${_seq++}';
 
   void debugReset() {
-    board = null;
+    boards.clear();
+    activeBoardId = null;
     genie.clear();
     _undo.clear();
     _redo.clear();
     notice = '';
     loaded = false;
+    atHome = true;
+    // Wipe persisted blob so a fresh capture/session cannot revive seed or prior boards.
+    FileBlobs.put(_blobId, Uint8List(0));
   }
 
   Future<void> init() async {
     if (loaded) return;
     try {
-      final b = await FileBlobs.get(_blobId);
-      if (b != null && b.isNotEmpty) {
-        final j = jsonDecode(utf8.decode(b));
-        if (j is Map && j['board'] is Map) {
-          board = SgBoard.fromJson((j['board'] as Map).cast<String, Object?>());
+      final raw = await FileBlobs.get(_blobId);
+      if (raw != null && raw.isNotEmpty) {
+        final j = jsonDecode(utf8.decode(raw));
+        if (j is Map) {
+          final list = j['boards'];
+          if (list is List) {
+            boards
+              ..clear()
+              ..addAll([
+                for (final b in list)
+                  if (b is Map) SgBoard.fromJson(b.cast<String, Object?>())
+              ]);
+          } else if (j['board'] is Map) {
+            // Migrate single-board blob from v9.1.8.
+            boards
+              ..clear()
+              ..add(SgBoard.fromJson((j['board'] as Map).cast<String, Object?>()));
+          }
+          activeBoardId = j['activeBoardId'] as String?;
+          if (activeBoardId != null && board == null && boards.isNotEmpty) {
+            activeBoardId = boards.first.id;
+          }
+          atHome = j['atHome'] == true || activeBoardId == null;
           final g = j['genie'];
           if (g is List) {
             genie
@@ -615,140 +663,72 @@ class SgStore extends ChangeNotifier {
     } catch (e) {
       debugPrint('SgStore: ignored unreadable board: $e');
     }
-    board ??= _starter();
+    // Never invent seed content. Empty is correct.
     loaded = true;
     notifyListeners();
   }
 
+  /// Test helper: open one empty board with the three default lists.
   void ensureStarter() {
-    board ??= _starter();
+    if (boards.isEmpty) {
+      createBoard('Board', goHome: false);
+    } else {
+      activeBoardId ??= boards.first.id;
+      atHome = false;
+    }
     loaded = true;
   }
 
-  SgBoard _starter() {
-    final todo = SgList(id: 'l1', title: 'To Do', position: 0);
-    final doing = SgList(id: 'l2', title: 'Doing', position: 1);
-    final done = SgList(id: 'l3', title: 'Done', position: 2);
-    final now = DateTime.now();
-    final design = SgLabel(id: 'lb1', title: 'Design', color: 0xFF3D7A6A);
-    final rush = SgLabel(id: 'lb2', title: 'Rush', color: 0xFFB84A4A);
-    SgCard card({
-      required String id,
-      required String title,
-      required String listId,
-      required double rank,
-      SgType type = SgType.task,
-      String description = '',
-      int? dueMs,
-      bool urgent = false,
-      List<String>? tags,
-      String hidden = '',
-      List<String>? labels,
-      String notebook = '',
-      String company = '',
-      String positionTitle = '',
-      String triggers = '',
-      List<String>? members,
-      List<SgFile>? files,
-      List<SgCheck>? checks,
-      List<String>? embeds,
-      String status = 'To Do',
-    }) {
-      final c = SgCard(
-        id: id,
-        title: title,
-        description: description,
-        type: type,
-        color: type.argb,
-        listId: listId,
-        status: status,
-        dueMs: dueMs,
-        urgent: urgent,
-        tags: tags,
-        hiddenNotes: hidden,
-        labelIds: labels,
-        notebook: notebook,
-        company: company,
-        positionTitle: positionTitle,
-        triggers: triggers,
-        members: members,
-        files: files,
-        checks: checks,
-        embeds: embeds,
-        rank: rank,
-        assignee: (members != null && members.isNotEmpty) ? members.first : '',
-      );
-      c.activity.add(SgActivity(at: now.millisecondsSinceEpoch, text: 'Card added'));
-      return c;
-    }
-
-    final launch = card(
-      id: 'c1',
-      title: 'Draft launch post',
-      listId: todo.id,
-      rank: 1,
-      description: 'Two lines and one image for the coast campaign.',
-      dueMs: now.add(const Duration(minutes: 30)).millisecondsSinceEpoch,
-      urgent: true,
-      tags: const ['launch'],
-      labels: [design.id],
-      members: const ['Ada'],
-      checks: [SgCheck(id: 'k1', text: 'Write the headline', done: true), SgCheck(id: 'k2', text: 'Pick the cover')],
-      files: [SgFile(id: 'f1', name: 'cover.png', dataUrl: kSeedPng, cardId: 'c1')],
-    );
-    final venue = card(
-      id: 'c2',
-      title: 'Book the venue',
-      listId: doing.id,
-      rank: 1,
-      description: 'Call Friday. Hold the room with the north light.',
-      dueMs: now.subtract(const Duration(hours: 3)).millisecondsSinceEpoch,
-      urgent: true,
-      labels: [rush.id],
-      status: 'Doing',
-      members: const ['Sam'],
-    );
-    final california = card(id: 'c3', title: 'California', listId: todo.id, rank: 2, description: 'State stop for the west coast leg.', tags: const ['California'], type: SgType.reminder);
-    final japan = card(id: 'c4', title: 'Japan', listId: todo.id, rank: 3, description: 'A week in Kyoto after the launch.', tags: const ['Japan'], type: SgType.project);
-    final memory = card(
-      id: 'c5',
-      title: 'Trip notes',
-      listId: todo.id,
-      rank: 4,
-      type: SgType.memory,
-      notebook: 'Day one is the train.\n---\nDay two is the market.\n---\nDay three is the ride home.',
-      hidden: 'Budget stays under the number we agreed.',
-    );
-    final job = card(
-      id: 'c6',
-      title: 'Design lead',
-      listId: doing.id,
-      rank: 2,
-      type: SgType.job,
-      company: 'Collider',
-      positionTitle: 'Design lead',
-      status: 'Doing',
-      description: 'Owns the board and the type.',
-    );
-    final scene = card(id: 'c7', title: 'Opening scene', listId: done.id, rank: 1, type: SgType.poster, status: 'Done', files: [SgFile(id: 'f2', name: 'scene.png', dataUrl: kSeedPng, cardId: 'c7')]);
-    scene.embeds.add(launch.id);
-    launch.triggers = 'done-final,hourly';
-
-    return SgBoard(
-      id: 'b1',
-      name: 'Launch',
-      starred: true,
-      guests: const ['Sam Rivera'],
+  /// A new board always starts with To Do / Doing / Done and no cards.
+  SgBoard createBoard(String name, {bool goHome = false}) {
+    final todo = SgList(id: _id('l'), title: 'To Do', position: 0);
+    final doing = SgList(id: _id('l'), title: 'Doing', position: 1);
+    final done = SgList(id: _id('l'), title: 'Done', position: 2);
+    final b = SgBoard(
+      id: _id('b'),
+      name: name.trim().isEmpty ? 'Board' : name.trim(),
       lists: [todo, doing, done],
-      labels: [design, rush],
-      cards: [launch, venue, california, japan, memory, job, scene],
-      canvases: [SgCanvas(id: 'v1', name: 'Desk', kind: 'Glass')],
-      fields: [SgFieldDef(id: 'fd1', name: 'Estimate', kind: SgFieldKind.number)],
       statuses: const ['To Do', 'Doing', 'Done'],
-    )..cards.first.custom['fd1'] = '3';
+    );
+    boards.add(b);
+    activeBoardId = b.id;
+    atHome = goHome;
+    loaded = true;
+    _commit();
+    return b;
   }
 
-  String _snap() => jsonEncode({'board': board?.toJson(), 'genie': [for (final m in genie) m.toJson()]});
+  void openBoard(String id) {
+    if (boards.any((b) => b.id == id)) {
+      activeBoardId = id;
+      atHome = false;
+      notifyListeners();
+      _commit();
+    }
+  }
+
+  void goHome() {
+    atHome = true;
+    notifyListeners();
+    _commit();
+  }
+
+  void deleteBoard(String id) {
+    _checkpoint();
+    boards.removeWhere((b) => b.id == id);
+    if (activeBoardId == id) {
+      activeBoardId = boards.isEmpty ? null : boards.first.id;
+      atHome = true;
+    }
+    _commit();
+  }
+
+  String _snap() => jsonEncode({
+        'boards': [for (final b in boards) b.toJson()],
+        'activeBoardId': activeBoardId,
+        'atHome': atHome,
+        'genie': [for (final m in genie) m.toJson()],
+      });
 
   void _checkpoint() {
     _undo.add(_snap());
@@ -758,24 +738,43 @@ class SgStore extends ChangeNotifier {
 
   Future<void> _commit() async {
     notifyListeners();
-    final doc = utf8.encode(_snap());
-    await FileBlobs.put(_blobId, Uint8List.fromList(doc));
+    try {
+      final doc = utf8.encode(_snap());
+      await FileBlobs.put(_blobId, Uint8List.fromList(doc));
+    } catch (_) {
+      // Tests and platforms without a path_provider channel still keep state in memory.
+    }
   }
 
   void undo() {
-    if (_undo.isEmpty || board == null) return;
+    if (_undo.isEmpty) return;
     _redo.add(_snap());
-    final j = jsonDecode(_undo.removeLast());
-    if (j is Map && j['board'] is Map) board = SgBoard.fromJson((j['board'] as Map).cast<String, Object?>());
+    _restore(jsonDecode(_undo.removeLast()));
     notifyListeners();
   }
 
   void redo() {
     if (_redo.isEmpty) return;
     _undo.add(_snap());
-    final j = jsonDecode(_redo.removeLast());
-    if (j is Map && j['board'] is Map) board = SgBoard.fromJson((j['board'] as Map).cast<String, Object?>());
+    _restore(jsonDecode(_redo.removeLast()));
     notifyListeners();
+  }
+
+  void _restore(Object? raw) {
+    if (raw is! Map) return;
+    final j = raw.cast<String, Object?>();
+    boards.clear();
+    final list = j['boards'];
+    if (list is List) {
+      boards.addAll([for (final b in list) if (b is Map) SgBoard.fromJson(b.cast<String, Object?>())]);
+    } else if (j['board'] is Map) {
+      boards.add(SgBoard.fromJson((j['board'] as Map).cast<String, Object?>()));
+    }
+    activeBoardId = j['activeBoardId'] as String?;
+    atHome = j['atHome'] == true || activeBoardId == null;
+    genie
+      ..clear()
+      ..addAll([for (final m in (j['genie'] as List?) ?? const []) if (m is Map) SgMessage.fromJson(m.cast<String, Object?>())]);
   }
 
   void setNotice(String text) {
