@@ -68,14 +68,98 @@ class _SgPaneState extends State<SgPane> {
           store.createBoard(boardName, goHome: false);
         }
         final b = store.board!;
+        // Capture-only: seed labels so faces can show real pills (never persisted as app seed).
+        if (q['rich'] == '1' || q['labels'] == '1') {
+          store.touch(() {
+            if (b.labels.isEmpty) {
+              b.labels.addAll([
+                SgLabel(id: 'cap-l1', title: 'Urgent', color: 0xFFEB5A46),
+                SgLabel(id: 'cap-l2', title: 'Design', color: 0xFFC377E0),
+                SgLabel(id: 'cap-l3', title: 'Ship', color: 0xFF61BD4F),
+              ]);
+            }
+          });
+        }
         for (final key in ['c1', 'c2', 'c3', 'c4', 'c5']) {
           final title = q[key];
           if (title == null || title.isEmpty) continue;
           final made = store.addCard(SgType.task);
           if (made != null) store.touch(() => made.title = title);
         }
+        // rich=1 builds varied Trello-like card faces for captures only.
+        if (q['rich'] == '1' && b.cards.isNotEmpty) {
+          final lists = b.orderedLists;
+          store.touch(() {
+            // Card 0: green cover + labels + due + checklist + attachment + desc + member
+            final c0 = b.cards[0];
+            c0.color = 0xFF61BD4F;
+            c0.description = 'Ship the board polish pass';
+            c0.labelIds
+              ..clear()
+              ..addAll(['cap-l1', 'cap-l3']);
+            c0.dueMs = DateTime.now().add(const Duration(days: 2)).millisecondsSinceEpoch;
+            c0.urgent = false;
+            c0.checks
+              ..clear()
+              ..addAll([
+                SgCheck(id: 'ck1', text: 'Layout', done: true),
+                SgCheck(id: 'ck2', text: 'Faces', done: false),
+                SgCheck(id: 'ck3', text: 'Editor', done: false),
+              ]);
+            c0.files
+              ..clear()
+              ..add(SgFile(id: 'f1', name: 'spec.pdf', dataUrl: 'data:text/plain;base64,YQ=='));
+            c0.members
+              ..clear()
+              ..add('Alex');
+            // Card 1: blue cover + due urgent + label
+            if (b.cards.length > 1) {
+              final c1 = b.cards[1];
+              c1.color = 0xFF0079BF;
+              c1.labelIds
+                ..clear()
+                ..add('cap-l2');
+              c1.dueMs = DateTime.now().add(const Duration(minutes: 25)).millisecondsSinceEpoch;
+              c1.urgent = true;
+              c1.description = 'Tighten list peek';
+              if (lists.length > 1) {
+                c1.listId = lists[1].id;
+                c1.status = lists[1].title;
+              }
+            }
+            // Card 2: red cover + checklist only
+            if (b.cards.length > 2) {
+              final c2 = b.cards[2];
+              c2.color = 0xFFEB5A46;
+              c2.checks
+                ..clear()
+                ..addAll([
+                  SgCheck(id: 'ck4', text: 'A', done: true),
+                  SgCheck(id: 'ck5', text: 'B', done: true),
+                ]);
+              c2.members.add('Sam');
+            }
+            // Card 3: purple + attachment
+            if (b.cards.length > 3) {
+              final c3 = b.cards[3];
+              c3.color = 0xFFC377E0;
+              c3.files.add(SgFile(id: 'f2', name: 'mock.png', dataUrl: 'data:text/plain;base64,YQ=='));
+              c3.labelIds.add('cap-l2');
+              if (lists.length > 1) {
+                c3.listId = lists[1].id;
+                c3.status = lists[1].title;
+              }
+            }
+            // Card 4: no colour (neutral glass) so default state is visible
+            if (b.cards.length > 4) {
+              final c4 = b.cards[4];
+              c4.color = 0;
+              c4.description = 'Neutral glass default';
+            }
+          });
+        }
         final due = q['due'];
-        if (due != null && b.cards.isNotEmpty) {
+        if (due != null && b.cards.isNotEmpty && q['rich'] != '1') {
           final mins = int.tryParse(due) ?? 30;
           store.touch(() {
             b.cards.first.dueMs = DateTime.now().add(Duration(minutes: mins)).millisecondsSinceEpoch;
@@ -654,12 +738,12 @@ class _SgPaneState extends State<SgPane> {
     ]);
   }
 
-  static const Color _ink = Color(0xFF1C1B19);
-  static const Color _muted = Color(0xFF5C6570);
-  static const Color _paper = Color(0xFFF2F4F7);
-  static const Color _line = Color(0xFFD0D5DE);
-  static const Color _chip = Color(0xFFE8ECF2);
-  static const Color _chipOn = Color(0xFFDDE2EA);
+  static const Color _ink = Color(0xFFFFFFFF);
+  static const Color _muted = Color(0xB3FFFFFF);
+  static const Color _paper = Color(0xFF1A1C22); // dense dark glass base
+  static const Color _line = Color(0x40FFFFFF);
+  static const Color _chip = Color(0x33FFFFFF);
+  static const Color _chipOn = Color(0x55FFFFFF);
   bool _cover = false;
 
   Future<void> _pickDue(SgCard c) async {
@@ -674,17 +758,21 @@ class _SgPaneState extends State<SgPane> {
   }
 
   Widget _quick(IconData icon, String label, VoidCallback onTap) {
-    return OutlinedButton.icon(
-      onPressed: onTap,
-      icon: Icon(icon, size: 16, color: _ink),
-      label: Text(label, style: appFont(fontSize: 13, color: _ink)),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: _ink,
-        backgroundColor: _chip,
-        side: const BorderSide(color: _line),
-        visualDensity: VisualDensity.compact,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    return SizedBox(
+      height: 36,
+      child: OutlinedButton.icon(
+        onPressed: onTap,
+        icon: Icon(icon, size: 15, color: _ink),
+        label: Text(label, style: appFont(fontSize: 12, fontWeight: FontWeight.w600, color: _ink)),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: _ink,
+          backgroundColor: _chip,
+          side: const BorderSide(color: _line),
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          minimumSize: const Size(0, 36),
+        ),
       ),
     );
   }
@@ -736,7 +824,7 @@ class _SgPaneState extends State<SgPane> {
       labelStyle: label,
       secondaryLabelStyle: label,
       checkmarkColor: _ink,
-      brightness: Brightness.light,
+      brightness: Brightness.dark,
       color: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) return selected;
         return fill;
@@ -744,7 +832,7 @@ class _SgPaneState extends State<SgPane> {
     );
   }
 
-  Color _sheet(SgCard c) => c.color == 0 ? _paper : Color.alphaBlend(Color(c.color).withValues(alpha: 0.40), _paper);
+  Color _sheet(SgCard c) => c.color == 0 ? _paper : Color.alphaBlend(Color(c.color).withValues(alpha: 0.35), _paper);
 
   static const List<int> _coverSwatches = [
     0xFF61BD4F,
@@ -853,18 +941,28 @@ class _SgPaneState extends State<SgPane> {
               ),
             ),
             const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _quick(Icons.image_outlined, 'Cover', () => setState(() => _cover = true)),
-                _quick(Icons.swap_horiz_rounded, 'Move', () => _reveal(_listKey)),
-                _quick(Icons.label_outline, 'Labels', () => _reveal(_labelsKey)),
-                _quick(Icons.people_outline, 'Members', () => _reveal(_membersKey)),
-                _quick(Icons.check_box_outlined, 'Checklist', () => _reveal(_checkKey)),
-                _quick(Icons.attach_file, 'Attachment', () => _reveal(_filesKey)),
-                _quick(Icons.flag_outlined, 'Done', () => store.markDone(c)),
-              ],
+            SizedBox(
+              height: 40,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _quick(Icons.image_outlined, 'Cover', () => setState(() => _cover = true)),
+                    const SizedBox(width: 8),
+                    _quick(Icons.swap_horiz_rounded, 'Move', () => _reveal(_listKey)),
+                    const SizedBox(width: 8),
+                    _quick(Icons.label_outline, 'Labels', () => _reveal(_labelsKey)),
+                    const SizedBox(width: 8),
+                    _quick(Icons.people_outline, 'Members', () => _reveal(_membersKey)),
+                    const SizedBox(width: 8),
+                    _quick(Icons.check_box_outlined, 'Checklist', () => _reveal(_checkKey)),
+                    const SizedBox(width: 8),
+                    _quick(Icons.attach_file, 'Attachment', () => _reveal(_filesKey)),
+                    const SizedBox(width: 8),
+                    _quick(Icons.flag_outlined, 'Done', () => store.markDone(c)),
+                  ],
+                ),
+              ),
             ),
             _section(Icons.notes_rounded, 'Description', [
               _field('Description', c.description, (v) => store.touch(() => c.description = v), lines: 3, color: _ink),
@@ -924,7 +1022,8 @@ class _SgPaneState extends State<SgPane> {
                     onSelected: (_) => store.touch(() {
                       final old = c.type;
                       c.type = t;
-                      if (c.color == old.argb) c.color = t.argb;
+                      // Only migrate a previous type-default colour; leave None alone.
+                      if (c.color != 0 && c.color == old.argb) c.color = t.argb;
                     }),
                   ),
               ]),

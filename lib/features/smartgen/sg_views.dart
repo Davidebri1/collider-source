@@ -8,7 +8,6 @@ import 'package:flutter/rendering.dart';
 
 import '../../core/theme/app_font.dart';
 import 'sg_model.dart';
-import 'sg_power_kanban.dart';
 
 class SgScroll extends ScrollBehavior {
   const SgScroll();
@@ -115,6 +114,17 @@ class SgCover extends StatelessWidget {
   }
 
   Widget _banner(BorderRadius radius) {
+    if (card.color == 0) {
+      return Container(
+        height: height,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          color: const Color(0xFF2A2D35),
+          border: Border.all(color: const Color(0x33FFFFFF)),
+        ),
+      );
+    }
     final color = Color(card.color);
     return Container(
       height: height,
@@ -141,56 +151,85 @@ class SgFace extends StatelessWidget {
   final bool compact;
   final bool back;
 
+  static const Color _glass = Color(0xFF2A2D35);
+  static const Color _ink = Color(0xFFFFFFFF);
+  static const Color _muted = Color(0xB3FFFFFF);
+  static const Color _line = Color(0x33FFFFFF);
+
   @override
   Widget build(BuildContext context) {
-    const paper = Color(0xFFF2F4F7);
-    const ink = Color(0xFF1C1B19);
-    const line = Color(0xFFD0D5DE);
-    final accent = card.color == 0 ? paper : Color(card.color);
-    final wash = card.color == 0 ? paper : Color.alphaBlend(accent.withValues(alpha: 0.40), paper);
+    final tinted = card.color != 0;
+    final wash = tinted ? Color.alphaBlend(Color(card.color).withValues(alpha: 0.40), _glass) : _glass;
     if (back) {
       return Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(color: paper, borderRadius: BorderRadius.circular(10), border: Border.all(color: line)),
-        child: Text(card.hiddenNotes.isEmpty ? 'Hidden fields' : card.hiddenNotes, style: appFont(fontSize: 12, color: ink)),
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(color: _glass, borderRadius: BorderRadius.circular(10), border: Border.all(color: _line)),
+        child: Text(card.hiddenNotes.isEmpty ? 'Hidden fields' : card.hiddenNotes, style: appFont(fontSize: 12, color: _ink)),
       );
     }
     final labels = [for (final id in card.labelIds) ...board.labels.where((l) => l.id == id)];
+    final doneChecks = card.checks.where((k) => k.done).length;
+    final hasDesc = card.description.trim().isNotEmpty;
     return Container(
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-      decoration: BoxDecoration(color: wash, borderRadius: BorderRadius.circular(10), border: Border.all(color: line)),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(color: wash, borderRadius: BorderRadius.circular(10), border: Border.all(color: _line)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+        if (tinted)
+          Container(height: compact ? 8 : 12, width: double.infinity, color: Color(card.color)),
         if (_hasPhoto(card))
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: Image.memory(_bytes(card.files.first.dataUrl), height: compact ? 36 : 56, width: double.infinity, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox(height: 36)),
-          ),
-        if (labels.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          Wrap(spacing: 4, runSpacing: 4, children: [for (final l in labels) Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), decoration: BoxDecoration(color: Color(l.color), borderRadius: BorderRadius.circular(999)), child: Text(l.title, style: appFont(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w600)))]),
-        ],
-        const SizedBox(height: 4),
-        Text(card.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: ink)),
-        if (!compact && card.description.isNotEmpty)
-          Text(card.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 11, color: const Color(0xFF5C6570))),
-        if (card.type == SgType.job && card.company.isNotEmpty)
-          Text('${card.company} · ${card.positionTitle}', maxLines: 1, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 10, color: const Color(0xFF5C6570))),
-        const SizedBox(height: 4),
-        Row(children: [
-          if (card.urgent && card.dueMs != null) SgClock(dueMs: card.dueMs!),
-          if (!card.urgent && card.dueMs != null) _dueChip(card.dueMs!),
-          if (card.urgent && card.dueMs == null) _pulse(),
-          const Spacer(),
-          for (final m in card.members.take(3))
-            Container(
-              margin: const EdgeInsets.only(left: 2),
-              width: 16,
-              height: 16,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(color: const Color(0xCC000000), borderRadius: BorderRadius.circular(8)),
-              child: Text(m.isEmpty ? '?' : m[0], style: appFont(fontSize: 9, color: Colors.white, fontWeight: FontWeight.w700)),
-            ),
-        ]),
+          Image.memory(_bytes(card.files.first.dataUrl), height: compact ? 48 : 72, width: double.infinity, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+            if (labels.isNotEmpty) ...[
+              Wrap(spacing: 4, runSpacing: 4, children: [
+                for (final l in labels)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(color: Color(l.color), borderRadius: BorderRadius.circular(999)),
+                    child: Text(l.title, style: appFont(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w700)),
+                  ),
+              ]),
+              const SizedBox(height: 6),
+            ],
+            Text(card.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 14, fontWeight: FontWeight.w700, color: _ink)),
+            if (!compact && card.description.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(card.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 11, color: _muted)),
+            ],
+            if (card.type == SgType.job && card.company.isNotEmpty)
+              Text('${card.company} · ${card.positionTitle}', maxLines: 1, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 10, color: _muted)),
+            const SizedBox(height: 6),
+            Wrap(spacing: 6, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+              if (card.urgent && card.dueMs != null) SgClock(dueMs: card.dueMs!),
+              if (!card.urgent && card.dueMs != null) _dueChip(card.dueMs!),
+              if (card.urgent && card.dueMs == null) _pulse(),
+              if (card.checks.isNotEmpty) _meta(Icons.check_box_outlined, '$doneChecks/${card.checks.length}'),
+              if (card.files.isNotEmpty) _meta(Icons.attach_file, '${card.files.length}'),
+              if (hasDesc) const Icon(Icons.notes_rounded, size: 14, color: _muted),
+              for (final m in card.members.take(3))
+                Container(
+                  width: 18,
+                  height: 18,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(color: const Color(0xCC000000), borderRadius: BorderRadius.circular(9), border: Border.all(color: _line)),
+                  child: Text(m.isEmpty ? '?' : m[0].toUpperCase(), style: appFont(fontSize: 9, color: Colors.white, fontWeight: FontWeight.w700)),
+                ),
+            ]),
+          ]),
+        ),
+      ]),
+    );
+  }
+
+  Widget _meta(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(color: const Color(0x33FFFFFF), borderRadius: BorderRadius.circular(999)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 12, color: _muted),
+        const SizedBox(width: 3),
+        Text(text, style: appFont(fontSize: 10, fontWeight: FontWeight.w600, color: _ink)),
       ]),
     );
   }
@@ -200,13 +239,17 @@ class SgFace extends StatelessWidget {
     final label = '${d.month}/${d.day}';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(color: const Color(0xFFE2E6EE), borderRadius: BorderRadius.circular(999)),
-      child: Text(label, style: appFont(fontSize: 10, fontWeight: FontWeight.w600, color: const Color(0xFF1C1B19))),
+      decoration: BoxDecoration(color: const Color(0x33FFFFFF), borderRadius: BorderRadius.circular(999)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        const Icon(Icons.schedule, size: 12, color: _muted),
+        const SizedBox(width: 3),
+        Text(label, style: appFont(fontSize: 10, fontWeight: FontWeight.w600, color: _ink)),
+      ]),
     );
   }
 
   Widget _pulse() {
-      return SgPulse(child: () {
+    return SgPulse(child: () {
       return Container(
         width: 8,
         height: 8,
@@ -237,9 +280,9 @@ class SgKanban extends StatefulWidget {
   /// two snap points. `orderedLists.length` is the "+ Add list" column.
   final double initialPage;
 
-  /// The column takes this share of the pane, so about 19% of the next list
-  /// stays on screen. (1 - 0.84) / 0.84 = 0.19.
-  static const double listFraction = 0.84;
+  /// The column takes this share of the pane, so about 18% of the next list
+  /// stays on screen. (1 - 0.85) / 0.85 ≈ 0.18.
+  static const double listFraction = 0.85;
 
   @override
   State<SgKanban> createState() => _SgKanbanState();
@@ -249,8 +292,6 @@ class _SgKanbanState extends State<SgKanban> {
   late final PageController _pages = PageController(viewportFraction: SgKanban.listFraction);
   int _pageTries = 0;
   int _stable = 0;
-  final List<GlobalKey> _sampleKeys = [];
-  double? _slot;
 
   @override
   void initState() {
@@ -302,73 +343,26 @@ class _SgKanbanState extends State<SgKanban> {
     super.dispose();
   }
 
-  void _readSamples() {
-    if (!mounted) return;
-    var maxH = 0.0;
-    for (final key in _sampleKeys) {
-      final box = key.currentContext?.findRenderObject();
-      if (box is RenderBox && box.hasSize && box.size.height > maxH) maxH = box.size.height;
-    }
-    if (maxH <= 0) return;
-    if (_slot != null && (maxH - _slot!).abs() < 0.5) return;
-    setState(() => _slot = maxH);
-  }
-
   @override
   Widget build(BuildContext context) {
     final b = widget.store.board!;
     final lists = b.orderedLists;
     final count = lists.length + 1;
-    while (_sampleKeys.length < count) {
-      _sampleKeys.add(GlobalKey());
-    }
-    if (_sampleKeys.length > count) _sampleKeys.removeRange(count, _sampleKeys.length);
     return LayoutBuilder(builder: (context, box) {
-      final pageW = box.maxWidth * SgKanban.listFraction;
-      final cap = box.maxHeight.isFinite ? box.maxHeight : 2000.0;
-      final h = _slot == null ? 0.0 : math.min(_slot!, cap);
-      WidgetsBinding.instance.addPostFrameCallback((_) => _readSamples());
-      return Stack(children: [
-        Offstage(
-          child: OverflowBox(
-            fit: OverflowBoxFit.deferToChild,
-            alignment: Alignment.topLeft,
-            minWidth: 0,
-            maxWidth: pageW * count,
-            minHeight: 0,
-            maxHeight: 4000,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (var i = 0; i < count; i++)
-                  SizedBox(
-                    width: pageW,
-                    child: KeyedSubtree(
-                      key: _sampleKeys[i],
-                      child: i == lists.length ? _addList() : _column(b, lists[i]),
-                    ),
-                  ),
-              ],
-            ),
+      return SizedBox(
+        height: box.maxHeight,
+        width: box.maxWidth,
+        child: ScrollConfiguration(
+          behavior: const SgScroll(),
+          child: PageView.builder(
+            controller: _pages,
+            padEnds: false,
+            pageSnapping: !_holdBetween,
+            itemCount: count,
+            itemBuilder: (context, i) => i == lists.length ? _addList() : _column(b, lists[i]),
           ),
         ),
-        if (_slot != null)
-          SizedBox(
-            height: h,
-            width: box.maxWidth,
-            child: ScrollConfiguration(
-              behavior: const SgScroll(),
-              child: PageView.builder(
-                controller: _pages,
-                padEnds: false,
-                pageSnapping: !_holdBetween,
-                itemCount: count,
-                itemBuilder: (context, i) => i == lists.length ? _addList() : _column(b, lists[i]),
-              ),
-            ),
-          ),
-      ]);
+      );
     });
   }
 
@@ -381,18 +375,13 @@ class _SgKanbanState extends State<SgKanban> {
         final hot = candidate.isNotEmpty;
         return Padding(
           padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
-          child: Align(
-            alignment: Alignment.topCenter,
-            widthFactor: 1,
-            heightFactor: 1,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: hot ? const Color(0xFFFFFFFF) : const Color(0xF7FFFFFF),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: hot ? const Color(0xFF3D7A6A) : const Color(0x14000000), width: hot ? 1.5 : 1),
-              ),
-              child: _KanbanColumn(store: widget.store, board: b, list: list, cards: cards, multi: widget.multi, selected: widget.selected, onOpen: widget.onOpen, onSelect: widget.onSelect),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: hot ? const Color(0xE62A2D35) : const Color(0xCC2A2D35),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: hot ? const Color(0xFF7AD4B8) : const Color(0x33FFFFFF), width: hot ? 1.5 : 1),
             ),
+            child: _KanbanColumn(store: widget.store, board: b, list: list, cards: cards, multi: widget.multi, selected: widget.selected, onOpen: widget.onOpen, onSelect: widget.onSelect),
           ),
         );
       },
@@ -404,8 +393,6 @@ class _SgKanbanState extends State<SgKanban> {
       padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
       child: Align(
         alignment: Alignment.topCenter,
-        widthFactor: 1,
-        heightFactor: 1,
         child: TextButton(
           onPressed: () => widget.store.addList('List ${widget.store.board!.lists.length + 1}'),
           child: Text('+ Add list', style: appFont(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
@@ -446,16 +433,17 @@ class _KanbanColumnState extends State<_KanbanColumn> {
 
   @override
   Widget build(BuildContext context) {
-    const ink = Color(0xFF1C1B19);
-    return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+    const ink = Color(0xFFFFFFFF);
+    const muted = Color(0xB3FFFFFF);
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Padding(
-        padding: const EdgeInsets.fromLTRB(12, 4, 0, 0),
+        padding: const EdgeInsets.fromLTRB(14, 10, 4, 4),
         child: Row(children: [
-          Expanded(child: Text(widget.list.title, style: appFont(fontSize: 17, fontWeight: FontWeight.w700, color: ink))),
+          Expanded(child: Text(widget.list.title, style: appFont(fontSize: 16, fontWeight: FontWeight.w700, color: ink))),
           IconButton(
             tooltip: 'List menu',
             onPressed: () => setState(() => _menu = !_menu),
-            icon: const Icon(Icons.more_horiz, color: ink, size: 22),
+            icon: const Icon(Icons.more_horiz, color: muted, size: 22),
           ),
         ]),
       ),
@@ -468,19 +456,21 @@ class _KanbanColumnState extends State<_KanbanColumn> {
             child: Text('Add a card', style: appFont(fontSize: 15, color: ink)),
           ),
         ),
-      Padding(
-        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [for (final c in widget.cards) _tile(c)],
+      Expanded(
+        child: ScrollConfiguration(
+          behavior: const SgScroll(),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+            children: [for (final c in widget.cards) _tile(c)],
+          ),
         ),
       ),
       Padding(
-        padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
+        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
         child: TextButton(
           style: TextButton.styleFrom(alignment: Alignment.centerLeft, minimumSize: const Size(double.infinity, 44)),
           onPressed: _add,
-          child: Text('+ Add a card', style: appFont(fontSize: 16, color: const Color(0xFF5C6570))),
+          child: Text('+ Add a card', style: appFont(fontSize: 15, color: muted)),
         ),
       ),
     ]);
@@ -1174,7 +1164,7 @@ class SgSurfaceView extends StatelessWidget {
     }
     final s = store.board!.surface;
     return switch (s) {
-      SgSurface.kanban => SgPowerKanban(store: store, onOpen: onOpen, multi: multi, selected: selected, onSelect: onSelect),
+      SgSurface.kanban => SgKanban(store: store, onOpen: onOpen, multi: multi, selected: selected, onSelect: onSelect, initialPage: kanbanPage),
       SgSurface.calendar => SgCalendar(store: store, onOpen: onOpen),
       SgSurface.notebook => SgNotebook(store: store, onOpen: onOpen),
       SgSurface.album => SgAlbum(store: store, onOpen: onOpen),
@@ -1190,7 +1180,7 @@ class SgSurfaceView extends StatelessWidget {
       SgSurface.ledger => SgLedger(store: store, onOpen: onOpen),
       SgSurface.binder => SgBinder(store: store, onOpen: onOpen),
       SgSurface.slate => SgSlate(store: store, onOpen: onOpen),
-      SgSurface.whiteboard => Container(color: const Color(0xFFF7F7F4), child: SgPowerKanban(store: store, onOpen: onOpen)),
+      SgSurface.whiteboard => Container(color: const Color(0xFFF7F7F4), child: SgKanban(store: store, onOpen: onOpen)),
       SgSurface.canvas => SgCanvasBoard(store: store, onOpen: onOpen),
     };
   }

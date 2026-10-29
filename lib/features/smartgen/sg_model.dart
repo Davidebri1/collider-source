@@ -806,7 +806,7 @@ class SgStore extends ChangeNotifier {
       id: _id('c'),
       title: type.label,
       type: type,
-      color: type.argb,
+      color: 0, // no cover until the user picks one
       listId: list.id,
       status: list.title,
       rank: top,
