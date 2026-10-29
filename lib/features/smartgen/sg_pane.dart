@@ -112,15 +112,15 @@ class _SgPaneState extends State<SgPane> {
             c0.members
               ..clear()
               ..add('Alex');
-            // Card 1: blue cover + due urgent + label
+            // Card 1: blue cover + due + label (not urgent — toast shot uses Shoot b-roll)
             if (b.cards.length > 1) {
               final c1 = b.cards[1];
               c1.color = 0xFF0079BF;
               c1.labelIds
                 ..clear()
                 ..add('cap-l2');
-              c1.dueMs = DateTime.now().add(const Duration(minutes: 25)).millisecondsSinceEpoch;
-              c1.urgent = true;
+              c1.dueMs = DateTime.now().add(const Duration(days: 3)).millisecondsSinceEpoch;
+              c1.urgent = false;
               c1.description = 'Tighten list peek';
               if (lists.length > 1) {
                 c1.listId = lists[1].id;
@@ -139,22 +139,24 @@ class _SgPaneState extends State<SgPane> {
                 ]);
               c2.members.add('Sam');
             }
-            // Card 3: purple + attachment
+            // Card 3: purple + attachment + urgent due (toast capture)
             if (b.cards.length > 3) {
               final c3 = b.cards[3];
               c3.color = 0xFFC377E0;
               c3.files.add(SgFile(id: 'f2', name: 'mock.png', dataUrl: 'data:text/plain;base64,YQ=='));
               c3.labelIds.add('cap-l2');
+              c3.dueMs = DateTime.now().add(const Duration(minutes: 25)).millisecondsSinceEpoch;
+              c3.urgent = true;
               if (lists.length > 1) {
                 c3.listId = lists[1].id;
                 c3.status = lists[1].title;
               }
             }
-            // Card 4: no colour (neutral glass) so default state is visible
+            // Card 4: no cover colour — default glass face
             if (b.cards.length > 4) {
               final c4 = b.cards[4];
               c4.color = 0;
-              c4.description = 'Neutral glass default';
+              c4.description = 'Follow up before Friday';
             }
           });
         }
@@ -213,7 +215,13 @@ class _SgPaneState extends State<SgPane> {
     if (sg == 'home' || (q['cap'] != '1' && store.boards.isEmpty)) {
       store.atHome = true;
     }
-    _checkNotes();
+    if (q['toast'] == '1' && store.board != null && store.board!.cards.isNotEmpty) {
+      final card = store.board!.cards.where((c) => c.urgent).firstOrNull ?? store.board!.cards.first;
+      // Long hold so the capture can screenshot before auto-dismiss.
+      _showToast('${card.title} is due within the hour', red: false, holdMs: 12000);
+    } else {
+      _checkNotes();
+    }
     _notes = Timer.periodic(const Duration(seconds: 30), (_) => _checkNotes());
     _hour = Timer.periodic(const Duration(hours: 1), (_) => store.applyHourly());
     setState(() {});
@@ -233,11 +241,11 @@ class _SgPaneState extends State<SgPane> {
     super.dispose();
   }
 
-  void _showToast(String text, {required bool red}) {
+  void _showToast(String text, {required bool red, int holdMs = 2600}) {
     _toastTimer?.cancel();
     _toast = text;
     _toastRed = red;
-    _toastTimer = Timer(const Duration(milliseconds: 2600), () {
+    _toastTimer = Timer(Duration(milliseconds: holdMs), () {
       if (!mounted) return;
       setState(() => _toast = '');
     });
@@ -246,6 +254,8 @@ class _SgPaneState extends State<SgPane> {
   void _checkNotes() {
     final b = store.board;
     if (b == null) return;
+    // Capture boards that must stay toast-free (clean header shots).
+    if (Uri.base.queryParameters['quiet'] == '1') return;
     final now = DateTime.now().millisecondsSinceEpoch;
     for (final c in b.cards) {
       if (!c.urgent || c.dueMs == null) continue;
@@ -288,8 +298,9 @@ class _SgPaneState extends State<SgPane> {
                     if (_multi) _bulkBar(b),
                   ],
                 ),
+                // Float over the list body, never over the board header / view tabs.
                 if (_toast.isNotEmpty)
-                  Positioned(top: 8, left: 8, right: 8, child: _toastBar()),
+                  Positioned(left: 8, right: 8, bottom: 12, child: _toastBar()),
               ]),
       ),
     );

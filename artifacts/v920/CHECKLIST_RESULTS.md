@@ -23,6 +23,7 @@ Before/after: `/workspace/sgrev/v920/before_after.png`.
 | Inline-only editing (no modal card editor / settings panel) | **PASS** | `04_inline_editor.png` — Cover/Move/Labels/Members/Checklist/Attachment/Done on `sg-card-sheet` |
 | Hidden fields flip to card back | **PASS** | `06_card_flip_back.png` — "Private notes" on back face |
 | Cover sheet 10 swatches + None; ~35–40% full-face tint | **PASS** | `05_cover_sheet.png` — Cover / Colors / None; tinted sheet with EB5A46; `05b_cover_on_board.png` coloured cards on board |
+| Urgent toast below header / above dock; auto-dismiss | **PASS** | `03c_urgent_toast.png` — toast at bottom; header title/views/star/menu clear; `quiet=1` on clean board shots |
 | Due dates visible | **PASS** | Due chip / `SgClock` on face; calendar (`11_calendar.png`) |
 | Attachments work | **PASS** (code + face) | Attachment quick action + count badge on face when files present |
 | NO scrollbars / progress bars / particles / nav-bar gradients | **PASS** | `SgScroll` hides bars; view-chip ShaderMask removed |
@@ -80,4 +81,4 @@ Before/after: `/workspace/sgrev/v920/before_after.png`.
 ## Capture index
 
 All under `collider/artifacts/v920/`:
-`01_empty_home` `02_create_board` `03_board_with_cards` `03b_list_peek` `04_inline_editor` `04b_editor_tinted` `05_cover_sheet` `05b_cover_on_board` `06_card_flip_back` `07_board_menu` `08_search` `09_statistics` `10_multi_select` `11_calendar` `12_notebook` `13_us_map` `14_genie` `15_drag` `cmp_*` `before_after`
+`01_empty_home` `02_create_board` `03_board_with_cards` `03b_list_peek` `03c_urgent_toast` `04_inline_editor` `04b_editor_tinted` `05_cover_sheet` `05b_cover_on_board` `06_card_flip_back` `07_board_menu` `08_search` `09_statistics` `10_multi_select` `11_calendar` `12_notebook` `13_us_map` `14_genie` `15_drag` `cmp_*` `before_after`
