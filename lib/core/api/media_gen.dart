@@ -130,7 +130,7 @@ const Map<String, _Route> _routes = {
   // Keyless text (Pollinations OpenAI-compatible endpoint)
   'free/pollinations-openai': _Route('pollinations-text', 'openai'),
   // Image
-  'img/flux-free': _Route('pollinations-image', 'sana'),  // free tier models list is ["sana"] (flux 402s)
+  'img/flux-free': _Route('pollinations-image', ''),  // omit model= — free tier 402s named models
   'img/gemini-3-1-flash-image': _Route('openrouter-image', 'google/gemini-3.1-flash-image-preview'),
   'img/gpt-5-image-mini': _Route('openrouter-image', 'openai/gpt-5-image-mini'),
   'img/gemini-3-pro-image': _Route('openrouter-image', 'google/gemini-3-pro-image-preview'),
@@ -377,8 +377,9 @@ class MediaGen {
   }
 
   /// chat.ts generateImageUrl.
-  static String pollinationsUrl(String prompt, GenFlags f, {String model = 'sana', int? seed}) {
+  static String pollinationsUrl(String prompt, GenFlags f, {String model = '', int? seed}) {
     // Free-tier Pollinations 402s large portrait frames; keep the long edge ≤512.
+    // Omit model= when empty — forcing flux/sana currently 402/503s the free tier.
     final full = arToSize(f.ar);
     final long = math.max(full.width, full.height);
     final scale = long > 512 ? 512 / long : 1.0;
@@ -387,7 +388,8 @@ class MediaGen {
     final sd = seed ?? math.Random().nextInt(1000000);
     final body = '${prompt.isEmpty ? 'abstract art' : prompt}${f.style != null && f.style != 'neutral' ? ', ${f.style}' : ''}';
     final neg = (f.negative ?? '').isNotEmpty ? '&negative=${Uri.encodeComponent(f.negative!)}' : '';
-    return 'https://image.pollinations.ai/prompt/${Uri.encodeComponent(body)}?width=$w&height=$h&nologo=true&model=$model&seed=$sd$neg';
+    final modelQ = model.isEmpty ? '' : '&model=$model';
+    return 'https://image.pollinations.ai/prompt/${Uri.encodeComponent(body)}?width=$w&height=$h&nologo=true$modelQ&seed=$sd$neg';
   }
 
   /// One generation for one model, exactly as the source's sendChat routes it.
