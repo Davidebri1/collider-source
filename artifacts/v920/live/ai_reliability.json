@@ -1,0 +1,119 @@
+{
+  "results": [
+    {
+      "tag": "01",
+      "gotPost": true,
+      "status": 402,
+      "netSlice": [
+        {
+          "status": 204,
+          "method": "OPTIONS",
+          "url": "https://text.pollinations.ai/openai",
+          "t": 1793392787098
+        },
+        {
+          "status": 204,
+          "method": "OPTIONS",
+          "url": "https://text.pollinations.ai/openai",
+          "t": 1793392787098
+        },
+        {
+          "status": 204,
+          "method": "OPTIONS",
+          "url": "https://text.pollinations.ai/openai",
+          "t": 1793392787142
+        },
+        {
+          "status": 402,
+          "method": "POST",
+          "url": "https://text.pollinations.ai/openai",
+          "t": 1793392787711
+        },
+        {
+          "status": 402,
+          "method": "POST",
+          "url": "https://text.pollinations.ai/openai",
+          "t": 1793392787713
+        },
+        {
+          "status": 200,
+          "method": "POST",
+          "url": "https://text.pollinations.ai/openai",
+          "t": 1793392789027
+        },
+        {
+          "status": 402,
+          "method": "POST",
+          "url": "https://text.pollinations.ai/openai",
+          "t": 1793392789534
+        },
+        {
+          "status": 402,
+          "method": "POST",
+          "url": "https://text.pollinations.ai/openai",
+          "t": 1793392789534
+        }
+      ],
+      "prompt": "Reply with exactly: PONG1"
+    },
+    {
+      "tag": "02",
+      "gotPost": false,
+      "status": 0,
+      "netSlice": [],
+      "prompt": "Reply with exactly: PONG2"
+    }
+  ],
+  "net": [
+    {
+      "status": 204,
+      "method": "OPTIONS",
+      "url": "https://text.pollinations.ai/openai",
+      "t": 1793392787098
+    },
+    {
+      "status": 204,
+      "method": "OPTIONS",
+      "url": "https://text.pollinations.ai/openai",
+      "t": 1793392787098
+    },
+    {
+      "status": 204,
+      "method": "OPTIONS",
+      "url": "https://text.pollinations.ai/openai",
+      "t": 1793392787142
+    },
+    {
+      "status": 402,
+      "method": "POST",
+      "url": "https://text.pollinations.ai/openai",
+      "t": 1793392787711
+    },
+    {
+      "status": 402,
+      "method": "POST",
+      "url": "https://text.pollinations.ai/openai",
+      "t": 1793392787713
+    },
+    {
+      "status": 200,
+      "method": "POST",
+      "url": "https://text.pollinations.ai/openai",
+      "t": 1793392789027
+    },
+    {
+      "status": 402,
+      "method": "POST",
+      "url": "https://text.pollinations.ai/openai",
+      "t": 1793392789534
+    },
+    {
+      "status": 402,
+      "method": "POST",
+      "url": "https://text.pollinations.ai/openai",
+      "t": 1793392789534
+    }
+  ],
+  "persistChat": true,
+  "afterReloadSample": "GLM 5.3 Flash\nLaguna S 2.1\nLaguna XS 2.1\nLing 3.1 Flash\nNemotron 3.5 Lightning\nGLM 5.3\nDeepSeek V4.1 Flash\nMiniMax M3\nMiMo V2.6 Flash\nNemotron 3 Ultra\nKimi K3\nNew New\nLocal Local\nGlobal Global\nRoundup Roundup\nMore\nSend\nSettings Settings\nApps Apps\nGLM 5.3 Flash\nLaguna S 2.1\nLaguna XS 2.1\nLing 3.1 Flash\nNemotron 3.5 Lightning\nGLM 5.3\nDeepSeek V4.1 Flash\nMiniMax M3\nMiMo V2.6 Flash\nNemotron 3 Ultra\nKimi K3\nNew New\nLocal Local\nGlobal Global\nRoundup Roundup\nMore\nSend\nSettings Settings\nApps Apps\nGLM 5.3 Flash\nLaguna S 2.1\nLaguna XS 2.1\nLing 3.1 Flash\nNemotron 3.5 Lightning\nGLM 5.3\nDeepSeek V4.1 Flash\nMiniMax M3\nMiMo V2.6 Flash\nNemotron 3 Ultra\nKimi K3\nNew New\nLocal Local\nGlobal Global\nRoundup Roundup\nMore\nSend\nSettings Settings\nApps Apps\nGLM 5.3 Flash\nLaguna S 2.1\nLaguna XS 2.1\nLing 3.1 Flash\nNem"
+}

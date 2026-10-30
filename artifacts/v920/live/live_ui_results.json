@@ -1,0 +1,116 @@
+{
+  "items": [
+    {
+      "id": "HOME",
+      "flow": "Home loads model ladder",
+      "result": "PASS",
+      "capture": "L00_home.png",
+      "notes": ""
+    },
+    {
+      "id": "SETTINGS",
+      "flow": "Settings screen",
+      "result": "PASS",
+      "capture": "L01_settings.png",
+      "notes": "GLM 5.3 Flash|Laguna S 2.1|Laguna XS 2.1|Ling 3.1 Flash|Nemotron 3.5 Lightning|GLM 5.3|DeepSeek V4.1 Flash|MiniMax M3|MiMo V2.6 Flash|Nemotron 3 Ultra|Kimi K3|New New|Local Local|Global Global|Account"
+    },
+    {
+      "id": "APPS",
+      "flow": "Apps launcher",
+      "result": "PASS",
+      "capture": "L02_apps.png",
+      "notes": "Smart Gen Smart Gen|Market Market|Themes Themes|GLM 5.3 Flash|Laguna S 2.1|Laguna XS 2.1|Ling 3.1 Flash|Nemotron 3.5 Lightning|GLM 5.3|DeepSeek V4.1 Flash|MiniMax M3|MiMo V2.6 Flash|Nemotron 3 Ultra|Kimi K3|Browser Browser|Music Music|Files Files|Premium Premium|Settings Settings|More|Send|Settings Settings|Apps Apps|Apps|Smart Gen Smart Gen"
+    },
+    {
+      "id": "THEMES",
+      "flow": "Theme Gallery open",
+      "result": "PASS",
+      "capture": "L03_themes.png",
+      "notes": ""
+    },
+    {
+      "id": "THEME-SET",
+      "flow": "Set free live wallpaper",
+      "result": "PASS",
+      "capture": "L03b_theme_set.png",
+      "notes": ""
+    },
+    {
+      "id": "PREMIUM",
+      "flow": "Premium Theme Market",
+      "result": "FAIL",
+      "capture": "L04_premium.png",
+      "notes": ""
+    },
+    {
+      "id": "PREMIUM-SET",
+      "flow": "Premium Set as wallpaper",
+      "result": "FAIL",
+      "capture": "L04b_premium_set.png",
+      "notes": ""
+    },
+    {
+      "id": "FILES",
+      "flow": "Files screen",
+      "result": "PASS",
+      "capture": "L05_files.png",
+      "notes": ""
+    },
+    {
+      "id": "MUSIC",
+      "flow": "Music screen",
+      "result": "PASS",
+      "capture": "L06_music.png",
+      "notes": ""
+    },
+    {
+      "id": "BROWSER",
+      "flow": "Browser window",
+      "result": "FAIL",
+      "capture": "L07_browser.png",
+      "notes": ""
+    },
+    {
+      "id": "VIDEO",
+      "flow": "Video player",
+      "result": "FAIL",
+      "capture": "L08_video.png",
+      "notes": ""
+    },
+    {
+      "id": "ACCOUNT",
+      "flow": "Account",
+      "result": "FAIL",
+      "capture": "L09_account.png",
+      "notes": ""
+    },
+    {
+      "id": "SG",
+      "flow": "Smart Gen home",
+      "result": "PASS",
+      "capture": "L10_sg_home.png",
+      "notes": ""
+    },
+    {
+      "id": "SG-BOARD",
+      "flow": "Create board LiveBoard",
+      "result": "PASS",
+      "capture": "L11_sg_board.png",
+      "notes": ""
+    },
+    {
+      "id": "SG-CARD",
+      "flow": "New card + editor",
+      "result": "PASS",
+      "capture": "L12_sg_card.png",
+      "notes": ""
+    },
+    {
+      "id": "SG-COVER",
+      "flow": "Cover picker",
+      "result": "PASS",
+      "capture": "L13_sg_cover.png",
+      "notes": ""
+    }
+  ]
+}

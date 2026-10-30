@@ -1,0 +1,91 @@
+{
+  "items": [
+    {
+      "id": "PREMIUM",
+      "flow": "Premium Theme Market",
+      "result": "PASS",
+      "capture": "L20_premium.png",
+      "notes": ""
+    },
+    {
+      "id": "PREMIUM-SET",
+      "flow": "Premium Set as wallpaper",
+      "result": "PASS",
+      "capture": "L20b_premium_set.png",
+      "notes": ""
+    },
+    {
+      "id": "WALLPAPER-PERSIST",
+      "flow": "Wallpaper after navigation",
+      "result": "PASS",
+      "capture": "L21_wallpaper_reload.png",
+      "notes": "visual"
+    },
+    {
+      "id": "BROWSER",
+      "flow": "Browser window",
+      "result": "PASS",
+      "capture": "L22_browser.png",
+      "notes": "New Tab New Tab|Reload|Home|Open Windows & Tabs Open Windows & Tabs|GLM 5.3 Flash|Laguna S 2.1|Laguna XS 2.1|Ling 3.1 Flash|Nemotron 3.5 Lightning|GLM 5.3|DeepSeek V4.1 Flash|MiniMax M3"
+    },
+    {
+      "id": "ACCOUNT",
+      "flow": "Account sheet",
+      "result": "PASS",
+      "capture": "L23_account.png",
+      "notes": ""
+    },
+    {
+      "id": "HISTORY",
+      "flow": "History / Local drawer",
+      "result": "PASS",
+      "capture": "L24_history.png",
+      "notes": ""
+    },
+    {
+      "id": "SG-GENIE",
+      "flow": "Live Genie round-trip",
+      "result": "PASS",
+      "capture": "L25_genie_after.png",
+      "notes": "post200=true reply=Added two cards: LiveA and LiveB. (2 changes) net=[{\"status\":204,\"method\":\"OPTIONS\"},{\"status\":200,\"method\":\"POST\"}]"
+    },
+    {
+      "id": "SG-GENIE-BOARD",
+      "flow": "Board after Genie",
+      "result": "PASS",
+      "capture": "L25b_board.png",
+      "notes": ""
+    },
+    {
+      "id": "SG-VISION",
+      "flow": "Vision board",
+      "result": "PASS",
+      "capture": "L26_vision.png",
+      "notes": ""
+    },
+    {
+      "id": "SG-SNAP",
+      "flow": "Snap toggle",
+      "result": "FAIL",
+      "capture": "L26b_snap.png",
+      "notes": ""
+    },
+    {
+      "id": "SCAN-LAUNCH",
+      "flow": "No invented Launch",
+      "result": "PASS",
+      "capture": "L27_rules_home.png",
+      "notes": ""
+    }
+  ],
+  "net": [
+    {
+      "status": 204,
+      "method": "OPTIONS"
+    },
+    {
+      "status": 200,
+      "method": "POST"
+    }
+  ]
+}
