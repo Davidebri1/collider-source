@@ -440,7 +440,8 @@ class SgBoard {
     required this.id,
     required this.name,
     this.starred = false,
-    this.background = 0x66302824,
+    this.background = 0xFF0079BF,
+    this.openedMs = 0,
     this.surface = SgSurface.kanban,
     this.statusKind = SgStatusKind.dropdown,
     this.autoArrange = false,
@@ -471,6 +472,7 @@ class SgBoard {
   String name;
   bool starred;
   int background;
+  int openedMs;
   SgSurface surface;
   SgStatusKind statusKind;
   bool autoArrange;
@@ -517,6 +519,7 @@ class SgBoard {
         'name': name,
         'starred': starred,
         'background': background,
+        'openedMs': openedMs,
         'surface': surface.name,
         'statusKind': statusKind.name,
         'autoArrange': autoArrange,
@@ -540,7 +543,8 @@ class SgBoard {
         id: j['id']! as String,
         name: j['name'] as String? ?? 'Board',
         starred: j['starred'] == true,
-        background: (j['background'] as num?)?.toInt() ?? 0x66302824,
+        background: (j['background'] as num?)?.toInt() ?? 0xFF0079BF,
+        openedMs: (j['openedMs'] as num?)?.toInt() ?? 0,
         surface: SgSurface.values.asNameMap()[j['surface']] ?? SgSurface.kanban,
         statusKind: SgStatusKind.values.asNameMap()[j['statusKind']] ?? SgStatusKind.dropdown,
         autoArrange: j['autoArrange'] == true,
@@ -706,7 +710,7 @@ class SgStore extends ChangeNotifier {
     final done = SgList(id: _id('l'), title: 'Done', position: 2);
     final b = SgBoard(
       id: _id('b'),
-      name: name.trim().isEmpty ? 'Board' : name.trim(),
+      name: name.trim().isEmpty ? 'Untitled board' : name.trim(),
       lists: [todo, doing, done],
       statuses: const ['To Do', 'Doing', 'Done'],
     );
@@ -722,6 +726,7 @@ class SgStore extends ChangeNotifier {
     if (boards.any((b) => b.id == id)) {
       activeBoardId = id;
       atHome = false;
+      board!.openedMs = DateTime.now().millisecondsSinceEpoch;
       notifyListeners();
       _commit();
     }

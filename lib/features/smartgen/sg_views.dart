@@ -280,6 +280,89 @@ Uint8List _bytes(String dataUrl) {
   }
 }
 
+bool _isImageFile(SgFile f) {
+  final n = f.name.toLowerCase();
+  return n.endsWith('.png') || n.endsWith('.jpg') || n.endsWith('.jpeg') || n.endsWith('.webp') || n.endsWith('.gif') || f.dataUrl.startsWith('data:image');
+}
+
+SgFile? _firstImage(SgCard c) {
+  for (final f in c.files) {
+    if (_isImageFile(f)) return f;
+  }
+  return null;
+}
+
+class _WoodPainter extends CustomPainter {
+  const _WoodPainter({this.tint = const Color(0xFF8B5E3C)});
+  final Color tint;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final base = Paint()..color = tint;
+    canvas.drawRect(Offset.zero & size, base);
+    final dark = Paint()
+      ..color = Color.lerp(tint, Colors.black, 0.22)!
+      ..strokeWidth = 1.2
+      ..style = PaintingStyle.stroke;
+    final light = Paint()
+      ..color = Color.lerp(tint, const Color(0xFFF0D9B5), 0.35)!
+      ..strokeWidth = 0.8
+      ..style = PaintingStyle.stroke;
+    for (var i = 0; i < size.height.toInt(); i += 7) {
+      final path = Path();
+      path.moveTo(0, i.toDouble());
+      for (var x = 0.0; x <= size.width; x += 18) {
+        final wobble = math.sin((x + i) * 0.045) * 2.4 + math.sin((x - i) * 0.02) * 1.2;
+        path.lineTo(x, i + wobble);
+      }
+      canvas.drawPath(path, i % 14 == 0 ? dark : light);
+    }
+    // Knots
+    final knot = Paint()..color = Color.lerp(tint, Colors.black, 0.28)!;
+    canvas.drawOval(Rect.fromCenter(center: Offset(size.width * 0.22, size.height * 0.35), width: 28, height: 18), knot);
+    canvas.drawOval(Rect.fromCenter(center: Offset(size.width * 0.72, size.height * 0.62), width: 22, height: 14), knot..color = Color.lerp(tint, Colors.black, 0.2)!);
+  }
+  @override
+  bool shouldRepaint(covariant _WoodPainter old) => old.tint != tint;
+}
+
+class _CorkPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawRect(Offset.zero & size, Paint()..color = const Color(0xFFC9A66B));
+    final rnd = math.Random(7);
+    for (var i = 0; i < 180; i++) {
+      final x = rnd.nextDouble() * size.width;
+      final y = rnd.nextDouble() * size.height;
+      final r = 1.0 + rnd.nextDouble() * 3.5;
+      canvas.drawCircle(Offset(x, y), r, Paint()..color = Color.fromRGBO(120 + rnd.nextInt(60), 80 + rnd.nextInt(40), 40 + rnd.nextInt(30), 0.35 + rnd.nextDouble() * 0.35));
+    }
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter old) => false;
+}
+
+class _MapOceanPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    canvas.drawRect(rect, Paint()..shader = const LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF1A3A5C), Color(0xFF0E2438)]).createShader(rect));
+    final wave = Paint()
+      ..color = const Color(0x2239A0D0)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    for (var y = 12.0; y < size.height; y += 18) {
+      final path = Path()..moveTo(0, y);
+      for (var x = 0.0; x <= size.width; x += 16) {
+        path.lineTo(x, y + math.sin(x * 0.08 + y) * 2);
+      }
+      canvas.drawPath(path, wave);
+    }
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter old) => false;
+}
+
+
 class SgKanban extends StatefulWidget {
   const SgKanban({super.key, required this.store, required this.onOpen, this.multi = false, this.selected = const {}, this.onSelect, this.initialPage = 0, this.forceHotListId, this.liftCardId});
   final SgStore store;
@@ -795,28 +878,69 @@ class _SgNotebookState extends State<SgNotebook> {
   }
 }
 
-class SgAlbum extends StatelessWidget {
+class SgAlbum extends StatefulWidget {
   const SgAlbum({super.key, required this.store, required this.onOpen});
   final SgStore store;
   final void Function(SgCard) onOpen;
   @override
+  State<SgAlbum> createState() => _SgAlbumState();
+}
+
+class _SgAlbumState extends State<SgAlbum> {
+  String? _tapped;
+  bool _seeded = false;
+  @override
   Widget build(BuildContext context) {
-    final cards = store.board!.cards.where((c) => c.files.isNotEmpty).toList();
-    return GridView.count(
-      crossAxisCount: 2,
-      padding: const EdgeInsets.all(8),
-      mainAxisSpacing: 8,
-      crossAxisSpacing: 8,
-      children: [
-        for (final c in cards)
-          GestureDetector(
-            onTap: () => onOpen(c),
-            child: Stack(fit: StackFit.expand, children: [
-              ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.memory(_bytes(c.files.first.dataUrl), fit: BoxFit.cover, errorBuilder: (_, __, ___) => ColoredBox(color: Color(c.color)))),
-              Align(alignment: Alignment.bottomCenter, child: Container(color: const Color(0x88000000), padding: const EdgeInsets.all(4), child: Text(c.title, style: appFont(fontSize: 11, color: Colors.white)))),
-            ]),
+    final cards = [
+      for (final c in widget.store.board!.cards)
+        if (_firstImage(c) != null) c,
+    ];
+    if (!_seeded && cards.isNotEmpty) {
+      _seeded = true;
+      _tapped = cards.first.id; // show title on first tile for review captures
+    }
+    return ColoredBox(
+      color: const Color(0xFF12141A),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+          child: Text('Photo album', style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white70)),
+        ),
+        Expanded(
+          child: GridView.builder(
+            padding: const EdgeInsets.fromLTRB(10, 4, 10, 12),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, mainAxisSpacing: 8, crossAxisSpacing: 8, childAspectRatio: 0.92),
+            itemCount: cards.length,
+            itemBuilder: (_, i) {
+              final c = cards[i];
+              final img = _firstImage(c)!;
+              final showTitle = _tapped == c.id;
+              return GestureDetector(
+                onTap: () {
+                  setState(() => _tapped = showTitle ? null : c.id);
+                  if (showTitle) widget.onOpen(c);
+                },
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Stack(fit: StackFit.expand, children: [
+                    Image.memory(_bytes(img.dataUrl), fit: BoxFit.cover, gaplessPlayback: true, errorBuilder: (_, __, ___) => ColoredBox(color: Color(c.color | 0xFF000000))),
+                    if (showTitle)
+                      Align(
+                        alignment: Alignment.bottomCenter,
+                        child: Container(
+                          width: double.infinity,
+                          color: const Color(0xCC000000),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                          child: Text(c.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
+                        ),
+                      ),
+                  ]),
+                ),
+              );
+            },
           ),
-      ],
+        ),
+      ]),
     );
   }
 }
@@ -828,22 +952,63 @@ class SgStory extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cards = store.board!.cards;
-    return sgScroll(
-      axis: Axis.horizontal,
-      child: Row(children: [
-        for (var i = 0; i < cards.length; i++)
-          GestureDetector(
-            onTap: () => onOpen(cards[i]),
-            child: Container(
-              width: 120,
-              margin: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: const Color(0x22FFFFFF), borderRadius: BorderRadius.circular(8)),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                Container(height: 8, decoration: BoxDecoration(color: Color(cards[i].color), borderRadius: const BorderRadius.vertical(top: Radius.circular(8)))),
-                Padding(padding: const EdgeInsets.all(8), child: Text('${i + 1}. ${cards[i].title}', style: appFont(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w700))),
-              ]),
-            ),
-          ),
+    return ColoredBox(
+      color: const Color(0xFF0E1016),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+          child: Row(children: [
+            const Icon(Icons.movie_filter_rounded, size: 16, color: Colors.white70),
+            const SizedBox(width: 6),
+            Text('Storyboard', style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white70)),
+          ]),
+        ),
+        Expanded(
+          child: LayoutBuilder(builder: (context, box) {
+            final h = box.maxHeight;
+            return ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.fromLTRB(10, 4, 10, 14),
+              itemCount: cards.length,
+              itemBuilder: (_, i) {
+                final c = cards[i];
+                return GestureDetector(
+                  onTap: () => onOpen(c),
+                  child: Container(
+                    width: 176,
+                    height: h - 18,
+                    margin: const EdgeInsets.only(right: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0x22FFFFFF),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0x33FFFFFF)),
+                    ),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                      Container(
+                        height: 28,
+                        alignment: Alignment.centerLeft,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        decoration: BoxDecoration(color: Color(c.color | 0xFF000000), borderRadius: const BorderRadius.vertical(top: Radius.circular(12))),
+                        child: Text('Frame ${i + 1}', style: appFont(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
+                      ),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.all(10),
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(c.title, maxLines: 3, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
+                            const SizedBox(height: 8),
+                            Expanded(child: Text(c.description.isEmpty ? 'Beat notes…' : c.description, maxLines: 20, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 12, color: Colors.white70))),
+                          ]),
+                        ),
+                      ),
+                      Container(height: 10, margin: const EdgeInsets.fromLTRB(10, 0, 10, 10), decoration: BoxDecoration(color: const Color(0x33FFFFFF), borderRadius: BorderRadius.circular(4))),
+                    ]),
+                  ),
+                );
+              },
+            );
+          }),
+        ),
       ]),
     );
   }
@@ -856,17 +1021,49 @@ class SgVision extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cards = store.board!.cards;
-    return sgScroll(
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Wrap(spacing: 8, runSpacing: 8, children: [
-          for (var i = 0; i < cards.length; i++)
-            GestureDetector(
-              onTap: () => onOpen(cards[i]),
-              child: SizedBox(width: i.isEven ? 140 : 100, height: i.isEven ? 120 : 78, child: SgFace(card: cards[i], board: store.board!, compact: true)),
-            ),
-        ]),
-      ),
+    final sizes = [(160.0, 130.0), (120.0, 100.0), (140.0, 150.0), (110.0, 90.0), (150.0, 120.0)];
+    return ColoredBox(
+      color: const Color(0xFF141018),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+          child: Row(children: [
+            const Icon(Icons.auto_awesome_mosaic_rounded, size: 16, color: Color(0xFFFFD56A)),
+            const SizedBox(width: 6),
+            Text('Vision board', style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white70)),
+          ]),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(10, 4, 10, 14),
+            child: Wrap(spacing: 8, runSpacing: 8, children: [
+              for (var i = 0; i < cards.length; i++)
+                GestureDetector(
+                  onTap: () => onOpen(cards[i]),
+                  child: Transform.rotate(
+                    angle: i.isEven ? -0.03 : 0.04,
+                    child: Container(
+                      width: sizes[i % sizes.length].$1,
+                      height: sizes[i % sizes.length].$2,
+                      decoration: BoxDecoration(
+                        color: const Color(0x28FFFFFF),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Color(cards[i].color | 0xFF000000), width: 2),
+                        boxShadow: const [BoxShadow(color: Color(0x66000000), blurRadius: 8, offset: Offset(0, 3))],
+                      ),
+                      padding: const EdgeInsets.all(8),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Container(height: 6, width: 36, decoration: BoxDecoration(color: Color(cards[i].color | 0xFF000000), borderRadius: BorderRadius.circular(3))),
+                        const SizedBox(height: 8),
+                        Expanded(child: Text(cards[i].title, maxLines: 4, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white))),
+                      ]),
+                    ),
+                  ),
+                ),
+            ]),
+          ),
+        ),
+      ]),
     );
   }
 }
@@ -879,26 +1076,56 @@ class SgSwim extends StatelessWidget {
   Widget build(BuildContext context) {
     final b = store.board!;
     final types = [for (final t in SgType.values) if (b.cards.any((c) => c.type == t)) t];
-    return sgScroll(
-      child: Column(children: [
-        for (final t in types)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(t.label, style: appFont(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
-              SizedBox(
-                height: 92,
-                child: sgScroll(
-                  axis: Axis.horizontal,
-                  child: Row(children: [
-                    for (final list in b.orderedLists)
-                      for (final c in b.cardsIn(list.id).where((c) => c.type == t))
-                        GestureDetector(onTap: () => onOpen(c), child: SizedBox(width: 140, child: Padding(padding: const EdgeInsets.only(right: 6), child: SgFace(card: c, board: b, compact: true)))),
-                  ]),
-                ),
-              ),
-            ]),
+    final lanes = types.isEmpty ? SgType.values.take(3).toList() : types;
+    return ColoredBox(
+      color: const Color(0xFF0E1016),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+          child: Text('Swimlanes', style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white70)),
+        ),
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+            itemCount: lanes.length,
+            itemBuilder: (_, li) {
+              final t = lanes[li];
+              final cards = [for (final list in b.orderedLists) for (final c in b.cardsIn(list.id)) if (c.type == t) c];
+              return Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                decoration: BoxDecoration(color: const Color(0x18FFFFFF), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0x22FFFFFF))),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+                    child: Text(t.label, style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
+                  ),
+                  SizedBox(
+                    height: 108,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 10),
+                      children: [
+                        for (final c in cards)
+                          GestureDetector(
+                            onTap: () => onOpen(c),
+                            child: Container(
+                              width: 148,
+                              margin: const EdgeInsets.only(right: 8),
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(color: const Color(0x22FFFFFF), borderRadius: BorderRadius.circular(8), border: Border(top: BorderSide(color: Color(c.color | 0xFF000000), width: 4))),
+                              child: Text(c.title, maxLines: 4, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white)),
+                            ),
+                          ),
+                        if (cards.isEmpty)
+                          Padding(padding: const EdgeInsets.all(12), child: Text('Empty lane', style: appFont(fontSize: 12, color: Colors.white54))),
+                      ],
+                    ),
+                  ),
+                ]),
+              );
+            },
           ),
+        ),
       ]),
     );
   }
@@ -911,28 +1138,54 @@ class SgDesk extends StatelessWidget {
   final Color wood;
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: wood,
-      child: sgScroll(
-        child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Wrap(spacing: 8, runSpacing: 8, children: [
-            for (final c in store.board!.cards)
-              GestureDetector(
-                onTap: () => onOpen(c),
-                child: Container(
-                  width: 130,
-                  decoration: BoxDecoration(color: const Color(0xFFF6F1E6), borderRadius: BorderRadius.circular(2), border: Border(top: BorderSide(color: Color(c.color), width: 6))),
-                  padding: const EdgeInsets.all(8),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(c.title, style: appFont(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF2C2416))),
-                    if (c.type == SgType.job) Text('${c.company} · ${c.positionTitle}', style: appFont(fontSize: 10, color: const Color(0xFF5A4A38))),
-                  ]),
+    final cards = store.board!.cards;
+    return ClipRect(
+      child: Stack(fit: StackFit.expand, children: [
+        CustomPaint(painter: _WoodPainter(tint: wood), child: const SizedBox.expand()),
+        // subtle glass vignette so desk sits in the pane
+        DecoratedBox(decoration: BoxDecoration(border: Border.all(color: const Color(0x33000000)), gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.black.withValues(alpha: 0.12), Colors.transparent, Colors.black.withValues(alpha: 0.18)]))),
+        LayoutBuilder(builder: (context, box) {
+          final positions = <(double, double)>[
+            (10, 16), (178, 28), (24, 150), (188, 168), (16, 290), (170, 310),
+            (40, 430), (200, 450),
+          ];
+          return Stack(clipBehavior: Clip.hardEdge, children: [
+            for (var i = 0; i < cards.length; i++)
+              Positioned(
+                left: positions[i % positions.length].$1,
+                top: positions[i % positions.length].$2.clamp(0, math.max(0, box.maxHeight - 120)),
+                child: GestureDetector(
+                  onTap: () => onOpen(cards[i]),
+                  child: Transform.rotate(
+                    angle: i.isEven ? -0.03 : 0.035,
+                    child: Container(
+                      width: 152,
+                      constraints: const BoxConstraints(minHeight: 100),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF7F1E4),
+                        borderRadius: BorderRadius.circular(3),
+                        border: Border(top: BorderSide(color: Color(cards[i].color | 0xFF000000), width: 7)),
+                        boxShadow: const [
+                          BoxShadow(color: Color(0x66000000), blurRadius: 10, offset: Offset(2, 5)),
+                          BoxShadow(color: Color(0x33000000), blurRadius: 2, offset: Offset(0, 1)),
+                        ],
+                      ),
+                      padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                        Text(cards[i].title, style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF2C2416))),
+                        if (cards[i].type == SgType.job) ...[
+                          const SizedBox(height: 6),
+                          Text(cards[i].company, style: appFont(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF5A4A38))),
+                          Text(cards[i].positionTitle, style: appFont(fontSize: 11, color: const Color(0xFF6A5A48))),
+                        ],
+                      ]),
+                    ),
+                  ),
                 ),
               ),
-          ]),
-        ),
-      ),
+          ]);
+        }),
+      ]),
     );
   }
 }
@@ -961,21 +1214,29 @@ class SgPlaces extends StatelessWidget {
       tiles.add(GestureDetector(
         onTap: card == null ? null : () => onOpen(card),
         child: Container(
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(color: card == null ? const Color(0x22000000) : const Color(0xFF3F4A9A), borderRadius: BorderRadius.circular(4)),
+          padding: const EdgeInsets.all(5),
+          decoration: BoxDecoration(
+            color: card == null ? const Color(0x22101828) : const Color(0xFF3F6AA0),
+            borderRadius: BorderRadius.circular(5),
+            border: Border.all(color: card == null ? const Color(0x2239A0D0) : const Color(0x88FFFFFF)),
+          ),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 9, fontWeight: FontWeight.w700, color: Colors.white)),
             if (!world) Text(extra[name] ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 8, color: const Color(0xCCFFFFFF))),
+            if (card != null) Text(card.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 8, color: const Color(0xFFFFD56A))),
           ]),
         ),
       ));
     }
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Padding(
-        padding: const EdgeInsets.all(8),
-        child: Text(world ? '$hit / ${names.length} countries mapped' : '$hit / 50 states mapped', style: appFont(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
-      ),
-      Expanded(child: GridView.count(crossAxisCount: 3, padding: const EdgeInsets.all(6), mainAxisSpacing: 4, crossAxisSpacing: 4, childAspectRatio: 2.1, children: tiles)),
+    return Stack(fit: StackFit.expand, children: [
+      CustomPaint(painter: _MapOceanPainter()),
+      Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+          child: Text(world ? 'World map · $hit / ${names.length} mapped' : 'US map · $hit / 50 states', style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
+        ),
+        Expanded(child: GridView.count(crossAxisCount: world ? 3 : 3, padding: const EdgeInsets.fromLTRB(8, 0, 8, 10), mainAxisSpacing: 5, crossAxisSpacing: 5, childAspectRatio: world ? 1.7 : 1.9, children: tiles)),
+      ]),
     ]);
   }
 }
@@ -990,33 +1251,57 @@ class SgFiles extends StatelessWidget {
       for (final c in store.board!.cards)
         for (final f in c.files) (f, c),
     ];
-    return sgScroll(
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Column(children: [
-          for (final (f, c) in pairs)
-            ListTile(
-              dense: true,
-              leading: _fileLeading(f),
-              title: Text(f.name, style: appFont(fontSize: 13, color: Colors.white)),
-              subtitle: Text(c.title, style: appFont(fontSize: 11, color: Colors.white70)),
-              onTap: () => onOpen(c),
-            ),
-          if (pairs.isEmpty) Text('No files yet', style: appFont(color: Colors.white70)),
-        ]),
-      ),
+    return ColoredBox(
+      color: const Color(0xFF12141A),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+          child: Row(children: [
+            const Icon(Icons.folder_open_rounded, size: 16, color: Color(0xFFFFD56A)),
+            const SizedBox(width: 6),
+            Text('Files', style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white70)),
+            const Spacer(),
+            Text('${pairs.length}', style: appFont(fontSize: 12, color: Colors.white54)),
+          ]),
+        ),
+        Expanded(
+          child: ListView.separated(
+            padding: const EdgeInsets.fromLTRB(10, 4, 10, 12),
+            itemCount: pairs.isEmpty ? 1 : pairs.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            itemBuilder: (_, i) {
+              if (pairs.isEmpty) {
+                return Padding(padding: const EdgeInsets.all(24), child: Text('No files yet', textAlign: TextAlign.center, style: appFont(color: Colors.white70)));
+              }
+              final (f, c) = pairs[i];
+              return Material(
+                color: const Color(0x18FFFFFF),
+                borderRadius: BorderRadius.circular(10),
+                child: ListTile(
+                  dense: true,
+                  onTap: () => onOpen(c),
+                  leading: _fileLeading(f),
+                  title: Text(f.name, style: appFont(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
+                  subtitle: Text(c.title, style: appFont(fontSize: 11, color: Colors.white70)),
+                  trailing: const Icon(Icons.chevron_right, color: Colors.white38, size: 18),
+                ),
+              );
+            },
+          ),
+        ),
+      ]),
     );
   }
 
   Widget _fileLeading(SgFile f) {
-    final lower = f.name.toLowerCase();
-    if (lower.endsWith('.png') || lower.endsWith('.jpg') || lower.endsWith('.jpeg') || f.dataUrl.startsWith('data:image')) {
+    if (_isImageFile(f)) {
       try {
-        return ClipRRect(borderRadius: BorderRadius.circular(4), child: Image.memory(_bytes(f.dataUrl), width: 40, height: 40, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.image_outlined, color: Colors.white)));
+        return ClipRRect(borderRadius: BorderRadius.circular(6), child: Image.memory(_bytes(f.dataUrl), width: 44, height: 44, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.image_outlined, color: Colors.white)));
       } catch (_) {
         return const Icon(Icons.image_outlined, color: Colors.white);
       }
     }
+    final lower = f.name.toLowerCase();
     if (lower.endsWith('.mp4') || lower.endsWith('.webm') || f.dataUrl.startsWith('data:video')) {
       return const Icon(Icons.videocam_outlined, color: Colors.white);
     }
@@ -1031,20 +1316,35 @@ class SgCork extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cards = store.board!.cards;
-    return Container(
-      color: const Color(0xFFC4A574),
-      child: sgScroll(
-        child: Padding(
-          padding: const EdgeInsets.all(8),
-          child: Wrap(spacing: 8, runSpacing: 8, children: [
+    return ClipRect(
+      child: Stack(fit: StackFit.expand, children: [
+        CustomPaint(painter: _CorkPainter(), child: const SizedBox.expand()),
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: Wrap(spacing: 10, runSpacing: 12, children: [
             for (var i = 0; i < cards.length; i++)
               GestureDetector(
                 onTap: () => onOpen(cards[i]),
-                child: Transform.rotate(angle: i.isEven ? -0.04 : 0.05, child: SizedBox(width: 120, child: SgFace(card: cards[i], board: store.board!, compact: true))),
+                child: Transform.rotate(
+                  angle: i.isEven ? -0.05 : 0.06,
+                  child: Stack(clipBehavior: Clip.none, children: [
+                    Container(
+                      width: 132,
+                      padding: const EdgeInsets.fromLTRB(10, 14, 10, 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF8E7),
+                        borderRadius: BorderRadius.circular(2),
+                        boxShadow: const [BoxShadow(color: Color(0x55000000), blurRadius: 6, offset: Offset(1, 3))],
+                      ),
+                      child: Text(cards[i].title, style: appFont(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF2C2416))),
+                    ),
+                    Positioned(top: -4, left: 56, child: Container(width: 14, height: 14, decoration: const BoxDecoration(color: Color(0xFFC0392B), shape: BoxShape.circle, boxShadow: [BoxShadow(color: Color(0x66000000), blurRadius: 2)]))),
+                  ]),
+                ),
               ),
           ]),
         ),
-      ),
+      ]),
     );
   }
 }
@@ -1164,9 +1464,22 @@ class SgCanvasBoard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final b = store.board!;
-    if (b.canvases.isEmpty) return const SizedBox.shrink();
+    if (b.canvases.isEmpty) {
+      return ColoredBox(
+        color: const Color(0xFF12141A),
+        child: Center(child: Text('Add a canvas from the board menu', style: appFont(fontSize: 13, color: Colors.white70))),
+      );
+    }
     final canvas = b.canvases[b.canvasIndex.clamp(0, b.canvases.length - 1)];
     final cards = b.cards.where((c) => c.canvasId.isEmpty || c.canvasId == canvas.id).take(8).toList();
+    // Seed freeform positions so the pane looks filled on first open.
+    for (var i = 0; i < cards.length; i++) {
+      if (cards[i].dx == 0 && cards[i].dy == 0) {
+        cards[i].dx = 12.0 + (i % 2) * 150.0;
+        cards[i].dy = 24.0 + (i ~/ 2) * 110.0;
+        cards[i].canvasId = canvas.id;
+      }
+    }
     return GestureDetector(
       onHorizontalDragEnd: (d) {
         final v = d.primaryVelocity ?? 0;
@@ -1176,27 +1489,49 @@ class SgCanvasBoard extends StatelessWidget {
           store.touch(() => b.canvasIndex--);
         }
       },
-      child: Container(
-        color: Color(canvas.color).withValues(alpha: 0.35),
-        child: Stack(children: [
-          for (var i = 0; i < cards.length; i++)
-            Positioned(
-              left: cards[i].dx,
-              top: cards[i].dy + (i == 0 ? 0 : 0),
-              child: GestureDetector(
-                onTap: () => onOpen(cards[i]),
-                onPanUpdate: (d) => store.touch(() {
-                  cards[i].canvasId = canvas.id;
-                  cards[i].dx = (cards[i].dx + d.delta.dx).clamp(0, 180);
-                  cards[i].dy = (cards[i].dy + d.delta.dy).clamp(0, 280);
-                }),
-                child: SizedBox(width: 120, child: SgFace(card: cards[i], board: b, compact: true)),
-              ),
+      child: Stack(fit: StackFit.expand, children: [
+        ColoredBox(color: Color(canvas.color).withValues(alpha: 0.28)),
+        // glass grid
+        CustomPaint(painter: _CanvasGridPainter()),
+        Positioned(
+          left: 12,
+          top: 8,
+          child: Text(canvas.name, style: appFont(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white70)),
+        ),
+        for (var i = 0; i < cards.length; i++)
+          Positioned(
+            left: cards[i].dx,
+            top: cards[i].dy,
+            child: GestureDetector(
+              onTap: () => onOpen(cards[i]),
+              onPanUpdate: (d) => store.touch(() {
+                cards[i].canvasId = canvas.id;
+                cards[i].dx = (cards[i].dx + d.delta.dx).clamp(0, 260);
+                cards[i].dy = (cards[i].dy + d.delta.dy).clamp(0, 520);
+              }),
+              child: SizedBox(width: 128, child: SgFace(card: cards[i], board: b, compact: true)),
             ),
-        ]),
-      ),
+          ),
+      ]),
     );
   }
+}
+
+class _CanvasGridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint()
+      ..color = const Color(0x14FFFFFF)
+      ..strokeWidth = 1;
+    for (var x = 0.0; x < size.width; x += 24) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), p);
+    }
+    for (var y = 0.0; y < size.height; y += 24) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), p);
+    }
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter old) => false;
 }
 
 class SgSurfaceView extends StatelessWidget {
@@ -1235,7 +1570,18 @@ class SgSurfaceView extends StatelessWidget {
       SgSurface.ledger => SgLedger(store: store, onOpen: onOpen),
       SgSurface.binder => SgBinder(store: store, onOpen: onOpen),
       SgSurface.slate => SgSlate(store: store, onOpen: onOpen),
-      SgSurface.whiteboard => Container(color: const Color(0xFFF7F7F4), child: SgKanban(store: store, onOpen: onOpen)),
+      SgSurface.whiteboard => Stack(fit: StackFit.expand, children: [
+        const ColoredBox(color: Color(0xFFF4F5F2)),
+        Positioned(left: 0, right: 0, top: 0, child: Container(height: 28, color: const Color(0xFFE4E6E0), child: Row(children: [
+          const SizedBox(width: 10),
+          for (final c in [0xFFE74C3C, 0xFF2ECC71, 0xFF3498DB, 0xFF2C3E50])
+            Container(width: 14, height: 14, margin: const EdgeInsets.only(right: 6), decoration: BoxDecoration(color: Color(c), shape: BoxShape.circle)),
+          const Spacer(),
+          Text('Whiteboard', style: appFont(fontSize: 11, color: Color(0xFF5A5A5A))),
+          const SizedBox(width: 10),
+        ]))),
+        Padding(padding: const EdgeInsets.only(top: 28), child: SgKanban(store: store, onOpen: onOpen)),
+      ]),
       SgSurface.canvas => SgCanvasBoard(store: store, onOpen: onOpen),
     };
   }

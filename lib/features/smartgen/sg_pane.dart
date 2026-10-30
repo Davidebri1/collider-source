@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_font.dart';
 import '../../core/vision/cpane.dart';
 import '../../core/vision/vision_tokens.dart';
+import 'sg_harness_imgs.dart';
 import 'sg_model.dart';
 import 'sg_views.dart';
 
@@ -64,18 +65,41 @@ class _SgPaneState extends State<SgPane> {
     final q = Uri.base.queryParameters;
     // Capture-only harness: names come from the capture URL, never hard-coded seed.
     if (q['cap'] == '1') {
-      final boardName = q['board'] ?? 'Board';
+      final boardName = q['board'];
       final wantHome = q['sg'] == 'home';
+      final wantMulti = q['multiboard'] == '1';
       if (wantHome) {
         store.debugReset();
         store.atHome = true;
         store.loaded = true;
+      } else if (wantMulti) {
+        // Only harness-named boards — never invent a default "Board".
+        store.debugReset();
+        store.loaded = true;
+        final personal = store.createBoard('Personal', goHome: true);
+        store.touch(() {
+          personal.background = 0xFF0079BF;
+          personal.starred = true;
+          personal.openedMs = DateTime.now().millisecondsSinceEpoch - 60000;
+        });
+        final work = store.createBoard('Work', goHome: true);
+        store.touch(() {
+          work.background = 0xFF61BD4F;
+          work.openedMs = DateTime.now().millisecondsSinceEpoch;
+        });
+        final sprint = store.createBoard('Sprint', goHome: true);
+        store.touch(() {
+          sprint.background = 0xFFC377E0;
+          sprint.openedMs = DateTime.now().millisecondsSinceEpoch - 30000;
+        });
+        store.goHome();
       } else {
+        final name = (boardName == null || boardName.isEmpty) ? 'Sprint' : boardName;
         if (store.boards.isEmpty || q['fresh'] == '1') {
           store.debugReset();
-          store.createBoard(boardName, goHome: false);
+          store.createBoard(name, goHome: false);
         } else if (store.atHome || store.board == null) {
-          store.createBoard(boardName, goHome: false);
+          store.createBoard(name, goHome: false);
         }
         final b = store.board!;
         // Capture-only: seed labels so faces can show real pills (never persisted as app seed).
@@ -202,7 +226,7 @@ class _SgPaneState extends State<SgPane> {
             c.files
               ..clear()
               ..addAll([
-                SgFile(id: 'img1', name: 'mood.png', dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAABICAIAAACyfKYoAAAAeElEQVR42u3QQQ0AAAgEoCtmJ+vY1hT6YiMBqWkeRIFo0YgWLdqCaNGIFi3agmjRiBYtGtGiES1aNKJFI1q0aESLRrRo0YgWjWjRohEtGtGiRSNaNKJFi0a0aESLFo1o0YgWLRrRohEtWjSiRSNatGhEi0a0aNFcWVTa/PcNgRavAAAAAElFTkSuQmCC', cardId: c.id),
+                SgFile(id: 'img1', name: 'mood.png', dataUrl: kHarnessImg_mood, cardId: c.id),
                 SgFile(id: 'vid1', name: 'walkthrough.mp4', dataUrl: 'data:video/mp4;base64,AAAA', cardId: c.id),
                 SgFile(id: 'doc1', name: 'brief.pdf', dataUrl: 'data:application/pdf;base64,JVBERi0=', cardId: c.id),
               ]);
@@ -212,8 +236,98 @@ class _SgPaneState extends State<SgPane> {
           store.touch(() {
             final c = b.cards.first;
             c.files.removeWhere((x) => x.name.startsWith('cover.'));
-            c.files.insert(0, SgFile(id: 'covercap', name: 'cover.png', dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAABICAIAAACyfKYoAAAAeElEQVR42u3QQQ0AAAgEoCtmJ+vY1hT6YiMBqWkeRIFo0YgWLdqCaNGIFi3agmjRiBYtGtGiES1aNKJFI1q0aESLRrRo0YgWjWjRohEtGtGiRSNaNKJFi0a0aESLFo1o0YgWLRrRohEtWjSiRSNatGhEi0a0aNFcWVTa/PcNgRavAAAAAElFTkSuQmCC', cardId: c.id));
+            c.files.insert(0, SgFile(id: 'covercap', name: 'cover.png', dataUrl: kHarnessImg_cover, cardId: c.id));
             c.color = 0xFF344563;
+          });
+        }
+        if (q['sg'] == 'album') {
+          // Dense photo album: several cards each carrying a real harness image.
+          final photos = <(String, String)>[
+            ('Mood board', kHarnessImg_mood),
+            ('Cover shot', kHarnessImg_cover),
+            ('Desk still', kHarnessImg_desk),
+            ('City walk', kHarnessImg_city),
+            ('Sky study', kHarnessImg_sky),
+            ('Leaf detail', kHarnessImg_leaf),
+            ('Night skyline', kHarnessImg_night),
+            ('Bloom study', kHarnessImg_bloom),
+          ];
+          store.touch(() {
+            while (b.cards.length < photos.length) {
+              store.addCard(SgType.task);
+            }
+            for (var i = 0; i < photos.length; i++) {
+              final c = b.cards[i];
+              c.title = photos[i].$1;
+              c.files
+                ..clear()
+                ..add(SgFile(id: 'alb$i', name: 'photo$i.png', dataUrl: photos[i].$2, cardId: c.id));
+              c.color = 0xFF344563;
+            }
+          });
+        }
+        if (q['sg'] == 'portfolio' || q['sg'] == 'desk') {
+          store.touch(() {
+            final extras = [
+              ('Role', 'Northwind Labs', 'Product designer'),
+              ('Case study', 'Orbit Co', 'Brand lead'),
+              ('Interview', 'Helix', 'Staff designer'),
+              ('Offer letter', 'Northwind Labs', 'Product designer'),
+              ('Reference', 'Atlas Studio', 'Art director'),
+              ('Side project', 'Collider', 'Founding designer'),
+            ];
+            while (b.cards.length < extras.length) {
+              store.addCard(SgType.job);
+            }
+            for (var i = 0; i < extras.length; i++) {
+              final c = b.cards[i];
+              c.title = extras[i].$1;
+              c.type = SgType.job;
+              c.company = extras[i].$2;
+              c.positionTitle = extras[i].$3;
+              c.color = [0xFFEB5A46, 0xFF0079BF, 0xFF61BD4F, 0xFFF2D600][i % 4];
+            }
+          });
+        }
+        if (q['sg'] == 'swimlane' && b.cards.isNotEmpty) {
+          store.touch(() {
+            final cycle = [SgType.task, SgType.job, SgType.note, SgType.project];
+            for (var i = 0; i < b.cards.length; i++) {
+              b.cards[i].type = cycle[i % cycle.length];
+            }
+          });
+        }
+        if (q['sg'] == 'storyboard') {
+          store.touch(() {
+            final beats = [
+              ('Open on desk', 'Wide establishing shot, soft morning light.'),
+              ('Pick font', 'Insert close-up of type specimen cards.'),
+              ('Book venue', 'Cut to phone call, city window bokeh.'),
+              ('Shoot b-roll', 'Handheld walkthrough of the space.'),
+              ('Email client', 'Over-shoulder send, checkmark land.'),
+            ];
+            while (b.cards.length < beats.length) {
+              store.addCard(SgType.task);
+            }
+            for (var i = 0; i < beats.length; i++) {
+              b.cards[i].title = beats[i].$1;
+              b.cards[i].description = beats[i].$2;
+              b.cards[i].color = [0xFF61BD4F, 0xFF0079BF, 0xFFEB5A46, 0xFFF2D600, 0xFFC377E0][i % 5];
+            }
+          });
+        }
+        if (q['sg'] == 'worldMap' || q['sg'] == 'usMap') {
+          store.touch(() {
+            final places = q['sg'] == 'worldMap'
+                ? ['United States', 'Canada', 'Japan', 'Brazil', 'Germany', 'Australia']
+                : ['California', 'New York', 'Texas', 'Washington', 'Colorado', 'Florida'];
+            while (b.cards.length < places.length) {
+              store.addCard(SgType.task);
+            }
+            for (var i = 0; i < places.length; i++) {
+              b.cards[i].title = places[i];
+              b.cards[i].tags.add(places[i]);
+            }
           });
         }
         if (q['history'] == '1') {
@@ -236,13 +350,6 @@ class _SgPaneState extends State<SgPane> {
             store.addCanvas('Canvas ${i + 1}', 'Glass');
           }
           store.touch(() => b.surface = SgSurface.canvas);
-        }
-        if (q['multiboard'] == '1') {
-          if (store.boards.length < 2) {
-            store.createBoard('Personal', goHome: true);
-            store.createBoard('Work', goHome: true);
-          }
-          store.goHome();
         }
         final due = q['due'];
         if (due != null && b.cards.isNotEmpty && q['rich'] != '1') {
@@ -406,7 +513,7 @@ class _SgPaneState extends State<SgPane> {
                   children: [
                     _header(b!),
                     _viewChips(b),
-                    _canvasChips(b),
+                    if (b.canvases.isNotEmpty) _canvasChips(b),
                     Expanded(child: _body(b)),
                     if (_multi) _bulkBar(b),
                   ],
@@ -434,18 +541,26 @@ class _SgPaneState extends State<SgPane> {
   final TextEditingController _newBoardName = TextEditingController();
 
   Widget _boardsHome() {
+    final starred = [for (final b in store.boards) if (b.starred) b];
+    final recent = [...store.boards]..sort((a, c) => c.openedMs.compareTo(a.openedMs));
+    final recentTop = <SgBoard>[];
+    for (final b in recent) {
+      if (starred.any((s) => s.id == b.id)) continue;
+      recentTop.add(b);
+      if (recentTop.length >= 4) break;
+    }
     return ColoredBox(
       key: const ValueKey('sg-boards-home'),
-      color: const Color(0xFF12141A),
+      color: const Color(0xFF0E1016),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Row(children: [
               Expanded(child: Text('Boards', style: appFont(fontSize: 22, fontWeight: FontWeight.w700, color: Colors.white))),
               _icon('Close', Icons.close, widget.onClose),
             ]),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             TextField(
               controller: _newBoardName,
               style: appFont(fontSize: 15, color: Colors.white),
@@ -453,7 +568,7 @@ class _SgPaneState extends State<SgPane> {
                 hintText: 'Add board title',
                 hintStyle: appFont(fontSize: 15, color: Colors.white54),
                 filled: true,
-                fillColor: const Color(0x33FFFFFF),
+                fillColor: const Color(0x28FFFFFF),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               ),
@@ -468,39 +583,29 @@ class _SgPaneState extends State<SgPane> {
                 child: Text('Create board', style: appFont(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
             if (store.boards.isEmpty)
-              Expanded(
-                child: Center(
-                  child: Text('No boards yet', style: appFont(fontSize: 15, color: Colors.white70)),
-                ),
-              )
+              Expanded(child: Center(child: Text('No boards yet', style: appFont(fontSize: 15, color: Colors.white70))))
             else
               Expanded(
-                child: ListView.separated(
-                  itemCount: store.boards.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (_, i) {
-                    final board = store.boards[i];
-                    return Material(
-                      color: Color(board.background == 0 ? 0xFF2A2F3A : board.background | 0xFF000000),
-                      borderRadius: BorderRadius.circular(10),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(10),
-                        onTap: () {
-                          store.openBoard(board.id);
-                          setState(() {});
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-                          child: Row(children: [
-                            Expanded(child: Text(board.name, style: appFont(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white))),
-                            if (board.starred) const Icon(Icons.star_rounded, color: Color(0xFFFFD56A), size: 18),
-                          ]),
-                        ),
-                      ),
-                    );
-                  },
+                child: ListView(
+                  children: [
+                    if (starred.isNotEmpty) ...[
+                      _homeSectionLabel(Icons.star_rounded, 'Starred boards', const Color(0xFFFFD56A)),
+                      const SizedBox(height: 8),
+                      for (final b in starred) ...[_boardTile(b, large: true), const SizedBox(height: 10)],
+                      const SizedBox(height: 6),
+                    ],
+                    if (recentTop.isNotEmpty) ...[
+                      _homeSectionLabel(Icons.schedule_rounded, 'Recent boards', Colors.white70),
+                      const SizedBox(height: 8),
+                      for (final b in recentTop) ...[_boardTile(b, large: false), const SizedBox(height: 8)],
+                      const SizedBox(height: 6),
+                    ],
+                    _homeSectionLabel(Icons.grid_view_rounded, 'Your boards', Colors.white70),
+                    const SizedBox(height: 8),
+                    for (final b in store.boards) ...[_boardTile(b, large: false, row: true), const SizedBox(height: 8)],
+                  ],
                 ),
               ),
           ]),
@@ -509,9 +614,91 @@ class _SgPaneState extends State<SgPane> {
     );
   }
 
+  Widget _homeSectionLabel(IconData icon, String label, Color color) {
+    return Row(children: [
+      Icon(icon, size: 16, color: color),
+      const SizedBox(width: 6),
+      Text(label, style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
+    ]);
+  }
+
+  Widget _boardTile(SgBoard board, {required bool large, bool row = false}) {
+    final bg = Color((board.background | 0xFF000000));
+    final accent = Color.lerp(bg, Colors.black, 0.35)!;
+    void open() {
+      store.openBoard(board.id);
+      setState(() {});
+    }
+    if (row) {
+      return Material(
+        color: const Color(0x18FFFFFF),
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: open,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
+            child: Row(children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [bg, accent]),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: Text(board.name, style: appFont(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white))),
+              if (board.starred) const Icon(Icons.star_rounded, color: Color(0xFFFFD56A), size: 18),
+            ]),
+          ),
+        ),
+      );
+    }
+    return Material(
+      elevation: large ? 2 : 0,
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: open,
+        child: Ink(
+          height: large ? 110 : 88,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [bg, accent]),
+            border: Border.all(color: const Color(0x33FFFFFF)),
+          ),
+          child: Stack(children: [
+            Positioned(
+              right: -12,
+              bottom: -18,
+              child: Opacity(
+                opacity: 0.18,
+                child: Icon(Icons.dashboard_customize_rounded, size: 96, color: Colors.white),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(child: Text(board.name, style: appFont(fontSize: 17, fontWeight: FontWeight.w700, color: Colors.white))),
+                if (board.starred) const Icon(Icons.star_rounded, color: Color(0xFFFFD56A), size: 20),
+              ]),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+
   void _createBoard() {
     final name = _newBoardName.text.trim();
-    store.createBoard(name.isEmpty ? 'Board' : name, goHome: false);
+    if (name.isEmpty) return; // do not invent a default board name
+    store.createBoard(name, goHome: false);
     _newBoardName.clear();
     setState(() {});
   }
@@ -617,43 +804,34 @@ class _SgPaneState extends State<SgPane> {
   }
 
   Widget _canvasChips(SgBoard b) {
+    // No floating '+' here — Add a canvas lives in the board menu (Trello-like).
     return SizedBox(
       height: 40,
-      child: Row(children: [
-        Expanded(
-          child: sgScroll(
-            axis: Axis.horizontal,
-            child: Row(children: [
-              for (var i = 0; i < b.canvases.length; i++)
-                Padding(
-                  padding: const EdgeInsets.only(left: 4),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Color(b.canvases[i].color), width: 2),
-                    ),
-                    child: _glassChoice(
-                      label: '${i + 1} ${b.canvases[i].name}',
-                      selected: b.canvasIndex == i,
-                      size: 11,
-                      onSelected: (_) => store.touch(() => b.canvasIndex = i),
-                    ),
+      child: ScrollConfiguration(
+        behavior: const SgScroll(),
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          children: [
+            for (var i = 0; i < b.canvases.length; i++)
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Color(b.canvases[i].color), width: 2),
+                  ),
+                  child: _glassChoice(
+                    label: '${i + 1} ${b.canvases[i].name}',
+                    selected: b.canvasIndex == i,
+                    size: 11,
+                    onSelected: (_) => store.touch(() => b.canvasIndex = i),
                   ),
                 ),
-            ]),
-          ),
+              ),
+          ],
         ),
-        Tooltip(
-          message: 'Add canvas',
-          child: IconButton(
-            onPressed: () {
-              final ok = store.addCanvas('Canvas ${b.canvases.length + 1}', 'Glass');
-              if (!ok) setState(() => _showToast(store.notice, red: false));
-            },
-            icon: const Icon(Icons.add, size: 16, color: Colors.white),
-          ),
-        ),
-      ]),
+      ),
     );
   }
 
@@ -671,6 +849,17 @@ class _SgPaneState extends State<SgPane> {
           _menuAction(Icons.bar_chart_rounded, 'Statistics', () => setState(() { _menu = false; _overlay = 'stats'; })),
           _menuAction(Icons.checklist_rounded, _multi ? 'Stop selecting' : 'Select cards', () => setState(() { _menu = false; _multi = !_multi; })),
           _menuAction(Icons.add_rounded, 'New card', () => setState(() { _menu = false; _overlay = 'create'; })),
+          _menuAction(Icons.dashboard_customize_outlined, 'Add a canvas', () {
+            final ok = store.addCanvas('Canvas ${b.canvases.length + 1}', 'Glass');
+            setState(() {
+              _menu = false;
+              if (!ok) {
+                _showToast(store.notice, red: false);
+              } else {
+                b.surface = SgSurface.canvas;
+              }
+            });
+          }),
           _menuAction(Icons.auto_awesome_rounded, 'Genie', () => setState(() { _menu = false; _overlay = 'genie'; })),
           const SizedBox(height: 8),
           Text('Members', style: appFont(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
