@@ -9,6 +9,10 @@ import 'dart:async';
 // does NOT (DEVIATIONS D58): a public GitHub Pages bundle would hand them to
 // anyone. They are read from --dart-define at build time and are empty in
 // the hosted build, so a run fails quietly at send time (D59).
+// Exact define names: OPENROUTER_KEY, CRAZYROUTER_KEY, NVIDIA_KEY,
+// COMMANDCODE_KEY, OPENCODE_KEY, MINIMAX_KEY, COLLIDER_PROXY.
+// Box/CI: set COLLIDER_OPENROUTER_KEY (etc.) and run tool/build_web.sh —
+// see docs/DART_DEFINES.md. Never log key values.
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
