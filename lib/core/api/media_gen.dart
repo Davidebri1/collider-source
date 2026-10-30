@@ -1,3 +1,4 @@
+import 'dart:async';
 // v8.3 media restore: a Dart port of the source app's provider client
 // (collidermergedx3-glm/src/services/chat.ts ROUTES + callOpenRouterImage /
 // callOpenRouterVideo / callOpenRouterSpeech / callOpenRouterAudio /
@@ -249,17 +250,54 @@ class MediaGen {
   /// Pollinations' OpenAI-compatible text endpoint. Needs no key, so it is the
   /// floor every text route falls back to: the answer is a weaker model rather
   /// than nothing.
+  ///
+  /// Classic anonymous free tier currently exposes only `openai-fast` (alias
+  /// `openai`). Multi-model Home sends N parallel chats that all land here when
+  /// no provider keys are in the build; a burst of concurrent POSTs gets 402
+  /// Payment Required. Serialize through [_pollinationsGate] and retry 402/429.
+  Future<void>? _pollinationsGate;
+
   Future<String> _pollinationsText(List<Map<String, String>> messages) async {
-    try {
-      final res = await _dio.post('https://text.pollinations.ai/openai',
-          data: {'model': 'openai', 'messages': messages},
-          options: Options(headers: {'Content-Type': 'application/json'}));
-      final text = _stripThink(res.data['choices']?[0]?['message']?['content'] as String? ?? '');
-      if (text.trim().isEmpty) throw const MediaGenError('Pollinations returned an empty answer');
-      return text;
-    } on DioException catch (e) {
-      throw MediaGenError('Pollinations ${e.response?.statusCode ?? 'unreachable'}: ${_errBody(e)}');
+    // Queue callers so consensus / multi-row Home do not stampede the free tier.
+    while (_pollinationsGate != null) {
+      try {
+        await _pollinationsGate;
+      } catch (_) {}
     }
+    final done = Completer<void>();
+    _pollinationsGate = done.future;
+    try {
+      return await _pollinationsTextOnce(messages);
+    } finally {
+      done.complete();
+      if (identical(_pollinationsGate, done.future)) _pollinationsGate = null;
+    }
+  }
+
+  Future<String> _pollinationsTextOnce(List<Map<String, String>> messages) async {
+    Object? last;
+    for (var attempt = 0; attempt < 4; attempt++) {
+      if (attempt > 0) {
+        await Future<void>.delayed(Duration(milliseconds: 400 * (1 << (attempt - 1))));
+      }
+      try {
+        final res = await _dio.post('https://text.pollinations.ai/openai',
+            data: {'model': 'openai-fast', 'messages': messages},
+            options: Options(headers: {'Content-Type': 'application/json'}));
+        final text = _stripThink(res.data['choices']?[0]?['message']?['content'] as String? ?? '');
+        if (text.trim().isEmpty) throw const MediaGenError('Pollinations returned an empty answer');
+        return text;
+      } on DioException catch (e) {
+        last = e;
+        final sc = e.response?.statusCode;
+        if (sc == 402 || sc == 429 || sc == 503) continue;
+        throw MediaGenError('Pollinations ${sc ?? 'unreachable'}: ${_errBody(e)}');
+      }
+    }
+    if (last is DioException) {
+      throw MediaGenError('Pollinations ${last.response?.statusCode ?? 'unreachable'}: ${_errBody(last)}');
+    }
+    throw MediaGenError('Pollinations unreachable: $last');
   }
 
   /// Tries each attempt in order; throws the first meaningful error. With
