@@ -504,28 +504,27 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       // offline start page to swap in. Still restore local History / active chat
       // so a real reload keeps the conversation (GitHub Pages has no /api).
       await _loadLocalHistory(restoreLatest: true);
-      return;
+    } else {
+      // Default selection: one model per provider, so every card carries a distinct colour.
+      final seen = <String>{};
+      final live = <String>[
+        for (final m in ModelRoster.allModels.where((m) => !m.isMedia))
+          if (seen.add(m.provider)) m.id,
+      ];
+      setState(() {
+        _selByCat[ModelCategory.general] = live.take(6).toList();
+      });
+      await _reloadHistory(restoreLatest: true);
+      // Merge any locally-saved sessions the server does not know about.
+      await _loadLocalHistory(restoreLatest: _tickerItems.isEmpty);
     }
-    // Default selection: one model per provider, so every card carries a distinct colour.
-    final seen = <String>{};
-    final live = <String>[
-      for (final m in ModelRoster.allModels.where((m) => !m.isMedia))
-        if (seen.add(m.provider)) m.id,
-    ];
-    setState(() {
-      _selByCat[ModelCategory.general] = live.take(6).toList();
-    });
-    await _reloadHistory(restoreLatest: true);
-    // Merge any locally-saved sessions the server does not know about.
-    await _loadLocalHistory(restoreLatest: _tickerItems.isEmpty);
-    // Deep links used by the launcher and the screenshot tour: ?ask=...&mode=research
+    // Deep links (launcher / screenshot tour / playtests). Must run on static
+    // hosting too — GitHub Pages never gets a roster, so these used to be skipped.
     final qp = Uri.base.queryParameters;
     if (qp['mode'] != null) {
       _mode = AskMode.values.firstWhere((m) => m.wire == qp['mode'], orElse: () => AskMode.chat);
     }
-    if (qp['ask'] != null && qp['ask']!.trim().isNotEmpty) _onSendPrompt(qp['ask']!);
-    // ?app=smartgen|market|themes|premium|music|files|consensus — open a
-    // surface directly. Used by the screenshot pass and as phone shortcuts.
+    if (qp['ask'] != null && qp['ask']!.trim().isNotEmpty) unawaited(_onSendPrompt(qp['ask']!));
     const openable = {'smartgen', 'market', 'themes', 'premium', 'music', 'files', 'consensus', 'apps'};
     final app = qp['app'];
     if (app != null && openable.contains(app)) {
