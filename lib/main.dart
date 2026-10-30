@@ -1700,7 +1700,26 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         for (final t in _tickerItems)
           if (!models.contains(t.modelDef.id)) t,
       ];
+      // Seed History immediately so a real reload (no ?fresh=1) keeps the prompt
+      // even while models are still Thinking.
+      if (_autosave && !_incognito) {
+        final sid = 'local_${now.microsecondsSinceEpoch}';
+        _globalHistorySessions = [
+          ConversationHistorySession(
+            id: sid,
+            title: prompt,
+            relativeTime: 'just now',
+            timestamp: now,
+            summary: prompt,
+            modelIds: models,
+            messages: [for (final t in _tickerItems) if (models.contains(t.modelDef.id)) ...t.conversation],
+          ),
+          ..._globalHistorySessions,
+        ];
+      }
     });
+    // Persist active chat + History before answers finish (static hosting reload).
+    if (_autosave && !_incognito) unawaited(_persistLocalHistory());
     await Future.wait([
       for (final id in models)
         MediaGen.instance.chat(id, [
@@ -1784,8 +1803,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       await _reloadHistory();
     } catch (_) {
       // No backend (static hosting: /api answers 404) or the server dropped:
-      // fail quietly (v8.3, D41). The screen goes back to how it was, with
-      // no error text and no spinner left running.
+      // ask every selected model directly instead of wiping the prompt.
       if (!mounted) return;
       setState(() {
         _isConsensusGenerating = false;
@@ -1794,7 +1812,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         _promptTime = prevTime;
         _consensusRatio = prevRatio;
         _consensusSummary = prevSummary;
+        _busy = false;
       });
+      return _onSendDirect(prompt, models);
     } finally {
       if (mounted) setState(() => _busy = false);
     }

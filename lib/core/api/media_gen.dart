@@ -400,14 +400,32 @@ class MediaGen {
       switch (r.provider) {
         case 'pollinations-image':
           // Retry transient Pollinations 402/429/503 like the text floor.
+          // When the free tier still refuses, fetch via the themes page proxy
+          // (same origin path the app already trusts for catalog images).
           Object? last;
           for (var attempt = 0; attempt < 4; attempt++) {
             try {
               final url = pollinationsUrl(prompt, f, model: r.remote, seed: math.Random().nextInt(1000000));
-              final res = await _dio.get<List<int>>(url, options: Options(responseType: ResponseType.bytes));
-              final ct = res.headers.value('content-type') ?? 'image/jpeg';
-              if (!ct.startsWith('image/')) throw const MediaGenError('no image');
-              return MediaResult('image', url: 'data:$ct;base64,${base64Encode(res.data!)}');
+              final tryUrls = <String>[
+                url,
+                if (attempt >= 1)
+                  'https://collider-themes.ebridavid.workers.dev/page?url=${Uri.encodeComponent(url)}',
+              ];
+              DioException? inner;
+              for (final u in tryUrls) {
+                try {
+                  final res = await _dio.get<List<int>>(u, options: Options(responseType: ResponseType.bytes));
+                  final ct = res.headers.value('content-type') ?? 'image/jpeg';
+                  if (!ct.startsWith('image/')) throw const MediaGenError('no image');
+                  return MediaResult('image', url: 'data:$ct;base64,${base64Encode(res.data!)}');
+                } on DioException catch (e) {
+                  inner = e;
+                  final code = e.response?.statusCode ?? 0;
+                  if (code != 402 && code != 429 && code != 503) rethrow;
+                }
+              }
+              last = inner;
+              await Future<void>.delayed(Duration(milliseconds: 400 * (attempt + 1)));
             } on DioException catch (e) {
               last = e;
               final code = e.response?.statusCode ?? 0;
