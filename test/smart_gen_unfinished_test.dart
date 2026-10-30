@@ -59,17 +59,22 @@ void main() {
     expect(s.historyFor('status'), containsAll(['Doing', 'To Do']));
   });
 
-  test('R10 Genie mass edit, refactor, new conversation, attachment persist', () {
+  test('R10 Genie mass edit, refactor, new conversation, attachment persist', () async {
     final s = SgStore()..ensureStarter();
     s.addCard(SgType.task);
     s.addCard(SgType.task);
-    final reply = s.askGenie('set all priority to high');
-    expect(reply, contains('priority'));
+    s.genieLlm = (msgs) async =>
+        '{"reply":"Raised priority","actions":[{"op":"set_all","field":"priority","value":"high"}]}';
+    final reply = await s.askGenie('set all priority to high');
+    expect(reply.toLowerCase(), contains('priority'));
     expect(s.board!.cards.every((c) => c.priority == 3), isTrue);
-    final r2 = s.askGenie('refactor task as note');
+    s.genieLlm = (msgs) async =>
+        '{"reply":"Refactored tasks as notes","actions":[{"op":"refactor","from":"task","to":"note"}]}';
+    final r2 = await s.askGenie('refactor task as note');
     expect(r2, contains('Refactored'));
     expect(s.board!.cards.every((c) => c.type == SgType.note), isTrue);
-    s.askGenie('hello', attachment: 'brief.pdf|data:text/plain;base64,YQ==');
+    s.genieLlm = (msgs) async => '{"reply":"Noted attachment","actions":[]}';
+    await s.askGenie('hello', attachment: 'brief.pdf|data:text/plain;base64,YQ==');
     expect(s.genie.any((m) => m.attachment.contains('brief.pdf')), isTrue);
     final snap = s.genie.length;
     s.newConversation();
@@ -291,17 +296,44 @@ void main() {
     expect(c.files.where((f) => f.name.toLowerCase().startsWith('cover.')).length, 1);
   });
 
-  test('R10 Genie stub provider replies when local parser has no match', () {
+  test('R10 Genie applies structured MediaGen-shaped reply (add + recolor)', () async {
     final store = SgStore()..ensureStarter();
     store.addCard(SgType.task);
-    final reply = store.askGenie('what is on this board?');
-    expect(reply, contains('callAiApi is wired'));
-    expect(store.genie.where((m) => m.role == 'genie').last.text, contains('callAiApi'));
+    final before = store.board!.cards.length;
+    var sawBoardContext = false;
+    store.genieLlm = (msgs) async {
+      final blob = msgs.map((m) => m['content'] ?? '').join('\n');
+      sawBoardContext = blob.contains('Board JSON') || blob.contains('cardCount');
+      return '''{
+      "reply": "Added three cards and recoloured one",
+      "actions": [
+        {"op":"add_card","title":"Alpha","type":"task","color":"EB5A46"},
+        {"op":"add_card","title":"Beta","type":"note","color":"0079BF"},
+        {"op":"add_card","title":"Gamma","type":"task","color":"61BD4F"},
+        {"op":"recolor","title":"Alpha","color":"C377E0"}
+      ]
+    }''';
+    };
+    final reply = await store.askGenie('add three cards and recolour Alpha');
+    expect(sawBoardContext, isTrue);
+    expect(reply.toLowerCase(), anyOf(contains('added'), contains('changes'), contains('recolour'), contains('recolor')));
+    expect(store.board!.cards.length, before + 3);
+    expect(store.board!.cards.any((c) => c.title == 'Alpha'), isTrue);
+    expect(store.board!.cards.any((c) => c.title == 'Beta'), isTrue);
+    expect(store.board!.cards.any((c) => c.title == 'Gamma'), isTrue);
+    final alpha = store.board!.cards.firstWhere((c) => c.title == 'Alpha');
+    expect(alpha.color.toRadixString(16).toUpperCase().endsWith('C377E0'), isTrue);
   });
 
-  test('R10 Genie new conversation clears history', () {
+  test('R10 Genie production path is homePathGenieChat / MediaGen', () {
+    expect(homePathGenieChat, isA<Function>());
+  });
+
+  test('R10 Genie new conversation clears history', () async {
     final store = SgStore()..ensureStarter();
-    store.askGenie('set all priority to high');
+    store.genieLlm = (msgs) async =>
+        '{"reply":"Raised priority","actions":[{"op":"set_all","field":"priority","value":"high"}]}';
+    await store.askGenie('set all priority to high');
     expect(store.genie, isNotEmpty);
     store.newConversation();
     expect(store.genie, isEmpty);

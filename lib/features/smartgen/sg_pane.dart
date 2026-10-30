@@ -367,8 +367,18 @@ class _SgPaneState extends State<SgPane> {
           });
         }
         if (q['geniehist'] == '1') {
-          store.askGenie('set all priority to high');
-          store.askGenie('refactor task as note');
+          store.genieLlm = (msgs) async =>
+              '{"reply":"Seeded for capture","actions":[{"op":"set_all","field":"priority","value":"high"},{"op":"refactor","from":"task","to":"note"}]}';
+          await store.askGenie('set all priority to high and refactor tasks as notes');
+          store.genieLlm = null;
+        }
+        // Capture-only: real Home MediaGen path (no stub). genielive=1&genieprompt=...
+        if (q['genielive'] == '1') {
+          final prompt = (q['genieprompt'] ??
+                  'Add three cards named Alpha, Beta, and Gamma. Recolor Alpha to purple C377E0.')
+              .trim();
+          // Do not inject genieLlm — production homePathGenieChat / MediaGen.chat.
+          await store.askGenie(prompt);
         }
         if (q['canvases'] == '1') {
           for (var i = b.canvases.length; i < 3; i++) {
@@ -1084,15 +1094,35 @@ class _SgPaneState extends State<SgPane> {
   }
 
   final TextEditingController _genieInput = TextEditingController();
+  bool _genieBusy = false;
+
+  Future<void> _sendGenie(String text, {String attachment = ''}) async {
+    if (_genieBusy || (text.trim().isEmpty && attachment.isEmpty)) return;
+    setState(() => _genieBusy = true);
+    try {
+      await store.askGenie(text.trim().isEmpty ? 'See attachment' : text.trim(), attachment: attachment);
+    } finally {
+      if (mounted) setState(() => _genieBusy = false);
+    }
+  }
 
   Widget _genie() {
     return Column(children: [
       Row(children: [
         Text('Genie', style: appFont(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
         const Spacer(),
+        if (_genieBusy)
+          const Padding(
+            padding: EdgeInsets.only(right: 8),
+            child: SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white70)),
+          ),
         Tooltip(
           message: 'New conversation',
-          child: IconButton(onPressed: () => store.newConversation(), icon: const Icon(Icons.add_comment_outlined, color: Colors.white, size: 18)),
+          child: IconButton(onPressed: _genieBusy ? null : () => store.newConversation(), icon: const Icon(Icons.add_comment_outlined, color: Colors.white, size: 18)),
+        ),
+        Tooltip(
+          message: 'Close Genie',
+          child: IconButton(onPressed: () => setState(() => _overlay = ''), icon: const Icon(Icons.close_rounded, color: Colors.white, size: 18)),
         ),
       ]),
       Expanded(
@@ -1115,30 +1145,50 @@ class _SgPaneState extends State<SgPane> {
         Tooltip(
           message: 'Attach a file',
           child: IconButton(
-            onPressed: () async {
-              final res = await FilePicker.platform.pickFiles(withData: true);
-              if (res == null || res.files.isEmpty) return;
-              final f = res.files.first;
-              final bytes = f.bytes;
-              if (bytes == null) return;
-              final b64 = base64Encode(bytes);
-              final mime = f.extension == 'png' ? 'image/png' : (f.extension == 'jpg' || f.extension == 'jpeg' ? 'image/jpeg' : 'application/octet-stream');
-              final dataUrl = 'data:$mime;base64,$b64';
-              final text = _genieInput.text.trim().isEmpty ? 'See attachment' : _genieInput.text.trim();
-              store.askGenie(text, attachment: '${f.name}|$dataUrl');
-              _genieInput.clear();
-              setState(() {});
-            },
+            onPressed: _genieBusy
+                ? null
+                : () async {
+                    final res = await FilePicker.platform.pickFiles(withData: true);
+                    if (res == null || res.files.isEmpty) return;
+                    final f = res.files.first;
+                    final bytes = f.bytes;
+                    if (bytes == null) return;
+                    final b64 = base64Encode(bytes);
+                    final mime = f.extension == 'png' ? 'image/png' : (f.extension == 'jpg' || f.extension == 'jpeg' ? 'image/jpeg' : 'application/octet-stream');
+                    final dataUrl = 'data:$mime;base64,$b64';
+                    final text = _genieInput.text.trim().isEmpty ? 'See attachment' : _genieInput.text.trim();
+                    _genieInput.clear();
+                    await _sendGenie(text, attachment: '${f.name}|$dataUrl');
+                  },
             icon: const Icon(Icons.attach_file, color: Colors.white, size: 18),
           ),
         ),
-        Expanded(child: TextField(controller: _genieInput, style: appFont(color: Colors.white, fontSize: 13), decoration: const InputDecoration(hintText: 'Message Genie', hintStyle: TextStyle(color: Colors.white38)))),
-        Tooltip(message: 'Send', child: IconButton(onPressed: () {
-          final t = _genieInput.text.trim();
-          if (t.isEmpty) return;
-          store.askGenie(t);
-          _genieInput.clear();
-        }, icon: const Icon(Icons.send_rounded, color: Colors.white))),
+        Expanded(child: TextField(
+          controller: _genieInput,
+          enabled: !_genieBusy,
+          style: appFont(color: Colors.white, fontSize: 13),
+          decoration: const InputDecoration(hintText: 'Message Genie', hintStyle: TextStyle(color: Colors.white38)),
+          onSubmitted: (v) async {
+            final t = v.trim();
+            if (t.isEmpty) return;
+            _genieInput.clear();
+            await _sendGenie(t);
+          },
+        )),
+        Tooltip(
+          message: 'Send',
+          child: IconButton(
+            onPressed: _genieBusy
+                ? null
+                : () async {
+                    final t = _genieInput.text.trim();
+                    if (t.isEmpty) return;
+                    _genieInput.clear();
+                    await _sendGenie(t);
+                  },
+            icon: const Icon(Icons.send_rounded, color: Colors.white),
+          ),
+        ),
       ]),
     ]);
   }

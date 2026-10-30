@@ -9,6 +9,7 @@ import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -198,6 +199,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   // Wallpaper state: Uninterrupted, star of the product
   WallpaperTheme _currentTheme = WallpaperCatalog.defaultTheme;
   WallpaperTheme _savedThemeBeforePreview = WallpaperCatalog.defaultTheme;
+  String? _pendingWallpaperId;
+  static const _kWallpaperPref = 'collider.wallpaper.themeId';
 
   // Selected models, per category, as the source keeps them (state.tsx
   // selectedModelIds: Record<Category, string[]>), max 9 each.
@@ -338,12 +341,45 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     return ActiveWorkSurface.chat;
   }
 
+
+  Future<void> _loadWallpaperPref() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final id = prefs.getString(_kWallpaperPref);
+      if (id == null || id.isEmpty) return;
+      _pendingWallpaperId = id;
+      final pick = ThemeCatalog.instance.bySlug(id);
+      if (pick != null && mounted) {
+        setState(() {
+          _currentTheme = pick;
+          _savedThemeBeforePreview = pick;
+          _pendingWallpaperId = null;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _persistWallpaper(WallpaperTheme theme) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kWallpaperPref, theme.id);
+    } catch (_) {}
+  }
+
   void _onCatalogChanged() {
     if (!mounted) return;
     final cat = ThemeCatalog.instance;
     setState(() {
       // v9.1 (from v8.6): no built-in default wallpaper; a theme that is gone
       // falls to the catalog's own default (an R2 theme).
+      if (_pendingWallpaperId != null) {
+        final saved = cat.bySlug(_pendingWallpaperId!);
+        if (saved != null) {
+          _currentTheme = saved;
+          _savedThemeBeforePreview = saved;
+          _pendingWallpaperId = null;
+        }
+      }
       _currentTheme = cat.bySlug(_currentTheme.id) ?? cat.defaultTheme;
       _savedThemeBeforePreview = cat.bySlug(_savedThemeBeforePreview.id) ?? cat.defaultTheme;
       // Capture-only: ?live=1 applies the first premium live loop and closes drawers.
@@ -397,6 +433,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     HardwareKeyboard.instance.addHandler(_onKey);
     if (Uri.base.queryParameters['seed'] == '1') _seedSamples();
     ThemeCatalog.instance.addListener(_onCatalogChanged);
+    unawaited(_loadWallpaperPref());
     KeyboardDof.install();
     if (Uri.base.queryParameters['drawer'] == 'premium') {
       _activeDrawer = 'premium';
@@ -2156,11 +2193,14 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                 currentTheme: _currentTheme,
                 // v8.3.1: browsing never changes the app background (only Set does).
                 onLivePreview: (_) {},
-                onConfirmTheme: (theme) => setState(() {
-                  _currentTheme = theme;
-                  _savedThemeBeforePreview = theme;
-                  _activeDrawer = null;
-                }),
+                onConfirmTheme: (theme) {
+                  setState(() {
+                    _currentTheme = theme;
+                    _savedThemeBeforePreview = theme;
+                    _activeDrawer = null;
+                  });
+                  unawaited(_persistWallpaper(theme));
+                },
                 onCancel: () => setState(() {
                   _currentTheme = _savedThemeBeforePreview;
                   _activeDrawer = null;
@@ -2176,11 +2216,14 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                 // direct link shows real covers.
                 key: ValueKey('market-${WallpaperCatalog.premiumThemes.length}'),
                 currentTheme: _currentTheme,
-                onApplyTheme: (theme) => setState(() {
-                  _currentTheme = theme;
-                  _savedThemeBeforePreview = theme;
-                  _activeDrawer = null;
-                }),
+                onApplyTheme: (theme) {
+                  setState(() {
+                    _currentTheme = theme;
+                    _savedThemeBeforePreview = theme;
+                    _activeDrawer = null;
+                  });
+                  unawaited(_persistWallpaper(theme));
+                },
                 onPreviewTheme: (theme) {
                   // Only the focused theme streams video; warm neighbour posters.
                   ThemeMediaPrefetch.precacheNeighbors(context, WallpaperCatalog.premiumThemes, theme);

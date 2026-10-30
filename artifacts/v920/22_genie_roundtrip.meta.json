@@ -1,0 +1,10 @@
+{
+  "at": "2026-10-30T11:08:07.520Z",
+  "net": [
+    200
+  ],
+  "before": "22_genie_before.png (Seed card only)",
+  "afterChat": "22_genie_after.png (Genie reply: 4 changes via MediaGen/Pollinations POST 200)",
+  "afterBoard": "22b_board_after_genie.png",
+  "note": "Genie stub removed. Uses MediaGen.chat/consensus (Home path). Live github.io has empty dart-defines; floor is Pollinations (can 402 when rate-limited)."
+}

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 import '../../core/files/file_blobs.dart';
+import '../../core/api/media_gen.dart';
 
 /// Smart Gen data, ported from the trello-clone schema (Board, List, Card,
 /// Label, guests, stars, background) plus the binding ledger (card types,
@@ -579,11 +580,50 @@ class SgMessage {
   static SgMessage fromJson(Map<String, Object?> j) => SgMessage(role: j['role'] as String? ?? 'genie', text: j['text'] as String? ?? '', attachment: j['attachment'] as String? ?? '');
 }
 
-/// Local engine behind [callAiApi]. No provider credentials are configured,
-/// so this never pretends a model answered.
-String callAiApi(String prompt, {required int cards, required int columns}) {
-  return 'callAiApi is wired and was not called. No provider credentials are configured. Local reading of $cards cards across $columns lists: $prompt';
+/// Same AI client Home uses on the live web build when `/api` is absent
+/// ([MediaGen.instance.chat]): MiniMax M3 / GLM Flash / etc., with that client's
+/// own wire chain and keyless floor. No new keys or providers.
+/// Same client Home uses: [MediaGen.instance.chat] for the selected model row
+/// (MiniMax M3 / GLM Flash / …). One model attempt, then one [MediaGen.consensus]
+/// pass (the Smart Gen agent path in media_gen). Avoids spamming the keyless
+/// Pollinations floor that every failed wire falls through to.
+Future<String> homePathGenieChat(List<Map<String, String>> messages) async {
+  Object? last;
+  for (final id in const ['pro/minimax-m3', 'free/glm-5-3-flash']) {
+    try {
+      return await MediaGen.instance.chat(id, messages);
+    } catch (e) {
+      last = e;
+      final s = '$e'.toLowerCase();
+      // Floor already answered — do not burn more keyless calls.
+      if (s.contains('pollinations') || s.contains('402')) break;
+    }
+  }
+  try {
+    return await MediaGen.instance.consensus(messages);
+  } catch (e) {
+    last = e;
+  }
+  final err = last;
+  if (err != null) throw err;
+  throw const MediaGenError('no-key');
 }
+
+typedef GenieLlm = Future<String> Function(List<Map<String, String>> messages);
+
+const String kGenieSystemPrompt = """
+You are Collider Smart Gen Genie. You edit the open board.
+Always reply with ONE JSON object only (no markdown fences), shape:
+{"reply":"short human summary","actions":[ ... ]}
+Allowed actions (omit unknown fields):
+{"op":"add_card","title":"...","type":"task|note|job|memory|journal|project|reminder","list":"To Do","color":"EB5A46","priority":1,"urgent":false}
+{"op":"recolor","title":"...","color":"0079BF"}
+{"op":"set_all","field":"priority|urgent|status|assignee","value":"..."}
+{"op":"refactor","from":"task","to":"note"}
+{"op":"rename","from":"...","to":"..."}
+{"op":"set_field","title":"...","field":"priority|status|assignee|urgent","value":"..."}
+Use hex colors without #. Prefer few precise actions. If nothing to change, actions may be [].
+""";
 
 class SgStore extends ChangeNotifier {
   SgStore();
@@ -1023,66 +1063,219 @@ class SgStore extends ChangeNotifier {
 
   List<String> historyFor(String key) => List<String>.from(history[key] ?? const []);
 
-  /// Local Genie. Mass edits and type refactors run here. [callAiApi] is not
-  /// invoked, because no provider key is configured.
-  String askGenie(String prompt, {String attachment = ''}) {
+  /// Optional inject for tests. Production uses [homePathGenieChat] (Home's MediaGen path).
+  GenieLlm? genieLlm;
+
+  /// Genie: real model via Home's [MediaGen.chat] path, then apply structured board edits.
+  Future<String> askGenie(String prompt, {String attachment = ''}) async {
     final b = board;
     genie.add(SgMessage(role: 'you', text: prompt, attachment: attachment));
-    final text = prompt.trim();
-    final lower = text.toLowerCase();
-    String reply;
-    final setAll = RegExp(r'^set all (\w+) to (.+)$', caseSensitive: false).firstMatch(text);
-    final refactor = RegExp(r'^refactor (\w+) as (\w+)$', caseSensitive: false).firstMatch(text);
     if (b == null) {
-      reply = 'No board is open.';
-    } else if (setAll != null) {
-      final field = setAll.group(1)!.toLowerCase();
-      final value = setAll.group(2)!.trim();
-      _checkpoint();
-      for (final c in b.cards) {
-        switch (field) {
-          case 'priority':
-            c.priority = int.tryParse(value) ?? (value.toLowerCase() == 'high' ? 3 : 1);
-          case 'urgent':
-            c.urgent = value.toLowerCase() == 'true' || value == '1';
-          case 'status':
-            c.status = value;
-          case 'assignee':
-            c.assignee = value;
-          default:
-            c.custom[field] = value;
-        }
-      }
-      reply = 'Set $field to $value on ${b.cards.length} cards.';
-      _commit();
-    } else if (refactor != null) {
-      final from = SgType.values.asNameMap()[refactor.group(1)!.toLowerCase()];
-      final to = SgType.values.asNameMap()[refactor.group(2)!.toLowerCase()];
-      if (from == null || to == null) {
-        reply = 'Name two card types, for example: refactor task as note.';
-      } else {
-        _checkpoint();
-        var n = 0;
-        for (final c in b.cards.where((c) => c.type == from)) {
-          if (c.color == from.argb) c.color = to.argb;
-          c.type = to;
-          n++;
-        }
-        reply = 'Refactored $n ${from.label} cards as ${to.label}.';
-        _commit();
-      }
-    } else if (lower == 'new conversation') {
-      genie.clear();
-      reply = 'Started a new conversation.';
+      const reply = 'No board is open.';
       genie.add(SgMessage(role: 'genie', text: reply));
       _commit();
       return reply;
-    } else {
-      reply = callAiApi(text, cards: b.cards.length, columns: b.lists.length);
+    }
+    final lower = prompt.trim().toLowerCase();
+    if (lower == 'new conversation') {
+      genie.clear();
+      const reply = 'Started a new conversation.';
+      genie.add(SgMessage(role: 'genie', text: reply));
+      _commit();
+      return reply;
+    }
+
+    final ctx = _boardContextForGenie(b);
+    final messages = <Map<String, String>>[
+      {'role': 'system', 'content': kGenieSystemPrompt},
+      {
+        'role': 'user',
+        'content': 'Board JSON:\n$ctx\n\nUser request:\n${prompt.trim()}\n'
+            '${attachment.isEmpty ? '' : '\n(Attachment: ${attachment.split('|').first})\n'}'
+            'Respond with the JSON object only.',
+      },
+    ];
+
+    String reply;
+    try {
+      final llm = genieLlm ?? homePathGenieChat;
+      var raw = await llm(messages);
+      if (_extractGenieJson(raw) == null) {
+        // One corrective turn — still the same Home MediaGen client.
+        raw = await llm([
+          ...messages,
+          {'role': 'assistant', 'content': raw},
+          {
+            'role': 'user',
+            'content': 'That was not valid JSON. Reply again with ONLY the JSON object '
+                '{"reply":"...","actions":[...]} and no other text.',
+          },
+        ]);
+      }
+      reply = _applyGenieModelReply(b, raw);
+    } catch (e) {
+      reply = e is MediaGenError ? e.reason : friendlyErrorMessage(e);
     }
     genie.add(SgMessage(role: 'genie', text: reply, attachment: attachment));
     _commit();
     return reply;
+  }
+
+  String _boardContextForGenie(SgBoard b) {
+    final cards = [
+      for (final c in b.cards)
+        {
+          'id': c.id,
+          'title': c.title,
+          'type': c.type.name,
+          'list': c.listId,
+          'status': c.status,
+          'priority': c.priority,
+          'urgent': c.urgent,
+          'assignee': c.assignee,
+          'color': c.color.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase(),
+        },
+    ];
+    final lists = [for (final l in b.orderedLists) {'id': l.id, 'title': l.title}];
+    return jsonEncode({
+      'board': b.name,
+      'lists': lists,
+      'cards': cards,
+      'cardCount': b.cards.length,
+      'listCount': b.lists.length,
+    });
+  }
+
+  /// Parse model JSON (or fenced JSON) and apply actions; return human reply text.
+  String _applyGenieModelReply(SgBoard b, String raw) {
+    final parsed = _extractGenieJson(raw);
+    if (parsed == null) {
+      // Model returned prose — keep it visible; no silent stub.
+      return raw.trim().isEmpty ? 'The model returned an empty reply.' : raw.trim();
+    }
+    final reply = (parsed['reply'] as String?)?.trim();
+    final actions = parsed['actions'];
+    var n = 0;
+    if (actions is List) {
+      _checkpoint();
+      for (final a in actions) {
+        if (a is! Map) continue;
+        final op = '${a['op'] ?? ''}'.toLowerCase();
+        switch (op) {
+          case 'add_card':
+            final type = SgType.values.asNameMap()['${a['type'] ?? 'task'}'.toLowerCase()] ?? SgType.task;
+            final card = addCard(type);
+            if (card == null) break;
+            card.title = '${a['title'] ?? 'Card'}'.trim().isEmpty ? type.label : '${a['title']}'.trim();
+            final listName = '${a['list'] ?? ''}'.trim();
+            if (listName.isNotEmpty) {
+              for (final l in b.lists) {
+                if (l.title.toLowerCase() == listName.toLowerCase()) {
+                  card.listId = l.id;
+                  card.status = l.title;
+                  break;
+                }
+              }
+            }
+            final color = _parseHexColor('${a['color'] ?? ''}');
+            if (color != null) card.color = color;
+            if (a['priority'] != null) card.priority = (a['priority'] as num?)?.toInt() ?? card.priority;
+            if (a['urgent'] == true) card.urgent = true;
+            n++;
+          case 'recolor':
+            final title = '${a['title'] ?? ''}'.toLowerCase();
+            final color = _parseHexColor('${a['color'] ?? ''}');
+            if (color == null) break;
+            for (final c in b.cards) {
+              if (title.isEmpty || c.title.toLowerCase().contains(title)) {
+                c.color = color;
+                n++;
+                if (title.isNotEmpty) break;
+              }
+            }
+          case 'set_all':
+            final field = '${a['field'] ?? ''}'.toLowerCase();
+            final value = '${a['value'] ?? ''}'.trim();
+            for (final c in b.cards) {
+              _setCardField(c, field, value);
+              n++;
+            }
+          case 'set_field':
+            final title = '${a['title'] ?? ''}'.toLowerCase();
+            final field = '${a['field'] ?? ''}'.toLowerCase();
+            final value = '${a['value'] ?? ''}'.trim();
+            for (final c in b.cards) {
+              if (title.isNotEmpty && !c.title.toLowerCase().contains(title)) continue;
+              _setCardField(c, field, value);
+              n++;
+              break;
+            }
+          case 'refactor':
+            final from = SgType.values.asNameMap()['${a['from'] ?? ''}'.toLowerCase()];
+            final to = SgType.values.asNameMap()['${a['to'] ?? ''}'.toLowerCase()];
+            if (from == null || to == null) break;
+            for (final c in b.cards.where((c) => c.type == from)) {
+              if (c.color == from.argb) c.color = to.argb;
+              c.type = to;
+              n++;
+            }
+          case 'rename':
+            final from = '${a['from'] ?? ''}';
+            final to = '${a['to'] ?? ''}'.trim();
+            if (from.isEmpty || to.isEmpty) break;
+            for (final c in b.cards) {
+              if (c.title == from || c.title.toLowerCase() == from.toLowerCase()) {
+                c.title = to;
+                n++;
+                break;
+              }
+            }
+        }
+      }
+      if (n > 0) _commit();
+    }
+    if (reply != null && reply.isNotEmpty) {
+      return n > 0 ? '$reply ($n changes)' : reply;
+    }
+    return n > 0 ? 'Applied $n board changes.' : (raw.trim().isEmpty ? 'No changes.' : raw.trim());
+  }
+
+  void _setCardField(SgCard c, String field, String value) {
+    switch (field) {
+      case 'priority':
+        c.priority = int.tryParse(value) ?? (value.toLowerCase() == 'high' ? 3 : (value.toLowerCase() == 'low' ? 1 : 2));
+      case 'urgent':
+        c.urgent = value.toLowerCase() == 'true' || value == '1' || value.toLowerCase() == 'yes';
+      case 'status':
+        c.status = value;
+      case 'assignee':
+        c.assignee = value;
+      default:
+        if (field.isNotEmpty) c.custom[field] = value;
+    }
+  }
+
+  static int? _parseHexColor(String raw) {
+    var s = raw.trim().replaceAll('#', '');
+    if (s.isEmpty) return null;
+    if (s.length == 6) s = 'FF$s';
+    return int.tryParse(s, radix: 16);
+  }
+
+  static Map<String, Object?>? _extractGenieJson(String raw) {
+    var s = raw.trim();
+    if (s.startsWith('```')) {
+      final lines = s.split('\n');
+      s = lines.skip(1).takeWhile((l) => !l.trim().startsWith('```')).join('\n').trim();
+    }
+    final start = s.indexOf('{');
+    final end = s.lastIndexOf('}');
+    if (start < 0 || end <= start) return null;
+    try {
+      final j = jsonDecode(s.substring(start, end + 1));
+      if (j is Map) return j.cast<String, Object?>();
+    } catch (_) {}
+    return null;
   }
 
   /// Apply a cover image chosen via the photo picker (R cover / Trello #21).
