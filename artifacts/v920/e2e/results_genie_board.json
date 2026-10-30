@@ -1,0 +1,14 @@
+{
+  "reply": "Added cards Alpha, Beta, Gamma. Recolored Alpha to purple. (4 changes)",
+  "has": true,
+  "net": [
+    {
+      "status": 204,
+      "method": "OPTIONS"
+    },
+    {
+      "status": 200,
+      "method": "POST"
+    }
+  ]
+}

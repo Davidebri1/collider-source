@@ -1,0 +1,74 @@
+{
+  "items": [
+    {
+      "id": "EMPTY",
+      "flow": "Empty home",
+      "result": "PASS",
+      "capture": "01_empty_home.png",
+      "notes": ""
+    },
+    {
+      "id": "SG-open",
+      "flow": "Smart Gen home",
+      "result": "PASS",
+      "capture": "01c_boards_home.png",
+      "notes": ""
+    },
+    {
+      "id": "Trello#04",
+      "flow": "Create Sprint",
+      "result": "PASS",
+      "capture": "02_board_sprint.png",
+      "notes": ""
+    },
+    {
+      "id": "Trello-menu",
+      "flow": "Board menu",
+      "result": "PASS",
+      "capture": "07_board_menu.png",
+      "notes": ""
+    },
+    {
+      "id": "R13",
+      "flow": "Search",
+      "result": "FAIL",
+      "capture": "08_search.png",
+      "notes": ""
+    },
+    {
+      "id": "R14",
+      "flow": "Statistics",
+      "result": "PASS",
+      "capture": "09_statistics.png",
+      "notes": ""
+    },
+    {
+      "id": "R10-genie",
+      "flow": "Genie MediaGen",
+      "result": "PASS",
+      "capture": "22_genie_after.png",
+      "notes": "post=true reply=true"
+    },
+    {
+      "id": "R10-board",
+      "flow": "Board after Genie",
+      "result": "FAIL",
+      "capture": "22b_board_after_genie.png",
+      "notes": ""
+    }
+  ],
+  "net": [
+    {
+      "status": 204,
+      "method": "OPTIONS"
+    },
+    {
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "status": 204,
+      "method": "OPTIONS"
+    }
+  ]
+}
