@@ -501,7 +501,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     if (!mounted) return;
     if (!ok) {
       // R34: home is Google whether or not the server answered, so there is no
-      // offline start page to swap in.
+      // offline start page to swap in. Still restore local History / active chat
+      // so a real reload keeps the conversation (GitHub Pages has no /api).
+      await _loadLocalHistory(restoreLatest: true);
       return;
     }
     // Default selection: one model per provider, so every card carries a distinct colour.
@@ -514,6 +516,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       _selByCat[ModelCategory.general] = live.take(6).toList();
     });
     await _reloadHistory(restoreLatest: true);
+    // Merge any locally-saved sessions the server does not know about.
+    await _loadLocalHistory(restoreLatest: _tickerItems.isEmpty);
     // Deep links used by the launcher and the screenshot tour: ?ask=...&mode=research
     final qp = Uri.base.queryParameters;
     if (qp['mode'] != null) {
@@ -668,6 +672,144 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   void _initializeHistorySessions() {
     _globalHistorySessions = [];
     _localHistorySessions = {};
+  }
+
+  // Static hosting (GitHub Pages) has no /api/history. Persist Home chat
+  // locally so a real reload (no ?fresh=1) keeps the conversation + History.
+  static const String _kLocalHistKey = 'collider_local_history_v1';
+  static const String _kActiveChatKey = 'collider_active_chat_v1';
+
+  Future<void> _persistLocalHistory() async {
+    if (_incognito || !_autosave) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final payload = {
+        'global': [for (final s in _globalHistorySessions) if (!s.id.startsWith('seed')) s.toJson()],
+        'local': {
+          for (final e in _localHistorySessions.entries)
+            e.key: [for (final s in e.value) if (!s.id.startsWith('seed')) s.toJson()],
+        },
+      };
+      await prefs.setString(_kLocalHistKey, jsonEncode(payload));
+      final active = {
+        'prompt': _currentPrompt,
+        'promptTime': _promptTime?.toIso8601String(),
+        'items': [
+          for (final t in _tickerItems)
+            {
+              'modelId': t.modelDef.id,
+              'relativeTime': t.relativeTime,
+              'summary': t.summary,
+              'messages': [for (final m in t.conversation) m.toJson()],
+            },
+        ],
+      };
+      await prefs.setString(_kActiveChatKey, jsonEncode(active));
+    } catch (_) {}
+  }
+
+  Future<void> _loadLocalHistory({bool restoreLatest = false}) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_kLocalHistKey);
+      if (raw != null && raw.isNotEmpty) {
+        final j = jsonDecode(raw);
+        if (j is Map) {
+          final global = <ConversationHistorySession>[
+            for (final s in (j['global'] as List?) ?? const [])
+              if (s is Map) ConversationHistorySession.fromJson(Map<String, dynamic>.from(s)),
+          ];
+          final local = <String, List<ConversationHistorySession>>{};
+          final loc = j['local'];
+          if (loc is Map) {
+            loc.forEach((k, v) {
+              if (v is! List) return;
+              local[k.toString()] = [
+                for (final s in v)
+                  if (s is Map) ConversationHistorySession.fromJson(Map<String, dynamic>.from(s)),
+              ];
+            });
+          }
+          if (!mounted) return;
+          setState(() {
+            _globalHistorySessions = [..._seedHist, ...global];
+            _localHistorySessions = local;
+          });
+        }
+      }
+      if (!restoreLatest || _tickerItems.isNotEmpty) return;
+      final activeRaw = prefs.getString(_kActiveChatKey);
+      if (activeRaw == null || activeRaw.isEmpty) {
+        // Fall back: restore latest History session onto Home.
+        if (_globalHistorySessions.isNotEmpty) {
+          _restoreActiveFromSession(_globalHistorySessions.first);
+        }
+        return;
+      }
+      final a = jsonDecode(activeRaw);
+      if (a is! Map) return;
+      final items = <TickerItem>[];
+      for (final it in (a['items'] as List?) ?? const []) {
+        if (it is! Map) continue;
+        final mid = it['modelId'] as String? ?? '';
+        final def = ModelRoster.byId(mid);
+        if (def == null) continue;
+        items.add(TickerItem(
+          modelDef: def,
+          relativeTime: it['relativeTime'] as String? ?? '',
+          summary: it['summary'] as String? ?? '',
+          conversation: [
+            for (final m in (it['messages'] as List?) ?? const [])
+              if (m is Map) TickerMessage.fromJson(Map<String, dynamic>.from(m)),
+          ],
+        ));
+      }
+      if (!mounted) return;
+      setState(() {
+        _currentPrompt = a['prompt'] as String? ?? '';
+        final pt = a['promptTime'] as String?;
+        _promptTime = pt == null ? null : DateTime.tryParse(pt);
+        if (items.isNotEmpty) _tickerItems = items;
+      });
+    } catch (_) {}
+  }
+
+  void _restoreActiveFromSession(ConversationHistorySession session) {
+    final ids = session.modelIds.isNotEmpty
+        ? session.modelIds
+        : [if (session.targetModelId != null) session.targetModelId!];
+    final items = <TickerItem>[];
+    if (ids.isEmpty) {
+      final mid = _selectedModelIds.isNotEmpty ? _selectedModelIds.first : null;
+      final def = mid == null ? null : ModelRoster.byId(mid);
+      if (def != null) {
+        items.add(TickerItem(
+          modelDef: def,
+          relativeTime: session.relativeTime,
+          summary: session.summary,
+          conversation: session.messages,
+        ));
+      }
+    } else {
+      for (final mid in ids) {
+        final def = ModelRoster.byId(mid);
+        if (def == null) continue;
+        final local = _localHistorySessions[mid];
+        final msgs = (local != null && local.isNotEmpty)
+            ? local.first.messages
+            : session.messages;
+        items.add(TickerItem(
+          modelDef: def,
+          relativeTime: session.relativeTime,
+          summary: session.summary,
+          conversation: msgs,
+        ));
+      }
+    }
+    if (items.isEmpty) return;
+    _currentPrompt = session.title;
+    _promptTime = session.timestamp;
+    _tickerItems = items;
   }
 
   void _initializeBrowserTabs() {
@@ -1590,6 +1732,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         }
       }
     });
+    if (_autosave && !_incognito) unawaited(_persistLocalHistory());
     await _directConsensus(prompt);
   }
 

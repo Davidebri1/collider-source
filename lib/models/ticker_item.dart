@@ -14,6 +14,22 @@ class TickerMessage {
     required this.timestamp,
     this.fileAttachments,
   });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'sender': sender,
+        'text': text,
+        'timestamp': timestamp.toIso8601String(),
+        if (fileAttachments != null) 'fileAttachments': fileAttachments,
+      };
+
+  static TickerMessage fromJson(Map<String, dynamic> j) => TickerMessage(
+        id: j['id'] as String? ?? '',
+        sender: j['sender'] as String? ?? 'user',
+        text: j['text'] as String? ?? '',
+        timestamp: DateTime.tryParse(j['timestamp'] as String? ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0),
+        fileAttachments: (j['fileAttachments'] as List?)?.cast<String>(),
+      );
 }
 
 class TickerItem {
@@ -76,5 +92,30 @@ class ConversationHistorySession {
     this.modelIds = const [],
     required this.messages,
   });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        if (targetModelId != null) 'targetModelId': targetModelId,
+        'relativeTime': relativeTime,
+        'timestamp': timestamp.toIso8601String(),
+        'summary': summary,
+        'modelIds': modelIds,
+        'messages': [for (final m in messages) m.toJson()],
+      };
+
+  static ConversationHistorySession fromJson(Map<String, dynamic> j) => ConversationHistorySession(
+        id: j['id'] as String? ?? '',
+        title: j['title'] as String? ?? '',
+        targetModelId: j['targetModelId'] as String?,
+        relativeTime: j['relativeTime'] as String? ?? '',
+        timestamp: DateTime.tryParse(j['timestamp'] as String? ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0),
+        summary: j['summary'] as String? ?? '',
+        modelIds: (j['modelIds'] as List?)?.cast<String>() ?? const [],
+        messages: [
+          for (final m in (j['messages'] as List?) ?? const [])
+            if (m is Map) TickerMessage.fromJson(Map<String, dynamic>.from(m)),
+        ],
+      );
 }
 
