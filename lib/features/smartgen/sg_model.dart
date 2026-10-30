@@ -717,7 +717,7 @@ class SgStore extends ChangeNotifier {
       id: _id('b'),
       name: name.trim().isEmpty ? 'Untitled board' : name.trim(),
       lists: [todo, doing, done],
-      statuses: const ['To Do', 'Doing', 'Done'],
+      statuses: ['To Do', 'Doing', 'Done'],
     );
     boards.add(b);
     activeBoardId = b.id;
@@ -1083,6 +1083,18 @@ class SgStore extends ChangeNotifier {
     genie.add(SgMessage(role: 'genie', text: reply, attachment: attachment));
     _commit();
     return reply;
+  }
+
+  /// Apply a cover image chosen via the photo picker (R cover / Trello #21).
+  void applyCoverPhoto(SgCard c, String fileName, String dataUrl) {
+    final name = fileName.trim().isEmpty ? 'cover.png' : fileName.trim();
+    final lower = name.toLowerCase();
+    final coverName = lower.startsWith('cover.') ? name : 'cover.${lower.contains('.') ? lower.split('.').last : 'png'}';
+    touch(() {
+      c.files.removeWhere((x) => x.name.toLowerCase().startsWith('cover.'));
+      c.files.insert(0, SgFile(id: 'cover${c.id}', name: coverName, dataUrl: dataUrl, cardId: c.id));
+      if (c.color == 0) c.color = 0xFF344563;
+    });
   }
 
   void newConversation() {

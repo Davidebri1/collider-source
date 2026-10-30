@@ -346,6 +346,27 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       // falls to the catalog's own default (an R2 theme).
       _currentTheme = cat.bySlug(_currentTheme.id) ?? cat.defaultTheme;
       _savedThemeBeforePreview = cat.bySlug(_savedThemeBeforePreview.id) ?? cat.defaultTheme;
+      // Capture-only: ?live=1 applies the first premium live loop and closes drawers.
+      final liveQ = Uri.base.queryParameters['live'];
+      if (liveQ == '1') {
+        final pick = cat.premiumThemes.where((t) => t.isLive && t.videoUrl != null).firstOrNull ??
+            cat.allThemes.where((t) => t.isLive && t.videoUrl != null).firstOrNull;
+        if (pick != null) {
+          _currentTheme = pick;
+          _savedThemeBeforePreview = pick;
+          _activeDrawer = null;
+        }
+      }
+      final themeQ = Uri.base.queryParameters['theme'];
+      if (themeQ != null && themeQ.isNotEmpty) {
+        final q = themeQ.toLowerCase();
+        final pick = cat.allThemes.where((t) => t.id.toLowerCase().contains(q) || t.name.toLowerCase().contains(q)).firstOrNull;
+        if (pick != null) {
+          _currentTheme = pick;
+          _savedThemeBeforePreview = pick;
+          _activeDrawer = null;
+        }
+      }
     });
     // v9.1.6d (#3): start the current wallpaper's poster as soon as the
     // catalogue lands, so the Gallery frame is never empty while it decodes.

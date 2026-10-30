@@ -1,3 +1,4 @@
+import '../../models/theme_def.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -155,4 +156,13 @@ class ThemePackStore extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList(_prefsKey, _unlocked.toList()..sort());
   }
+}
+
+
+/// Whether the Premium Market shows Set-as-wallpaper for [t].
+/// On the web preview link ([purchasesAvailable] is false) Buy always fails,
+/// so every catalog theme must remain settable or live wallpapers cannot be applied.
+bool themeIsSettable(WallpaperTheme t, [ThemePackStore? store]) {
+  final s = store ?? ThemePackStore.instance;
+  return !t.isPremium || s.isUnlocked(t.id) || !ThemePackStore.purchasesAvailable;
 }

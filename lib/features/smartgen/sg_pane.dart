@@ -1626,11 +1626,7 @@ class _SgPaneState extends State<SgPane> {
     final b64 = base64Encode(bytes);
     final ext = (f.extension ?? 'png').toLowerCase();
     final mime = ext == 'jpg' || ext == 'jpeg' ? 'image/jpeg' : 'image/png';
-    store.touch(() {
-      c.files.removeWhere((x) => x.name.startsWith('cover.'));
-      c.files.insert(0, SgFile(id: 'cover${c.id}', name: 'cover.$ext', dataUrl: 'data:$mime;base64,$b64', cardId: c.id));
-      if (c.color == 0) c.color = 0xFF344563;
-    });
+    store.applyCoverPhoto(c, 'cover.$ext', 'data:$mime;base64,$b64');
   }
 
   Widget _attachmentTile(SgFile f) {

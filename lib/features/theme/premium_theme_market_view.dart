@@ -341,7 +341,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> {
   }
 
   /// A still (not premium) is free: it applies straight away.
-  bool _owned(WallpaperTheme t) => !t.isPremium || _store.isUnlocked(t.id);
+  bool _owned(WallpaperTheme t) => themeIsSettable(t, _store);
 
   void _onCatalogChanged() {
     if (!mounted) return;

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:collider_flutter/features/smartgen/sg_model.dart';
 import 'package:collider_flutter/features/smartgen/sg_views.dart';
 import 'package:collider_flutter/features/smartgen/sg_free_drag.dart';
@@ -273,6 +274,148 @@ void main() {
     final back = SgCard.fromJson(c.toJson());
     expect(back.dx, 173);
     expect(back.dy, 311);
+  });
+
+
+  test('Cover from photo applies cover.* file and tint', () {
+    final store = SgStore()..ensureStarter();
+    final c = store.addCard(SgType.task)!;
+    c.color = 0;
+    const tiny = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    store.applyCoverPhoto(c, 'shot.png', tiny);
+    expect(c.files.any((f) => f.name.startsWith('cover.')), isTrue);
+    expect(c.files.first.dataUrl, tiny);
+    expect(c.color, isNot(0));
+    // Replacing cover keeps a single cover.*
+    store.applyCoverPhoto(c, 'cover.jpg', tiny);
+    expect(c.files.where((f) => f.name.toLowerCase().startsWith('cover.')).length, 1);
+  });
+
+  test('R10 Genie stub provider replies when local parser has no match', () {
+    final store = SgStore()..ensureStarter();
+    store.addCard(SgType.task);
+    final reply = store.askGenie('what is on this board?');
+    expect(reply, contains('callAiApi is wired'));
+    expect(store.genie.where((m) => m.role == 'genie').last.text, contains('callAiApi'));
+  });
+
+  test('R10 Genie new conversation clears history', () {
+    final store = SgStore()..ensureStarter();
+    store.askGenie('set all priority to high');
+    expect(store.genie, isNotEmpty);
+    store.newConversation();
+    expect(store.genie, isEmpty);
+  });
+
+  test('R11 manage columns types statuses fields inline via store', () {
+    final store = SgStore()..ensureStarter();
+    final before = store.board!.lists.length;
+    store.addList('Review');
+    expect(store.board!.lists.length, before + 1);
+    expect(store.board!.lists.last.title, 'Review');
+    store.addField('Budget', SgFieldKind.number);
+    expect(store.board!.fields.any((f) => f.name == 'Budget' && f.kind == SgFieldKind.number), isTrue);
+    store.touch(() {
+      store.board!.autoArrange = true;
+      store.board!.autoSort = true;
+      store.board!.autoFilterComplete = true;
+      store.board!.inheritColumnStatus = true;
+      store.board!.urgentAutoCalendar = true;
+    });
+    expect(store.board!.autoArrange, isTrue);
+    expect(store.board!.urgentAutoCalendar, isTrue);
+  });
+
+  test('R4 + Add new status creates a real list option', () {
+    final store = SgStore()..ensureStarter();
+    store.addList('Waiting');
+    store.rememberHistory('status', 'Waiting');
+    expect(store.historyFor('status'), contains('Waiting'));
+    expect(store.board!.lists.any((l) => l.title == 'Waiting'), isTrue);
+  });
+
+  testWidgets('R20 urgent pulse animation controller is running', (tester) async {
+    tester.view.physicalSize = const Size(440, 956);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: Center(child: SgPulse(child: () => const SizedBox(width: 8, height: 8))))));
+    await tester.pump();
+    final state = tester.state(find.byType(SgPulse)) as dynamic;
+    expect(state.c.isAnimating, isTrue);
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(state.c.value, greaterThan(0));
+  });
+
+  testWidgets('R9 spatial surfaces build without inventing boards', (tester) async {
+    tester.view.physicalSize = const Size(440, 956);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final store = SgStore()..ensureStarter();
+    final c = store.addCard(SgType.task)!..title = 'Draft';
+    c.files.add(SgFile(id: 'i1', name: 'mood.png', dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', cardId: c.id));
+    store.addCard(SgType.job)!
+      ..title = 'Role'
+      ..company = 'Acme'
+      ..positionTitle = 'Designer';
+    final surfaces = <SgSurface, Widget Function()>{
+      SgSurface.album: () => SgAlbum(store: store, onOpen: (_) {}),
+      SgSurface.storyboard: () => SgStory(store: store, onOpen: (_) {}),
+      SgSurface.vision: () => SgVision(store: store, onOpen: (_) {}),
+      SgSurface.swimlane: () => SgSwim(store: store, onOpen: (_) {}),
+      SgSurface.portfolio: () => SgDesk(store: store, onOpen: (_) {}),
+      SgSurface.worldMap: () => SgPlaces(store: store, onOpen: (_) {}, world: true),
+      SgSurface.usMap: () => SgPlaces(store: store, onOpen: (_) {}, world: false),
+      SgSurface.corkboard: () => SgCork(store: store, onOpen: (_) {}),
+      SgSurface.files: () => SgFiles(store: store, onOpen: (_) {}),
+    };
+    for (final e in surfaces.entries) {
+      store.touch(() => store.board!.surface = e.key);
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: SizedBox(width: 440, height: 900, child: e.value()))));
+      await tester.pump();
+      expect(tester.takeException(), isNull, reason: '${e.key} threw');
+    }
+  });
+
+  testWidgets('R19 Files explorer shows preview stage and sort', (tester) async {
+    tester.view.physicalSize = const Size(440, 956);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final store = SgStore()..ensureStarter();
+    final c = store.addCard(SgType.task)!..title = 'Draft post';
+    c.files.addAll([
+      SgFile(id: 'a', name: 'mood.png', dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', cardId: c.id),
+      SgFile(id: 'b', name: 'brief.pdf', dataUrl: 'data:application/pdf;base64,JVBERi0=', cardId: c.id),
+    ]);
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: SizedBox(width: 440, height: 900, child: SgFiles(store: store, onOpen: (_) {})))));
+    await tester.pump();
+    expect(find.text('Files'), findsOneWidget);
+    expect(find.text('Type'), findsOneWidget);
+    expect(find.text('Name'), findsOneWidget);
+    expect(find.text('Open card'), findsOneWidget);
+    expect(find.textContaining('IMAGE'), findsWidgets);
+  });
+
+
+
+  test('Smart Gen cards never use non-zero Transform.rotate', () async {
+    // Structural: every Smart Gen dart source must not rotate cards.
+    // Desk/Cork previously tilted papers; David did not ask for tilt.
+    final root = Directory('lib/features/smartgen');
+    final hits = <String>[];
+    await for (final f in root.list(recursive: true)) {
+      if (f is! File || !f.path.endsWith('.dart')) continue;
+      final src = await f.readAsString();
+      // Allow commented mentions; fail on live Transform.rotate( angle: non-zero.
+      for (final m in RegExp(r'Transform\.rotate\s*\(\s*angle:\s*([^,\)]+)').allMatches(src)) {
+        final expr = m.group(1)!.trim();
+        if (expr == '0' || expr == '0.0') continue;
+        hits.add('${f.path}: angle: $expr');
+      }
+    }
+    expect(hits, isEmpty, reason: 'non-zero card rotation found:\n${hits.join('\n')}');
   });
 
   testWidgets('Vision board exposes Align to grid IconButton tooltip', (tester) async {

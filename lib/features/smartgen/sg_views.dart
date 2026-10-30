@@ -1061,7 +1061,7 @@ class SgSwim extends StatelessWidget {
                     child: Text(t.label, style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
                   ),
                   SizedBox(
-                    height: 108,
+                    height: 148,
                     child: ListView(
                       scrollDirection: Axis.horizontal,
                       padding: const EdgeInsets.fromLTRB(8, 0, 8, 10),
@@ -1070,11 +1070,9 @@ class SgSwim extends StatelessWidget {
                           GestureDetector(
                             onTap: () => onOpen(c),
                             child: Container(
-                              width: 148,
+                              width: 160,
                               margin: const EdgeInsets.only(right: 8),
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(color: const Color(0x22FFFFFF), borderRadius: BorderRadius.circular(8), border: Border(top: BorderSide(color: Color(c.color | 0xFF000000), width: 4))),
-                              child: Text(c.title, maxLines: 4, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white)),
+                              child: ClipRect(child: SgFace(card: c, board: b, compact: true)),
                             ),
                           ),
                         if (cards.isEmpty)
@@ -1112,30 +1110,27 @@ class SgDesk extends StatelessWidget {
           onOpen: onOpen,
           slotsFor: (plane, cs) => SgFreeLayouts.papers(plane, cs.length),
           tileBuilder: (context, c, i, tile) {
-            return Transform.rotate(
-              angle: store.board!.snapAlign ? 0 : (i.isEven ? -0.03 : 0.035),
-              child: Container(
-                width: tile.width,
-                constraints: BoxConstraints(minHeight: tile.height * 0.85),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF7F1E4),
-                  borderRadius: BorderRadius.circular(3),
-                  border: Border(top: BorderSide(color: Color(c.color | 0xFF000000), width: 7)),
-                  boxShadow: const [
-                    BoxShadow(color: Color(0x66000000), blurRadius: 10, offset: Offset(2, 5)),
-                    BoxShadow(color: Color(0x33000000), blurRadius: 2, offset: Offset(0, 1)),
-                  ],
-                ),
-                padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                  Text(c.title, style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF2C2416))),
-                  if (c.type == SgType.job) ...[
-                    const SizedBox(height: 6),
-                    Text(c.company, style: appFont(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF5A4A38))),
-                    Text(c.positionTitle, style: appFont(fontSize: 11, color: const Color(0xFF6A5A48))),
-                  ],
-                ]),
+            return Container(
+              width: tile.width,
+              constraints: BoxConstraints(minHeight: tile.height * 0.85),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF7F1E4),
+                borderRadius: BorderRadius.circular(3),
+                border: Border(top: BorderSide(color: Color(c.color | 0xFF000000), width: 7)),
+                boxShadow: const [
+                  BoxShadow(color: Color(0x66000000), blurRadius: 10, offset: Offset(2, 5)),
+                  BoxShadow(color: Color(0x33000000), blurRadius: 2, offset: Offset(0, 1)),
+                ],
               ),
+              padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                Text(c.title, style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF2C2416))),
+                if (c.type == SgType.job) ...[
+                  const SizedBox(height: 6),
+                  Text(c.company, style: appFont(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF5A4A38))),
+                  Text(c.positionTitle, style: appFont(fontSize: 11, color: const Color(0xFF6A5A48))),
+                ],
+              ]),
             );
           },
         ),
@@ -1195,16 +1190,44 @@ class SgPlaces extends StatelessWidget {
   }
 }
 
-class SgFiles extends StatelessWidget {
+class SgFiles extends StatefulWidget {
   const SgFiles({super.key, required this.store, required this.onOpen});
   final SgStore store;
   final void Function(SgCard) onOpen;
   @override
+  State<SgFiles> createState() => _SgFilesState();
+}
+
+class _SgFilesState extends State<SgFiles> {
+  String _sort = 'type'; // name | type
+  int _sel = 0;
+
+  static String _cat(SgFile f) {
+    final n = f.name.toLowerCase();
+    if (n.endsWith('.png') || n.endsWith('.jpg') || n.endsWith('.jpeg') || n.endsWith('.webp') || n.endsWith('.gif') || f.dataUrl.startsWith('data:image')) return 'IMAGE';
+    if (n.endsWith('.mp4') || n.endsWith('.webm') || n.endsWith('.mov') || f.dataUrl.startsWith('data:video')) return 'VIDEO';
+    if (n.endsWith('.pdf') || f.dataUrl.startsWith('data:application/pdf')) return 'PDF';
+    return 'FILE';
+  }
+
+  @override
   Widget build(BuildContext context) {
     final pairs = <(SgFile, SgCard)>[
-      for (final c in store.board!.cards)
+      for (final c in widget.store.board!.cards)
         for (final f in c.files) (f, c),
     ];
+    if (_sort == 'name') {
+      pairs.sort((a, b) => a.$1.name.toLowerCase().compareTo(b.$1.name.toLowerCase()));
+    } else {
+      pairs.sort((a, b) {
+        final ca = _cat(a.$1).compareTo(_cat(b.$1));
+        if (ca != 0) return ca;
+        return a.$1.name.toLowerCase().compareTo(b.$1.name.toLowerCase());
+      });
+    }
+    if (_sel >= pairs.length) _sel = 0;
+    final selected = pairs.isEmpty ? null : pairs[_sel];
+
     return ColoredBox(
       color: const Color(0xFF12141A),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -1215,51 +1238,147 @@ class SgFiles extends StatelessWidget {
             const SizedBox(width: 6),
             Text('Files', style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white70)),
             const Spacer(),
+            _sortChip('type', 'Type'),
+            const SizedBox(width: 4),
+            _sortChip('name', 'Name'),
+            const SizedBox(width: 8),
             Text('${pairs.length}', style: appFont(fontSize: 12, color: Colors.white54)),
           ]),
         ),
         Expanded(
-          child: ListView.separated(
-            padding: const EdgeInsets.fromLTRB(10, 4, 10, 12),
-            itemCount: pairs.isEmpty ? 1 : pairs.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
-            itemBuilder: (_, i) {
-              if (pairs.isEmpty) {
-                return Padding(padding: const EdgeInsets.all(24), child: Text('No files yet', textAlign: TextAlign.center, style: appFont(color: Colors.white70)));
-              }
-              final (f, c) = pairs[i];
-              return Material(
-                color: const Color(0x18FFFFFF),
-                borderRadius: BorderRadius.circular(10),
-                child: ListTile(
-                  dense: true,
-                  onTap: () => onOpen(c),
-                  leading: _fileLeading(f),
-                  title: Text(f.name, style: appFont(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
-                  subtitle: Text(c.title, style: appFont(fontSize: 11, color: Colors.white70)),
-                  trailing: const Icon(Icons.chevron_right, color: Colors.white38, size: 18),
-                ),
-              );
-            },
-          ),
+          child: pairs.isEmpty
+              ? Center(child: Text('No files yet', style: appFont(color: Colors.white70)))
+              : Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  SizedBox(
+                    width: 92,
+                    child: ScrollConfiguration(
+                      behavior: const SgScroll(),
+                      child: ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(8, 4, 4, 12),
+                        itemCount: pairs.length,
+                        itemBuilder: (_, i) {
+                          final (f, _) = pairs[i];
+                          final on = i == _sel;
+                          final showHead = _sort == 'type' && (i == 0 || _cat(pairs[i - 1].$1) != _cat(f));
+                          return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                            if (showHead)
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(2, 8, 2, 4),
+                                child: Text(_cat(f), style: appFont(fontSize: 9, fontWeight: FontWeight.w700, color: const Color(0x99FFFFFF), letterSpacing: 0.8)),
+                              ),
+                            GestureDetector(
+                              onTap: () => setState(() => _sel = i),
+                              child: Container(
+                                margin: const EdgeInsets.only(bottom: 6),
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: on ? const Color(0x33FFFFFF) : const Color(0x14FFFFFF),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: on ? const Color(0x88FFFFFF) : const Color(0x22FFFFFF)),
+                                ),
+                                child: Column(children: [
+                                  SizedBox(height: 56, width: double.infinity, child: _thumb(f)),
+                                  const SizedBox(height: 4),
+                                  Text(f.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 9, color: Colors.white70)),
+                                ]),
+                              ),
+                            ),
+                          ]);
+                        },
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(6, 4, 10, 12),
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(color: const Color(0x18FFFFFF), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0x22FFFFFF))),
+                        child: selected == null
+                            ? const SizedBox.shrink()
+                            : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                                Expanded(child: Padding(padding: const EdgeInsets.all(12), child: _stage(selected.$1))),
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                                  child: Row(children: [
+                                    Expanded(
+                                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                        Text(selected.$1.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
+                                        Text('From ${selected.$2.title}', maxLines: 1, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 11, color: Colors.white54)),
+                                      ]),
+                                    ),
+                                    TextButton(
+                                      onPressed: () => widget.onOpen(selected.$2),
+                                      child: Text('Open card', style: appFont(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFFFFD56A))),
+                                    ),
+                                  ]),
+                                ),
+                              ]),
+                      ),
+                    ),
+                  ),
+                ]),
         ),
       ]),
     );
   }
 
-  Widget _fileLeading(SgFile f) {
+  Widget _sortChip(String key, String label) {
+    final on = _sort == key;
+    return GestureDetector(
+      onTap: () => setState(() => _sort = key),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: on ? const Color(0x44FFFFFF) : const Color(0x14FFFFFF),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: on ? const Color(0x88FFFFFF) : const Color(0x33FFFFFF)),
+        ),
+        child: Text(label, style: appFont(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white)),
+      ),
+    );
+  }
+
+  Widget _thumb(SgFile f) {
     if (_isImageFile(f)) {
       try {
-        return ClipRRect(borderRadius: BorderRadius.circular(6), child: Image.memory(_bytes(f.dataUrl), width: 44, height: 44, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.image_outlined, color: Colors.white)));
+        return ClipRRect(borderRadius: BorderRadius.circular(4), child: Image.memory(_bytes(f.dataUrl), fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0x33FFFFFF), child: Icon(Icons.image_outlined, color: Colors.white54, size: 18))));
+      } catch (_) {}
+    }
+    final cat = _cat(f);
+    final icon = switch (cat) {
+      'VIDEO' => Icons.videocam_outlined,
+      'PDF' => Icons.picture_as_pdf_outlined,
+      _ => Icons.insert_drive_file_outlined,
+    };
+    return ColoredBox(color: const Color(0x22FFFFFF), child: Icon(icon, color: Colors.white70, size: 22));
+  }
+
+  Widget _stage(SgFile f) {
+    if (_isImageFile(f)) {
+      try {
+        return ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.memory(_bytes(f.dataUrl), fit: BoxFit.contain, errorBuilder: (_, __, ___) => _fallbackStage(f)));
       } catch (_) {
-        return const Icon(Icons.image_outlined, color: Colors.white);
+        return _fallbackStage(f);
       }
     }
-    final lower = f.name.toLowerCase();
-    if (lower.endsWith('.mp4') || lower.endsWith('.webm') || f.dataUrl.startsWith('data:video')) {
-      return const Icon(Icons.videocam_outlined, color: Colors.white);
-    }
-    return const Icon(Icons.insert_drive_file_outlined, color: Colors.white);
+    return _fallbackStage(f);
+  }
+
+  Widget _fallbackStage(SgFile f) {
+    final cat = _cat(f);
+    final icon = switch (cat) {
+      'VIDEO' => Icons.play_circle_outline,
+      'PDF' => Icons.picture_as_pdf_outlined,
+      _ => Icons.insert_drive_file_outlined,
+    };
+    return Center(
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 56, color: Colors.white54),
+        const SizedBox(height: 10),
+        Text(f.name, textAlign: TextAlign.center, style: appFont(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white70)),
+        Text(cat, style: appFont(fontSize: 11, color: Colors.white38)),
+      ]),
+    );
   }
 }
 
@@ -1280,22 +1399,19 @@ class SgCork extends StatelessWidget {
         background: CustomPaint(painter: _CorkPainter(), child: const SizedBox.expand()),
         slotsFor: (plane, cs) => SgFreeLayouts.papers(plane, cs.length, tileW: 132, tileH: 100, gapX: 14, gapY: 18),
         tileBuilder: (context, c, i, tile) {
-          return Transform.rotate(
-            angle: store.board!.snapAlign ? 0 : (i.isEven ? -0.05 : 0.06),
-            child: Stack(clipBehavior: Clip.none, children: [
-              Container(
-                width: tile.width,
-                padding: const EdgeInsets.fromLTRB(10, 14, 10, 12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF8E7),
-                  borderRadius: BorderRadius.circular(2),
-                  boxShadow: const [BoxShadow(color: Color(0x55000000), blurRadius: 6, offset: Offset(1, 3))],
-                ),
-                child: Text(c.title, style: appFont(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF2C2416))),
+          return Stack(clipBehavior: Clip.none, children: [
+            Container(
+              width: tile.width,
+              padding: const EdgeInsets.fromLTRB(10, 14, 10, 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF8E7),
+                borderRadius: BorderRadius.circular(2),
+                boxShadow: const [BoxShadow(color: Color(0x55000000), blurRadius: 6, offset: Offset(1, 3))],
               ),
-              Positioned(top: -4, left: tile.width / 2 - 7, child: Container(width: 14, height: 14, decoration: const BoxDecoration(color: Color(0xFFC0392B), shape: BoxShape.circle, boxShadow: [BoxShadow(color: Color(0x66000000), blurRadius: 2)]))),
-            ]),
-          );
+              child: Text(c.title, style: appFont(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF2C2416))),
+            ),
+            Positioned(top: -4, left: tile.width / 2 - 7, child: Container(width: 14, height: 14, decoration: const BoxDecoration(color: Color(0xFFC0392B), shape: BoxShape.circle, boxShadow: [BoxShadow(color: Color(0x66000000), blurRadius: 2)]))),
+          ]);
         },
       ),
     );
