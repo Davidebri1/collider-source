@@ -93,19 +93,36 @@ Future<Waveform?> pcmWaveform(Uint8List bytes, {int buckets = 96}) => decodedWav
 /// frame into a canvas and read it back as PNG bytes. Returns null when the
 /// browser cannot decode the codec or never fires the events.
 Future<Uint8List?> videoFrame(Uint8List bytes, {int atSeconds = 1}) async {
-  final blob = web.Blob([bytes.toJS].toJS, web.BlobPropertyBag());
+  // Hint MP4 so Chromium picks the right demuxer even when the blob has no name.
+  final blob = web.Blob(
+    [bytes.toJS].toJS,
+    web.BlobPropertyBag(type: 'video/mp4'),
+  );
   final url = web.URL.createObjectURL(blob);
   final video = web.HTMLVideoElement()
     ..src = url
     ..muted = true
+    ..playsInline = true
+    ..crossOrigin = 'anonymous'
     ..preload = 'auto';
+  // Some Chromium builds only decode once the element is in the document.
+  video.style
+    ..setProperty('position', 'fixed')
+    ..setProperty('left', '-9999px')
+    ..setProperty('width', '1px')
+    ..setProperty('height', '1px')
+    ..setProperty('opacity', '0')
+    ..setProperty('pointer-events', 'none');
+  web.document.body?.append(video);
   final canvas = web.HTMLCanvasElement();
   final ready = Completer<void>();
   final failed = Completer<void>();
-  video.oncanplaythrough = ((web.Event e) {
+  void markReady(web.Event e) {
     if (!ready.isCompleted) ready.complete();
-    return null;
-  }).toJS;
+  }
+  video.onloadeddata = markReady.toJS;
+  video.oncanplay = markReady.toJS;
+  video.oncanplaythrough = markReady.toJS;
   video.onerror = ((web.Event e) {
     if (!failed.isCompleted) failed.complete();
     return null;
@@ -113,18 +130,27 @@ Future<Uint8List?> videoFrame(Uint8List bytes, {int atSeconds = 1}) async {
   try {
     video.load();
     // Cap the wait so one bad file cannot hang a tile forever.
-    await Future.any([ready.future, failed.future, Future<void>.delayed(const Duration(seconds: 4))]);
+    await Future.any([ready.future, failed.future, Future<void>.delayed(const Duration(seconds: 6))]);
     if (failed.isCompleted) return null;
     if (video.readyState < 2) return null;
     final duration = video.duration;
-    final t = (duration.isFinite && duration > 0) ? (duration * 0.25).clamp(0.0, atSeconds.toDouble()) : atSeconds.toDouble();
+    // Prefer an early in-stream frame so short clips still yield a picture.
+    final t = (duration.isFinite && duration > 0)
+        ? (duration * 0.1).clamp(0.0, atSeconds.toDouble())
+        : 0.05;
     final seeked = Completer<void>();
     video.onseeked = ((web.Event e) {
       if (!seeked.isCompleted) seeked.complete();
       return null;
     }).toJS;
-    video.currentTime = t;
+    try {
+      video.currentTime = t;
+    } catch (_) {
+      // Some demuxers reject seek before HAVE_CURRENT_DATA; fall through.
+    }
     await Future.any([seeked.future, Future<void>.delayed(const Duration(seconds: 3))]);
+    // Give the decoder one paint cycle after seek.
+    await Future<void>.delayed(const Duration(milliseconds: 50));
     final w = video.videoWidth;
     final h = video.videoHeight;
     if (w <= 0 || h <= 0) return null;
@@ -137,10 +163,16 @@ Future<Uint8List?> videoFrame(Uint8List bytes, {int atSeconds = 1}) async {
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     final dataUrl = canvas.toDataURL('image/png');
     final b64 = dataUrl.substring(dataUrl.indexOf(',') + 1);
-    return base64Decode(b64);
+    final out = base64Decode(b64);
+    // Reject empty / near-black frames (failed decode paints black).
+    if (out.length < 64) return null;
+    return out;
   } catch (_) {
     return null;
   } finally {
+    try {
+      video.remove();
+    } catch (_) {}
     web.URL.revokeObjectURL(url);
   }
 }

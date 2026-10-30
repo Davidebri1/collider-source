@@ -524,6 +524,11 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     if (qp['mode'] != null) {
       _mode = AskMode.values.firstWhere((m) => m.wire == qp['mode'], orElse: () => AskMode.chat);
     }
+    // Re-apply ?cat= after History restore so media asks are not stolen by Home.
+    final catQ = qp['cat'];
+    if (catQ != null) {
+      _activeCategory = ModelCategory.values.firstWhere((c) => c.name == catQ, orElse: () => _activeCategory);
+    }
     if (qp['ask'] != null && qp['ask']!.trim().isNotEmpty) unawaited(_onSendPrompt(qp['ask']!));
     const openable = {'smartgen', 'market', 'themes', 'premium', 'music', 'files', 'consensus', 'apps'};
     final app = qp['app'];
@@ -698,7 +703,11 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             {
               'modelId': t.modelDef.id,
               'relativeTime': t.relativeTime,
-              'summary': t.summary,
+              // Prefer real summary; fall back to last message / prompt so a
+              // reload mid-Thinking still shows the conversation on Home.
+              'summary': t.summary.trim().isNotEmpty
+                  ? t.summary
+                  : (t.conversation.isNotEmpty ? t.conversation.last.text : _currentPrompt),
               'messages': [for (final m in t.conversation) m.toJson()],
             },
         ],
@@ -741,7 +750,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       if (activeRaw == null || activeRaw.isEmpty) {
         // Fall back: restore latest History session onto Home.
         if (_globalHistorySessions.isNotEmpty) {
-          _restoreActiveFromSession(_globalHistorySessions.first);
+          setState(() => _restoreActiveFromSession(_globalHistorySessions.first));
         }
         return;
       }
@@ -768,7 +777,41 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         _currentPrompt = a['prompt'] as String? ?? '';
         final pt = a['promptTime'] as String?;
         _promptTime = pt == null ? null : DateTime.tryParse(pt);
-        if (items.isNotEmpty) _tickerItems = items;
+        if (items.isNotEmpty) {
+          // Ensure collapsed cards show text even when summary was blank.
+          _tickerItems = [
+            for (final t in items)
+              t.summary.trim().isNotEmpty
+                  ? t
+                  : t.copyWith(
+                      summary: t.conversation.isNotEmpty
+                          ? t.conversation.last.text
+                          : (a['prompt'] as String? ?? ''),
+                    ),
+          ];
+          // Keep restored models selected so the Home ticker filter shows them.
+          // Do not override an explicit ?cat= deep link (media gen playtests).
+          final ids = [for (final t in _tickerItems) t.modelDef.id];
+          if (ids.isNotEmpty) {
+            _selByCat[ModelCategory.general] = [
+              ...ids,
+              for (final id in _selByCat[ModelCategory.general]!)
+                if (!ids.contains(id)) id,
+            ].take(9).toList();
+            final catQ = Uri.base.queryParameters['cat'];
+            if (catQ == null || catQ.isEmpty) {
+              _activeCategory = ModelCategory.general;
+            }
+          }
+          // Open the first thread so messages + replies are visible after reload.
+          final openId = _tickerItems.firstWhere(
+            (t) => t.conversation.isNotEmpty,
+            orElse: () => _tickerItems.first,
+          ).modelDef.id;
+          _expandedModelIds
+            ..clear()
+            ..add(openId);
+        }
       });
     } catch (_) {}
   }
@@ -808,7 +851,33 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     if (items.isEmpty) return;
     _currentPrompt = session.title;
     _promptTime = session.timestamp;
-    _tickerItems = items;
+    _tickerItems = [
+      for (final t in items)
+        t.summary.trim().isNotEmpty
+            ? t
+            : t.copyWith(
+                summary: t.conversation.isNotEmpty ? t.conversation.last.text : session.title,
+              ),
+    ];
+    final restoredIds = [for (final t in _tickerItems) t.modelDef.id];
+    if (restoredIds.isNotEmpty) {
+      _selByCat[ModelCategory.general] = [
+        ...restoredIds,
+        for (final id in _selByCat[ModelCategory.general]!)
+          if (!restoredIds.contains(id)) id,
+      ].take(9).toList();
+      final catQ = Uri.base.queryParameters['cat'];
+      if (catQ == null || catQ.isEmpty) {
+        _activeCategory = ModelCategory.general;
+      }
+    }
+    final openId = _tickerItems.firstWhere(
+      (t) => t.conversation.isNotEmpty,
+      orElse: () => _tickerItems.first,
+    ).modelDef.id;
+    _expandedModelIds
+      ..clear()
+      ..add(openId);
   }
 
   void _initializeBrowserTabs() {
@@ -1366,13 +1435,33 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
   bool get _mediaStageOn => _activeCategory.isMedia && (_mediaGens[_activeCategory]?.isNotEmpty ?? false);
 
-  Widget _buildMediaStage() => MediaStageContent(
-        key: ValueKey('media-${_activeCategory.name}'),
-        items: _mediaGens[_activeCategory]!,
-        onRemix: (p) => _restoreText.value = p,
-        onNotice: _notice,
-        onOptions: () => setState(() => _genOptionsOpen = true),
+  Widget _buildMediaStage() {
+    final items = _mediaGens[_activeCategory]!;
+    // Phone portrait: stacked MediaTicker keeps the generated image on-screen.
+    // Wide layouts keep the Figma side-panel stage.
+    final narrow = MediaQuery.sizeOf(context).width < 768;
+    if (narrow) {
+      return Align(
+        alignment: Alignment.topCenter,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          child: MediaTicker(
+            key: ValueKey('media-${_activeCategory.name}'),
+            items: items,
+            onRemix: (p) => _restoreText.value = p,
+            onNotice: _notice,
+          ),
+        ),
       );
+    }
+    return MediaStageContent(
+      key: ValueKey('media-${_activeCategory.name}-wide'),
+      items: items,
+      onRemix: (p) => _restoreText.value = p,
+      onNotice: _notice,
+      onOptions: () => setState(() => _genOptionsOpen = true),
+    );
+  }
 
   Widget _buildTicker() {
     final idx = _tickerOrder.indexOf(_activeCategory);
@@ -1719,7 +1808,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       }
     });
     // Persist active chat + History before answers finish (static hosting reload).
-    if (_autosave && !_incognito) unawaited(_persistLocalHistory());
+    // Await so a reload that follows send immediately still finds the chat.
+    if (_autosave && !_incognito) await _persistLocalHistory();
     await Future.wait([
       for (final id in models)
         MediaGen.instance.chat(id, [

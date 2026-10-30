@@ -20,9 +20,37 @@ class GenMediaView extends StatelessWidget {
     if (kind == 'audio') return _GenAudio(url: url);
     if (url.startsWith('data:')) {
       final i = url.indexOf(',');
-      return Image.memory(base64Decode(url.substring(i + 1)), fit: fit, gaplessPlayback: true, width: double.infinity, height: double.infinity);
+      final bytes = base64Decode(url.substring(i + 1));
+      return Semantics(
+        label: 'Generated image',
+        image: true,
+        child: Image.memory(
+          bytes,
+          fit: fit,
+          gaplessPlayback: true,
+          width: double.infinity,
+          height: double.infinity,
+          errorBuilder: (_, __, ___) => const ColoredBox(
+            color: Color(0xFF101014),
+            child: Center(child: Icon(Icons.broken_image_outlined, color: Colors.white54, size: 40)),
+          ),
+        ),
+      );
     }
-    return Image.network(url, fit: fit, width: double.infinity, height: double.infinity, errorBuilder: (_, __, ___) => const SizedBox.shrink());
+    return Semantics(
+      label: 'Generated image',
+      image: true,
+      child: Image.network(
+        url,
+        fit: fit,
+        width: double.infinity,
+        height: double.infinity,
+        errorBuilder: (_, __, ___) => const ColoredBox(
+          color: Color(0xFF101014),
+          child: Center(child: Icon(Icons.broken_image_outlined, color: Colors.white54, size: 40)),
+        ),
+      ),
+    );
   }
 }
 

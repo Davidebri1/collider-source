@@ -825,22 +825,28 @@ class _SgPaneState extends State<SgPane> {
   }
 
   Widget _viewChips(SgBoard b) {
-    // Wrap (not a horizontal ListView): at phone width ~440 every board view
-    // chip must stay reachable without horizontal off-screen scroll.
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 2, 8, 4),
-      child: Wrap(
-        spacing: 4,
-        runSpacing: 4,
-        children: [
-          for (final s in SgSurface.values)
-            _glassChoice(
-              label: s.label,
-              selected: b.surface == s,
-              size: 11,
-              onSelected: (_) => store.touch(() => b.surface = s),
-            ),
-        ],
+    // One horizontal swipe row (no scrollbar): the approved phone layout.
+    // Align stays pinned in [_header], so chips never push it off-screen.
+    return SizedBox(
+      height: 40,
+      child: ScrollConfiguration(
+        behavior: const SgScroll(),
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          children: [
+            for (final s in SgSurface.values)
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: _glassChoice(
+                  label: s.label,
+                  selected: b.surface == s,
+                  size: 11,
+                  onSelected: (_) => store.touch(() => b.surface = s),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

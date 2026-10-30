@@ -376,6 +376,29 @@ class MediaGen {
     return (width: s[0], height: s[1]);
   }
 
+
+  static bool _looksLikeImage(List<int> b) {
+    if (b.length < 12) return false;
+    // JPEG
+    if (b[0] == 0xFF && b[1] == 0xD8 && b[2] == 0xFF) return true;
+    // PNG
+    if (b[0] == 0x89 && b[1] == 0x50 && b[2] == 0x4E && b[3] == 0x47) return true;
+    // GIF
+    if (b[0] == 0x47 && b[1] == 0x49 && b[2] == 0x46) return true;
+    // WEBP (RIFF....WEBP)
+    if (b[0] == 0x52 && b[1] == 0x49 && b[2] == 0x46 && b[3] == 0x46 &&
+        b[8] == 0x57 && b[9] == 0x45 && b[10] == 0x42 && b[11] == 0x50) return true;
+    return false;
+  }
+
+  static String _imageMime(List<int> b) {
+    if (b[0] == 0xFF && b[1] == 0xD8) return 'image/jpeg';
+    if (b[0] == 0x89 && b[1] == 0x50) return 'image/png';
+    if (b[0] == 0x47 && b[1] == 0x49) return 'image/gif';
+    if (b[0] == 0x52 && b[1] == 0x49) return 'image/webp';
+    return 'image/jpeg';
+  }
+
   /// chat.ts generateImageUrl.
   static String pollinationsUrl(String prompt, GenFlags f, {String model = '', int? seed}) {
     // Free-tier Pollinations 402s large frames; keep the long edge ≤256.
@@ -417,9 +440,14 @@ class MediaGen {
               for (final u in tryUrls) {
                 try {
                   final res = await _dio.get<List<int>>(u, options: Options(responseType: ResponseType.bytes));
-                  final ct = res.headers.value('content-type') ?? 'image/jpeg';
-                  if (!ct.startsWith('image/')) throw const MediaGenError('no image');
-                  return MediaResult('image', url: 'data:$ct;base64,${base64Encode(res.data!)}');
+                  final raw = res.data;
+                  if (raw == null || raw.length < 24) throw const MediaGenError('no image');
+                  // Accept real image payloads even when a proxy lies about content-type.
+                  final isImg = _looksLikeImage(raw);
+                  final ctHdr = res.headers.value('content-type') ?? '';
+                  if (!isImg && !ctHdr.startsWith('image/')) throw const MediaGenError('no image');
+                  final ct = isImg ? _imageMime(raw) : (ctHdr.startsWith('image/') ? ctHdr.split(';').first : 'image/jpeg');
+                  return MediaResult('image', url: 'data:$ct;base64,${base64Encode(raw)}');
                 } on DioException catch (e) {
                   inner = e;
                   final code = e.response?.statusCode ?? 0;
@@ -427,15 +455,18 @@ class MediaGen {
                 }
               }
               last = inner;
-              await Future<void>.delayed(Duration(milliseconds: 400 * (attempt + 1)));
+              await Future<void>.delayed(Duration(milliseconds: 900 * (attempt + 1)));
             } on DioException catch (e) {
               last = e;
               final code = e.response?.statusCode ?? 0;
               if (code != 402 && code != 429 && code != 503) rethrow;
-              await Future<void>.delayed(Duration(milliseconds: 400 * (attempt + 1)));
+              await Future<void>.delayed(Duration(milliseconds: 900 * (attempt + 1)));
             }
           }
-          throw MediaGenError('provider ${(last is DioException) ? (last.response?.statusCode ?? 'unreachable') : 'unreachable'}');
+          // Last resort: hand the Pollinations URL to Image.network so the
+          // browser can paint the frame even when Dio byte-fetch is rate-limited.
+          final fallback = pollinationsUrl(prompt, f, model: r.remote, seed: math.Random().nextInt(1000000));
+          return MediaResult('image', url: fallback);
         case 'openrouter-image':
           return MediaResult('image', url: await _image(r, prompt, f, imageDataUris));
         case 'openrouter-video':
