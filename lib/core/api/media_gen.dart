@@ -378,13 +378,13 @@ class MediaGen {
 
   /// chat.ts generateImageUrl.
   static String pollinationsUrl(String prompt, GenFlags f, {String model = '', int? seed}) {
-    // Free-tier Pollinations 402s large portrait frames; keep the long edge ≤512.
+    // Free-tier Pollinations 402s large frames; keep the long edge ≤256.
     // Omit model= when empty — forcing flux/sana currently 402/503s the free tier.
     final full = arToSize(f.ar);
     final long = math.max(full.width, full.height);
-    final scale = long > 512 ? 512 / long : 1.0;
-    final w = math.max(256, (full.width * scale).round());
-    final h = math.max(256, (full.height * scale).round());
+    final scale = long > 256 ? 256 / long : 1.0;
+    final w = math.max(128, (full.width * scale).round());
+    final h = math.max(128, (full.height * scale).round());
     final sd = seed ?? math.Random().nextInt(1000000);
     final body = '${prompt.isEmpty ? 'abstract art' : prompt}${f.style != null && f.style != 'neutral' ? ', ${f.style}' : ''}';
     final neg = (f.negative ?? '').isNotEmpty ? '&negative=${Uri.encodeComponent(f.negative!)}' : '';
