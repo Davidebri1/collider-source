@@ -10,6 +10,7 @@ class AudioEngine {
   void play(String url) {
     if (_el == null) {
       _el = web.HTMLAudioElement();
+      _el!.crossOrigin = 'anonymous';
       _el!.setAttribute('data-collider-audio', '1');
       // Attach so the element is in the document (autoplay + playtests).
       web.document.body?.appendChild(_el!);
@@ -18,8 +19,10 @@ class AudioEngine {
     if (_src != url) {
       _src = url;
       _el!.src = url;
+      _el!.load();
     }
-    _el!.play();
+    // Ignore autoplay rejection; UI still shows playing and a user gesture retries.
+    _el!.play().toDart.catchError((_) => null);
   }
 
   void pause() => _el?.pause();
