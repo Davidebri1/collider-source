@@ -297,6 +297,31 @@ class _SgPaneState extends State<SgPane> {
             }
           });
         }
+        if (q['sg'] == 'vision') {
+          store.touch(() {
+            final pins = <(String, String)>[
+              ('Mood board', kHarnessImg_mood),
+              ('Cover shot', kHarnessImg_cover),
+              ('Desk still', kHarnessImg_desk),
+              ('City walk', kHarnessImg_city),
+              ('Sky study', kHarnessImg_sky),
+              ('Leaf detail', kHarnessImg_leaf),
+              ('Night skyline', kHarnessImg_night),
+              ('Bloom study', kHarnessImg_bloom),
+            ];
+            while (b.cards.length < pins.length) {
+              store.addCard(SgType.task);
+            }
+            for (var i = 0; i < pins.length; i++) {
+              final c = b.cards[i];
+              c.title = pins[i].$1;
+              c.color = [0xFFEB5A46, 0xFF0079BF, 0xFF61BD4F, 0xFFF2D600, 0xFFC377E0, 0xFFFF9F1A, 0xFF00C2E0, 0xFF344563][i % 8];
+              c.files
+                ..clear()
+                ..add(SgFile(id: 'vis$i', name: 'vision$i.png', dataUrl: pins[i].$2, cardId: c.id));
+            }
+          });
+        }
         if (q['sg'] == 'storyboard') {
           store.touch(() {
             final beats = [

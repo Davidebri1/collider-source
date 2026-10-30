@@ -945,13 +945,26 @@ class _SgAlbumState extends State<SgAlbum> {
   }
 }
 
-class SgStory extends StatelessWidget {
+class SgStory extends StatefulWidget {
   const SgStory({super.key, required this.store, required this.onOpen});
   final SgStore store;
   final void Function(SgCard) onOpen;
+  /// Same peek math as kanban lists: ~85% frame, next frame peeks.
+  static const double frameFraction = 0.85;
+  @override
+  State<SgStory> createState() => _SgStoryState();
+}
+
+class _SgStoryState extends State<SgStory> {
+  late final PageController _pages = PageController(viewportFraction: SgStory.frameFraction);
+  @override
+  void dispose() {
+    _pages.dispose();
+    super.dispose();
+  }
   @override
   Widget build(BuildContext context) {
-    final cards = store.board!.cards;
+    final cards = widget.store.board!.cards;
     return ColoredBox(
       color: const Color(0xFF0E1016),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -964,50 +977,54 @@ class SgStory extends StatelessWidget {
           ]),
         ),
         Expanded(
-          child: LayoutBuilder(builder: (context, box) {
-            final h = box.maxHeight;
-            return ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.fromLTRB(10, 4, 10, 14),
+          child: ScrollConfiguration(
+            behavior: const SgScroll(),
+            child: PageView.builder(
+              controller: _pages,
               itemCount: cards.length,
+              padEnds: false,
               itemBuilder: (_, i) {
                 final c = cards[i];
-                return GestureDetector(
-                  onTap: () => onOpen(c),
-                  child: Container(
-                    width: 176,
-                    height: h - 18,
-                    margin: const EdgeInsets.only(right: 10),
-                    decoration: BoxDecoration(
-                      color: const Color(0x22FFFFFF),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0x33FFFFFF)),
-                    ),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                      Container(
-                        height: 28,
-                        alignment: Alignment.centerLeft,
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        decoration: BoxDecoration(color: Color(c.color | 0xFF000000), borderRadius: const BorderRadius.vertical(top: Radius.circular(12))),
-                        child: Text('Frame ${i + 1}', style: appFont(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
+                // Same inset as kanban columns so the next frame peeks ~15%.
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+                  child: GestureDetector(
+                    onTap: () => widget.onOpen(c),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: const Color(0xCC2A2D35),
+                        borderRadius: BorderRadius.circular(14),
                       ),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.all(10),
-                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Text(c.title, maxLines: 3, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
-                            const SizedBox(height: 8),
-                            Expanded(child: Text(c.description.isEmpty ? 'Beat notes…' : c.description, maxLines: 20, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 12, color: Colors.white70))),
-                          ]),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                        Container(
+                          height: 32,
+                          alignment: Alignment.centerLeft,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: Color(c.color | 0xFF000000),
+                            borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+                          ),
+                          child: Text('Frame ${i + 1}', style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
                         ),
-                      ),
-                      Container(height: 10, margin: const EdgeInsets.fromLTRB(10, 0, 10, 10), decoration: BoxDecoration(color: const Color(0x33FFFFFF), borderRadius: BorderRadius.circular(4))),
-                    ]),
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
+                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Text(c.title, maxLines: 3, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+                              const SizedBox(height: 10),
+                              Text(c.description.isEmpty ? 'Beat notes…' : c.description, maxLines: 12, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 13, color: Colors.white70)),
+                              const Spacer(),
+                              Text('SHOT ${i + 1}', style: appFont(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0x99FFFFFF), letterSpacing: 1.4)),
+                            ]),
+                          ),
+                        ),
+                      ]),
+                    ),
                   ),
                 );
               },
-            );
-          }),
+            ),
+          ),
         ),
       ]),
     );
@@ -1021,7 +1038,6 @@ class SgVision extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cards = store.board!.cards;
-    final sizes = [(160.0, 130.0), (120.0, 100.0), (140.0, 150.0), (110.0, 90.0), (150.0, 120.0)];
     return ColoredBox(
       color: const Color(0xFF141018),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -1034,36 +1050,80 @@ class SgVision extends StatelessWidget {
           ]),
         ),
         Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(10, 4, 10, 14),
-            child: Wrap(spacing: 8, runSpacing: 8, children: [
-              for (var i = 0; i < cards.length; i++)
-                GestureDetector(
-                  onTap: () => onOpen(cards[i]),
-                  child: Transform.rotate(
-                    angle: i.isEven ? -0.03 : 0.04,
-                    child: Container(
-                      width: sizes[i % sizes.length].$1,
-                      height: sizes[i % sizes.length].$2,
-                      decoration: BoxDecoration(
-                        color: const Color(0x28FFFFFF),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Color(cards[i].color | 0xFF000000), width: 2),
-                        boxShadow: const [BoxShadow(color: Color(0x66000000), blurRadius: 8, offset: Offset(0, 3))],
-                      ),
-                      padding: const EdgeInsets.all(8),
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Container(height: 6, width: 36, decoration: BoxDecoration(color: Color(cards[i].color | 0xFF000000), borderRadius: BorderRadius.circular(3))),
-                        const SizedBox(height: 8),
-                        Expanded(child: Text(cards[i].title, maxLines: 4, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white))),
-                      ]),
-                    ),
-                  ),
-                ),
-            ]),
-          ),
+          child: LayoutBuilder(builder: (context, box) {
+            // Two-column masonry: alternate tall / short tiles, image bg when available.
+            final gap = 8.0;
+            final colW = (box.maxWidth - 20 - gap) / 2;
+            final left = <Widget>[];
+            final right = <Widget>[];
+            for (var i = 0; i < cards.length; i++) {
+              final tall = i.isEven;
+              final h = tall ? colW * 1.35 : colW * 0.92;
+              final tile = _visionTile(cards[i], colW, h);
+              (i.isEven ? left : right).add(Padding(padding: EdgeInsets.only(bottom: gap), child: tile));
+            }
+            return SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(10, 4, 10, 14),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(width: colW, child: Column(children: left)),
+                  SizedBox(width: gap),
+                  SizedBox(width: colW, child: Column(children: [
+                    SizedBox(height: gap * 1.5), // stagger short column
+                    ...right,
+                  ])),
+                ],
+              ),
+            );
+          }),
         ),
       ]),
+    );
+  }
+
+  Widget _visionTile(SgCard c, double w, double h) {
+    final img = _firstImage(c);
+    return GestureDetector(
+      onTap: () => onOpen(c),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: SizedBox(
+          width: w,
+          height: h,
+          child: Stack(fit: StackFit.expand, children: [
+            if (img != null)
+              Image.memory(_bytes(img.dataUrl), fit: BoxFit.cover, gaplessPlayback: true, errorBuilder: (_, __, ___) => ColoredBox(color: Color(c.color | 0xFF000000)))
+            else
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(c.color | 0xFF000000), Color.lerp(Color(c.color | 0xFF000000), Colors.black, 0.45)!],
+                  ),
+                ),
+              ),
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0x22000000), Color(0xAA000000)],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(10),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Container(height: 4, width: 28, decoration: BoxDecoration(color: Color(c.color | 0xFF000000), borderRadius: BorderRadius.circular(2))),
+                const Spacer(),
+                Text(c.title, maxLines: 3, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
+              ]),
+            ),
+          ]),
+        ),
+      ),
     );
   }
 }
