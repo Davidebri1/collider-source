@@ -1,5 +1,8 @@
 import 'dart:async';
 
+import 'dart:convert';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_font.dart';
@@ -20,6 +23,8 @@ class SgPane extends StatefulWidget {
 class _SgPaneState extends State<SgPane> {
   final SgStore store = SgStore.instance;
   String? _openId;
+  String? _liftCardId;
+  String? _forceHotListId;
   bool _multi = false;
   bool _menu = false;
   bool _armedDelete = false;
@@ -35,6 +40,11 @@ class _SgPaneState extends State<SgPane> {
   final GlobalKey _membersKey = GlobalKey();
   final GlobalKey _checkKey = GlobalKey();
   final GlobalKey _filesKey = GlobalKey();
+  final GlobalKey _jobKey = GlobalKey();
+  final GlobalKey _embedKey = GlobalKey();
+  final GlobalKey _hideKey = GlobalKey();
+  final GlobalKey _typeKey = GlobalKey();
+  final GlobalKey _priorityKey = GlobalKey();
   final Set<String> _toasted = {};
   Timer? _notes;
   Timer? _hour;
@@ -160,6 +170,80 @@ class _SgPaneState extends State<SgPane> {
             }
           });
         }
+
+        // Capture-only extras: job fields, embeds, attachments, cover photo, history.
+        if (q['job'] == '1' && b.cards.isNotEmpty) {
+          store.touch(() {
+            final c = b.cards.first;
+            c.type = SgType.job;
+            c.company = 'Northwind Labs';
+            c.positionTitle = 'Product designer';
+            c.jobStart = '2024-01';
+            c.jobEnd = 'Present';
+            c.responsibilities = 'Ship the board experience';
+            c.achievements = 'Cut review time in half';
+            c.priority = 2;
+            c.assignee = 'Alex';
+            c.tags.addAll(['design', 'ship']);
+            c.notebook = 'Page one notes\n---\nPage two outline';
+            c.triggers = 'done-final';
+          });
+        }
+        if (q['embed'] == '1' && b.cards.length >= 2) {
+          store.touch(() {
+            if (!b.cards.first.embeds.contains(b.cards[1].id)) {
+              b.cards.first.embeds.add(b.cards[1].id);
+            }
+          });
+        }
+        if (q['files'] == '1' && b.cards.isNotEmpty) {
+          store.touch(() {
+            final c = b.cards.first;
+            c.files
+              ..clear()
+              ..addAll([
+                SgFile(id: 'img1', name: 'mood.png', dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAABICAIAAACyfKYoAAAAeElEQVR42u3QQQ0AAAgEoCtmJ+vY1hT6YiMBqWkeRIFo0YgWLdqCaNGIFi3agmjRiBYtGtGiES1aNKJFI1q0aESLRrRo0YgWjWjRohEtGtGiRSNaNKJFi0a0aESLFo1o0YgWLRrRohEtWjSiRSNatGhEi0a0aNFcWVTa/PcNgRavAAAAAElFTkSuQmCC', cardId: c.id),
+                SgFile(id: 'vid1', name: 'walkthrough.mp4', dataUrl: 'data:video/mp4;base64,AAAA', cardId: c.id),
+                SgFile(id: 'doc1', name: 'brief.pdf', dataUrl: 'data:application/pdf;base64,JVBERi0=', cardId: c.id),
+              ]);
+          });
+        }
+        if (q['coverphoto'] == '1' && b.cards.isNotEmpty) {
+          store.touch(() {
+            final c = b.cards.first;
+            c.files.removeWhere((x) => x.name.startsWith('cover.'));
+            c.files.insert(0, SgFile(id: 'covercap', name: 'cover.png', dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAABICAIAAACyfKYoAAAAeElEQVR42u3QQQ0AAAgEoCtmJ+vY1hT6YiMBqWkeRIFo0YgWLdqCaNGIFi3agmjRiBYtGtGiES1aNKJFI1q0aESLRrRo0YgWjWjRohEtGtGiRSNaNKJFi0a0aESLFo1o0YgWLRrRohEtWjSiRSNatGhEi0a0aNFcWVTa/PcNgRavAAAAAElFTkSuQmCC', cardId: c.id));
+            c.color = 0xFF344563;
+          });
+        }
+        if (q['history'] == '1') {
+          store.rememberHistory('list', 'To Do');
+          store.rememberHistory('list', 'Doing');
+          store.rememberHistory('status', 'Doing');
+        }
+        if (q['hide'] == '1' && b.cards.isNotEmpty) {
+          store.touch(() {
+            b.cards.first.hiddenKeys.addAll({'description', 'tags'});
+            b.cards.first.hiddenNotes = 'Private salary note';
+          });
+        }
+        if (q['geniehist'] == '1') {
+          store.askGenie('set all priority to high');
+          store.askGenie('refactor task as note');
+        }
+        if (q['canvases'] == '1') {
+          for (var i = b.canvases.length; i < 3; i++) {
+            store.addCanvas('Canvas ${i + 1}', 'Glass');
+          }
+          store.touch(() => b.surface = SgSurface.canvas);
+        }
+        if (q['multiboard'] == '1') {
+          if (store.boards.length < 2) {
+            store.createBoard('Personal', goHome: true);
+            store.createBoard('Work', goHome: true);
+          }
+          store.goHome();
+        }
         final due = q['due'];
         if (due != null && b.cards.isNotEmpty && q['rich'] != '1') {
           final mins = int.tryParse(due) ?? 30;
@@ -203,7 +287,21 @@ class _SgPaneState extends State<SgPane> {
       }
       if (sg == 'home') store.goHome();
       if (sg == 'drag' && b.cards.isNotEmpty) {
-        // Leave board open; capture script long-presses.
+        // Capture-readable mid-drag: lifted ghost + highlighted Doing column.
+        _liftCardId = b.cards.first.id;
+        final doing = b.orderedLists.where((l) => l.title == 'Doing').firstOrNull;
+        _forceHotListId = doing?.id ?? (b.orderedLists.length > 1 ? b.orderedLists[1].id : b.orderedLists.first.id);
+      }
+      if (sg == 'canvas11') {
+        while (b.canvases.length < 10) {
+          store.addCanvas('Canvas ${b.canvases.length + 1}', 'Glass');
+        }
+        store.touch(() => b.surface = SgSurface.canvas);
+        final ok = store.addCanvas('too many', 'Glass');
+        if (!ok) _showToast(store.notice, red: false, holdMs: 12000);
+      }
+      if (q['panel'] == 'attachments' || q['files'] == '1') {
+        // open editor already set via sg=editor; sections always visible
       }
       final kp = q['kpage'];
       if (kp == 'last') {
@@ -225,6 +323,21 @@ class _SgPaneState extends State<SgPane> {
     _notes = Timer.periodic(const Duration(seconds: 30), (_) => _checkNotes());
     _hour = Timer.periodic(const Duration(hours: 1), (_) => store.applyHourly());
     setState(() {});
+    // Capture-only: scroll the open editor to the section under test.
+    final panel = q['panel'] ?? '';
+    if (_openId != null && (panel.isNotEmpty || q['job'] == '1' || q['files'] == '1' || q['embed'] == '1' || q['hide'] == '1' || q['history'] == '1')) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (!mounted) return;
+          if (q['job'] == '1' || panel == 'job') _reveal(_jobKey);
+          else if (q['files'] == '1' || panel == 'attachments') _reveal(_filesKey);
+          else if (q['embed'] == '1' || panel == 'embeds') _reveal(_embedKey);
+          else if (q['hide'] == '1' || panel == 'hide') _reveal(_hideKey);
+          else if (q['history'] == '1' || panel == 'history') _reveal(_typeKey);
+          else if (panel == 'priority') _reveal(_priorityKey);
+        });
+      });
+    }
   }
 
   void _onStore() {
@@ -293,14 +406,26 @@ class _SgPaneState extends State<SgPane> {
                   children: [
                     _header(b!),
                     _viewChips(b),
-                    if (b.surface == SgSurface.canvas) _canvasChips(b),
+                    _canvasChips(b),
                     Expanded(child: _body(b)),
                     if (_multi) _bulkBar(b),
                   ],
                 ),
                 // Float over the list body, never over the board header / view tabs.
-                if (_toast.isNotEmpty)
-                  Positioned(left: 8, right: 8, bottom: 12, child: _toastBar()),
+                Positioned(
+                  left: 8,
+                  right: 8,
+                  bottom: 12,
+                  child: AnimatedSlide(
+                    duration: const Duration(milliseconds: 220),
+                    offset: _toast.isEmpty ? const Offset(0, 0.4) : Offset.zero,
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 220),
+                      opacity: _toast.isEmpty ? 0 : 1,
+                      child: _toast.isEmpty ? const SizedBox.shrink() : _toastBar(),
+                    ),
+                  ),
+                ),
               ]),
       ),
     );
@@ -502,11 +627,17 @@ class _SgPaneState extends State<SgPane> {
               for (var i = 0; i < b.canvases.length; i++)
                 Padding(
                   padding: const EdgeInsets.only(left: 4),
-                  child: _glassChoice(
-                    label: '${i + 1} ${b.canvases[i].name}',
-                    selected: b.canvasIndex == i,
-                    size: 11,
-                    onSelected: (_) => store.touch(() => b.canvasIndex = i),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Color(b.canvases[i].color), width: 2),
+                    ),
+                    child: _glassChoice(
+                      label: '${i + 1} ${b.canvases[i].name}',
+                      selected: b.canvasIndex == i,
+                      size: 11,
+                      onSelected: (_) => store.touch(() => b.canvasIndex = i),
+                    ),
                   ),
                 ),
             ]),
@@ -569,6 +700,7 @@ class _SgPaneState extends State<SgPane> {
                 }),
               ),
           ]),
+          _toggle('Auto arrange', b.autoArrange, (v) => store.touch(() => b.autoArrange = v)),
           _toggle('Auto sort', b.autoSort, (v) => store.touch(() => b.autoSort = v)),
           _toggle('Hide complete', b.autoFilterComplete, (v) => store.touch(() => b.autoFilterComplete = v)),
           _toggle('Inherit column status', b.inheritColumnStatus, (v) => store.touch(() => b.inheritColumnStatus = v)),
@@ -613,7 +745,7 @@ class _SgPaneState extends State<SgPane> {
     if (_overlay == 'editor-bulk') return _bulkEdit(b);
     if (_menu) return _menuBody(b);
     if (open != null) return _editor(b, open);
-    return SgSurfaceView(store: store, onOpen: _open, multi: _multi, selected: _selected, forceFlip: _forceFlip, kanbanPage: _kanbanPage, onSelect: (c) => setState(() => _selected.contains(c.id) ? _selected.remove(c.id) : _selected.add(c.id)));
+    return SgSurfaceView(store: store, onOpen: _open, multi: _multi, selected: _selected, forceFlip: _forceFlip, kanbanPage: _kanbanPage, forceHotListId: _forceHotListId, liftCardId: _liftCardId, onSelect: (c) => setState(() => _selected.contains(c.id) ? _selected.remove(c.id) : _selected.add(c.id)));
   }
 
   Widget _create() {
@@ -738,6 +870,26 @@ class _SgPaneState extends State<SgPane> {
         ),
       ),
       Row(children: [
+        Tooltip(
+          message: 'Attach a file',
+          child: IconButton(
+            onPressed: () async {
+              final res = await FilePicker.platform.pickFiles(withData: true);
+              if (res == null || res.files.isEmpty) return;
+              final f = res.files.first;
+              final bytes = f.bytes;
+              if (bytes == null) return;
+              final b64 = base64Encode(bytes);
+              final mime = f.extension == 'png' ? 'image/png' : (f.extension == 'jpg' || f.extension == 'jpeg' ? 'image/jpeg' : 'application/octet-stream');
+              final dataUrl = 'data:$mime;base64,$b64';
+              final text = _genieInput.text.trim().isEmpty ? 'See attachment' : _genieInput.text.trim();
+              store.askGenie(text, attachment: '${f.name}|$dataUrl');
+              _genieInput.clear();
+              setState(() {});
+            },
+            icon: const Icon(Icons.attach_file, color: Colors.white, size: 18),
+          ),
+        ),
         Expanded(child: TextField(controller: _genieInput, style: appFont(color: Colors.white, fontSize: 13), decoration: const InputDecoration(hintText: 'Message Genie', hintStyle: TextStyle(color: Colors.white38)))),
         Tooltip(message: 'Send', child: IconButton(onPressed: () {
           final t = _genieInput.text.trim();
@@ -809,7 +961,7 @@ class _SgPaneState extends State<SgPane> {
         Row(children: [
           Icon(icon, size: 18, color: _ink),
           const SizedBox(width: 8),
-          Text(title, style: appFont(fontSize: 16, fontWeight: FontWeight.w700, color: _ink)),
+          Expanded(child: Text(title, style: appFont(fontSize: 16, fontWeight: FontWeight.w700, color: _ink), overflow: TextOverflow.ellipsis)),
         ]),
         const SizedBox(height: 8),
         ...children,
@@ -909,6 +1061,14 @@ class _SgPaneState extends State<SgPane> {
                     child: Text('None', style: appFont(fontSize: 15, fontWeight: FontWeight.w600, color: _ink)),
                   ),
                 ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () => _attachCoverPhoto(c),
+                    icon: const Icon(Icons.photo_library_outlined, color: _ink, size: 18),
+                    label: Text('From photo', style: appFont(fontSize: 15, fontWeight: FontWeight.w600, color: _ink)),
+                  ),
+                ),
               ],
             ),
           ),
@@ -978,6 +1138,28 @@ class _SgPaneState extends State<SgPane> {
             _section(Icons.notes_rounded, 'Description', [
               _field('Description', c.description, (v) => store.touch(() => c.description = v), lines: 3, color: _ink),
             ]),
+            if (c.embeds.isNotEmpty)
+              _section(Icons.dashboard_customize_outlined, 'Embedded cards', [
+                Wrap(spacing: 6, runSpacing: 6, children: [
+                  for (final id in c.embeds)
+                    if (store.byId(id) != null)
+                      ActionChip(
+                        key: ValueKey('embed-top-$id'),
+                        avatar: const Icon(Icons.link, size: 14, color: _ink),
+                        label: Text(store.byId(id)!.title, style: appFont(fontSize: 13, color: _ink)),
+                        onPressed: () => _open(store.byId(id)!),
+                      ),
+                ]),
+              ], key: _embedKey),
+            if (c.type == SgType.job)
+              _section(Icons.work_outline, 'Role', [
+                _field('Company', c.company, (v) => store.touch(() => c.company = v), color: _ink),
+                _field('Position', c.positionTitle, (v) => store.touch(() => c.positionTitle = v), color: _ink),
+                _field('Start', c.jobStart, (v) => store.touch(() => c.jobStart = v), color: _ink),
+                _field('End', c.jobEnd, (v) => store.touch(() => c.jobEnd = v), color: _ink),
+                _field('Responsibilities', c.responsibilities, (v) => store.touch(() => c.responsibilities = v), lines: 2, color: _ink),
+                _field('Achievements', c.achievements, (v) => store.touch(() => c.achievements = v), lines: 2, color: _ink),
+              ], key: _jobKey),
             _section(Icons.view_column_outlined, 'List', [
               _addNew('List', b.orderedLists.map((l) => l.title).toList(), c.status, (name) {
                 final list = b.lists.where((l) => l.title == name).firstOrNull;
@@ -1010,8 +1192,16 @@ class _SgPaneState extends State<SgPane> {
               }, color: _ink),
             ], key: _checkKey),
             _section(Icons.attach_file, 'Attachments', [
-              for (final f in c.files) Text(f.name, style: appFont(fontSize: 14, color: _ink)),
+              for (final f in c.files) _attachmentTile(f),
               if (c.files.isEmpty) Text('No attachments', style: appFont(fontSize: 14, color: _muted)),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => _pickAttachment(c),
+                  icon: const Icon(Icons.attach_file, color: _ink, size: 18),
+                  label: Text('Attach a file', style: appFont(fontSize: 14, fontWeight: FontWeight.w600, color: _ink)),
+                ),
+              ),
             ], key: _filesKey),
             _section(Icons.chat_bubble_outline, 'Activity', [
               for (final a in c.activity.reversed.take(8))
@@ -1038,7 +1228,7 @@ class _SgPaneState extends State<SgPane> {
                     }),
                   ),
               ]),
-            ]),
+            ], key: _typeKey),
             _section(Icons.label_outline, 'Labels', [
               Wrap(spacing: 4, children: [
                 for (final l in b.labels)
@@ -1057,6 +1247,16 @@ class _SgPaneState extends State<SgPane> {
               }, color: _ink),
               _field('Assignee', c.assignee, (v) => store.touch(() => c.assignee = v), color: _ink),
             ], key: _membersKey),
+            _section(Icons.flag_outlined, 'Priority', [
+              Wrap(spacing: 6, children: [
+                for (final p in [0, 1, 2, 3])
+                  ChoiceChip(
+                    label: Text(p == 0 ? 'None' : '$p', style: appFont(fontSize: 12, color: _ink)),
+                    selected: c.priority == p,
+                    onSelected: (_) => store.touch(() => c.priority = p),
+                  ),
+              ]),
+            ], key: _priorityKey),
             _section(Icons.bolt_outlined, 'Triggers', [
               _toggle('When the card is finished', _hasTrigger(c, 'done-final'), (v) => store.touch(() => _setTrigger(c, 'done-final', v)), color: _ink),
               _toggle('Each hour', _hasTrigger(c, 'hourly'), (v) => store.touch(() => _setTrigger(c, 'hourly', v)), color: _ink),
@@ -1064,14 +1264,37 @@ class _SgPaneState extends State<SgPane> {
               _toggle('Use the list name as the status', c.inherit, (v) => store.touch(() => c.inherit = v), color: _ink),
             ]),
             _section(Icons.dashboard_customize_outlined, 'Embeds', [
-              for (final id in c.embeds)
-                if (store.byId(id) != null)
-                  TextButton(onPressed: () => _open(store.byId(id)!), child: Align(alignment: Alignment.centerLeft, child: Text(store.byId(id)!.title, style: appFont(color: _ink, fontSize: 14)))),
-              _addNew('Add a card', [for (final o in b.cards) if (o.id != c.id) o.title], '', (name) {
+              Wrap(spacing: 6, runSpacing: 6, children: [
+                for (final id in c.embeds)
+                  if (store.byId(id) != null)
+                    ActionChip(
+                      key: ValueKey('embed-$id'),
+                      avatar: const Icon(Icons.link, size: 14, color: _ink),
+                      label: Text(store.byId(id)!.title, style: appFont(fontSize: 13, color: _ink)),
+                      onPressed: () => _open(store.byId(id)!),
+                    ),
+              ]),
+              _addNew('Embed', [for (final o in b.cards) if (o.id != c.id) o.title], '', (name) {
                 final other = b.cards.where((o) => o.title == name).firstOrNull;
                 if (other != null && !c.embeds.contains(other.id)) store.touch(() => c.embeds.add(other.id));
               }, (_) {}, color: _ink),
             ]),
+            _section(Icons.visibility_off_outlined, 'Hide attributes', [
+              for (final key in const ['description', 'due', 'labels', 'members', 'checklist', 'attachments', 'tags'])
+                _toggle(
+                  key,
+                  c.attrHidden(key),
+                  (v) => store.touch(() {
+                    if (v) {
+                      c.hiddenKeys.add(key);
+                    } else {
+                      c.hiddenKeys.remove(key);
+                    }
+                  }),
+                  color: _ink,
+                ),
+              Text('Hidden attributes grey out and move to the card back.', style: appFont(fontSize: 12, color: _muted)),
+            ], key: _hideKey),
             if (c.hasHidden || c.hiddenNotes.isNotEmpty)
               _section(Icons.flip_to_back_rounded, 'Hidden notes', [
                 _field('Private note', c.hiddenNotes, (v) => store.touch(() => c.hiddenNotes = v), lines: 2, color: _ink),
@@ -1086,15 +1309,7 @@ class _SgPaneState extends State<SgPane> {
                   ..addAll(v.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty));
               }), color: _ink),
             ]),
-            if (c.type == SgType.job)
-              _section(Icons.work_outline, 'Role', [
-                _field('Company', c.company, (v) => store.touch(() => c.company = v), color: _ink),
-                _field('Position', c.positionTitle, (v) => store.touch(() => c.positionTitle = v), color: _ink),
-                _field('Start', c.jobStart, (v) => store.touch(() => c.jobStart = v), color: _ink),
-                _field('End', c.jobEnd, (v) => store.touch(() => c.jobEnd = v), color: _ink),
-                _field('Responsibilities', c.responsibilities, (v) => store.touch(() => c.responsibilities = v), lines: 2, color: _ink),
-                _field('Achievements', c.achievements, (v) => store.touch(() => c.achievements = v), lines: 2, color: _ink),
-              ]),
+
             TextButton(
               onPressed: () {
                 store.removeCards([c.id]);
@@ -1137,6 +1352,96 @@ class _SgPaneState extends State<SgPane> {
     };
   }
 
+
+  Future<void> _pickAttachment(SgCard c) async {
+    final res = await FilePicker.platform.pickFiles(withData: true);
+    if (res == null || res.files.isEmpty || !mounted) return;
+    final f = res.files.first;
+    final bytes = f.bytes;
+    if (bytes == null) return;
+    final b64 = base64Encode(bytes);
+    final ext = (f.extension ?? '').toLowerCase();
+    final mime = switch (ext) {
+      'png' => 'image/png',
+      'jpg' || 'jpeg' => 'image/jpeg',
+      'webp' => 'image/webp',
+      'gif' => 'image/gif',
+      'mp4' => 'video/mp4',
+      'webm' => 'video/webm',
+      _ => 'application/octet-stream',
+    };
+    store.touch(() {
+      c.files.add(SgFile(id: 'f${c.files.length}${f.name.hashCode}', name: f.name, dataUrl: 'data:$mime;base64,$b64', cardId: c.id));
+    });
+  }
+
+  Future<void> _attachCoverPhoto(SgCard c) async {
+    final res = await FilePicker.platform.pickFiles(type: FileType.image, withData: true);
+    if (res == null || res.files.isEmpty || !mounted) return;
+    final f = res.files.first;
+    final bytes = f.bytes;
+    if (bytes == null) return;
+    final b64 = base64Encode(bytes);
+    final ext = (f.extension ?? 'png').toLowerCase();
+    final mime = ext == 'jpg' || ext == 'jpeg' ? 'image/jpeg' : 'image/png';
+    store.touch(() {
+      c.files.removeWhere((x) => x.name.startsWith('cover.'));
+      c.files.insert(0, SgFile(id: 'cover${c.id}', name: 'cover.$ext', dataUrl: 'data:$mime;base64,$b64', cardId: c.id));
+      if (c.color == 0) c.color = 0xFF344563;
+    });
+  }
+
+  Widget _attachmentTile(SgFile f) {
+    final lower = f.name.toLowerCase();
+    final isImage = lower.endsWith('.png') || lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.webp') || lower.endsWith('.gif') || f.dataUrl.startsWith('data:image');
+    final isVideo = lower.endsWith('.mp4') || lower.endsWith('.webm') || lower.endsWith('.mov') || f.dataUrl.startsWith('data:video');
+    if (isImage) {
+      try {
+        final b64 = f.dataUrl.contains(',') ? f.dataUrl.split(',').last : '';
+        final bytes = base64Decode(b64);
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.memory(bytes, height: 96, width: double.infinity, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _fileIconRow(f)),
+            ),
+            Text(f.name, style: appFont(fontSize: 12, color: _muted)),
+          ]),
+        );
+      } catch (_) {
+        return _fileIconRow(f);
+      }
+    }
+    if (isVideo) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Container(
+          key: ValueKey('video-${f.id}'),
+          height: 96,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(color: const Color(0x33000000), borderRadius: BorderRadius.circular(8), border: Border.all(color: _line)),
+          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+            const Icon(Icons.play_circle_outline, color: _ink, size: 36),
+            Text(f.name, style: appFont(fontSize: 12, color: _ink)),
+          ]),
+        ),
+      );
+    }
+    return _fileIconRow(f);
+  }
+
+  Widget _fileIconRow(SgFile f) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(children: [
+        const Icon(Icons.insert_drive_file_outlined, color: _ink, size: 20),
+        const SizedBox(width: 8),
+        Expanded(child: Text(f.name, style: appFont(fontSize: 14, color: _ink))),
+      ]),
+    );
+  }
+
   Widget _field(String label, String value, ValueChanged<String> onSubmit, {int lines = 1, Color color = Colors.white}) {
     return Padding(
       padding: const EdgeInsets.only(top: 6),
@@ -1151,8 +1456,23 @@ class _SgPaneState extends State<SgPane> {
     );
   }
 
-  Widget _addNew(String label, List<String> options, String current, ValueChanged<String> onPick, ValueChanged<String> onCreate, {Color color = Colors.white}) {
-    return _OptionRow(label: label, options: options, current: current, onPick: onPick, onCreate: onCreate, color: color);
+  Widget _addNew(String label, List<String> options, String current, ValueChanged<String> onPick, ValueChanged<String> onCreate, {Color color = Colors.white, String historyKey = ''}) {
+    final key = historyKey.isEmpty ? label.toLowerCase() : historyKey;
+    return _OptionRow(
+      label: label,
+      options: options,
+      current: current,
+      history: store.historyFor(key),
+      color: color,
+      onPick: (v) {
+        store.rememberHistory(key, v);
+        onPick(v);
+      },
+      onCreate: (v) {
+        store.rememberHistory(key, v);
+        onCreate(v);
+      },
+    );
   }
 
   Widget _bulkEdit(SgBoard b) {
@@ -1233,13 +1553,14 @@ class _SgPaneState extends State<SgPane> {
 }
 
 class _OptionRow extends StatefulWidget {
-  const _OptionRow({required this.label, required this.options, required this.current, required this.onPick, required this.onCreate, this.color = Colors.white});
+  const _OptionRow({required this.label, required this.options, required this.current, required this.onPick, required this.onCreate, this.color = Colors.white, this.history = const []});
   final String label;
   final List<String> options;
   final String current;
   final ValueChanged<String> onPick;
   final ValueChanged<String> onCreate;
   final Color color;
+  final List<String> history;
   @override
   State<_OptionRow> createState() => _OptionRowState();
 }
@@ -1260,6 +1581,18 @@ class _OptionRowState extends State<_OptionRow> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(widget.label, style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: widget.color)),
         const SizedBox(height: 4),
+        if (widget.history.isNotEmpty) ...[
+          Text('Recent', style: appFont(fontSize: 11, color: widget.color.withValues(alpha: 0.7))),
+          const SizedBox(height: 2),
+          Wrap(spacing: 4, runSpacing: 4, children: [
+            for (final h in widget.history)
+              ActionChip(
+                label: Text(h, style: appFont(fontSize: 12, color: widget.color)),
+                onPressed: () => widget.onPick(h),
+              ),
+          ]),
+          const SizedBox(height: 4),
+        ],
         Wrap(spacing: 4, runSpacing: 4, children: [
           for (final o in widget.options)
             ChoiceChip(

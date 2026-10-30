@@ -161,15 +161,23 @@ class SgFace extends StatelessWidget {
     final tinted = card.color != 0;
     final wash = tinted ? Color.alphaBlend(Color(card.color).withValues(alpha: 0.40), _glass) : _glass;
     if (back) {
+      final hidden = [
+        if (card.hiddenNotes.isNotEmpty) card.hiddenNotes,
+        for (final k in card.hiddenKeys) '$k (hidden)',
+      ];
       return Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(color: _glass, borderRadius: BorderRadius.circular(10), border: Border.all(color: _line)),
-        child: Text(card.hiddenNotes.isEmpty ? 'Hidden fields' : card.hiddenNotes, style: appFont(fontSize: 12, color: _ink)),
+        child: Text(hidden.isEmpty ? 'Hidden fields' : hidden.join('\n'), style: appFont(fontSize: 12, color: const Color(0xFFB0B0B0))),
       );
     }
-    final labels = [for (final id in card.labelIds) ...board.labels.where((l) => l.id == id)];
+    final labels = card.attrHidden('labels') ? <SgLabel>[] : [for (final id in card.labelIds) ...board.labels.where((l) => l.id == id)];
     final doneChecks = card.checks.where((k) => k.done).length;
-    final hasDesc = card.description.trim().isNotEmpty;
+    final hasDesc = !card.attrHidden('description') && card.description.trim().isNotEmpty;
+    final showDue = !card.attrHidden('due');
+    final showChecks = !card.attrHidden('checklist');
+    final showFiles = !card.attrHidden('attachments');
+    final showMembers = !card.attrHidden('members');
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(color: wash, borderRadius: BorderRadius.circular(10), border: Border.all(color: _line)),
@@ -193,7 +201,7 @@ class SgFace extends StatelessWidget {
               const SizedBox(height: 6),
             ],
             Text(card.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 14, fontWeight: FontWeight.w700, color: _ink)),
-            if (!compact && card.description.isNotEmpty) ...[
+            if (!compact && hasDesc) ...[
               const SizedBox(height: 4),
               Text(card.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 11, color: _muted)),
             ],
@@ -201,12 +209,15 @@ class SgFace extends StatelessWidget {
               Text('${card.company} · ${card.positionTitle}', maxLines: 1, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 10, color: _muted)),
             const SizedBox(height: 6),
             Wrap(spacing: 6, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
-              if (card.urgent && card.dueMs != null) SgClock(dueMs: card.dueMs!),
-              if (!card.urgent && card.dueMs != null) _dueChip(card.dueMs!),
-              if (card.urgent && card.dueMs == null) _pulse(),
-              if (card.checks.isNotEmpty) _meta(Icons.check_box_outlined, '$doneChecks/${card.checks.length}'),
-              if (card.files.isNotEmpty) _meta(Icons.attach_file, '${card.files.length}'),
+              if (showDue && card.urgent && card.dueMs != null) SgClock(dueMs: card.dueMs!),
+              if (showDue && !card.urgent && card.dueMs != null) _dueChip(card.dueMs!),
+              if (showDue && card.urgent && card.dueMs == null) _pulse(),
+              if (showChecks && card.checks.isNotEmpty) _meta(Icons.check_box_outlined, '$doneChecks/${card.checks.length}'),
+              if (showFiles && card.files.isNotEmpty) _meta(Icons.attach_file, '${card.files.length}'),
               if (hasDesc) const Icon(Icons.notes_rounded, size: 14, color: _muted),
+              for (final k in card.hiddenKeys)
+                Text(k, style: appFont(fontSize: 10, color: const Color(0x66FFFFFF), decoration: TextDecoration.lineThrough)),
+              if (showMembers)
               for (final m in card.members.take(3))
                 Container(
                   width: 18,
@@ -270,7 +281,7 @@ Uint8List _bytes(String dataUrl) {
 }
 
 class SgKanban extends StatefulWidget {
-  const SgKanban({super.key, required this.store, required this.onOpen, this.multi = false, this.selected = const {}, this.onSelect, this.initialPage = 0});
+  const SgKanban({super.key, required this.store, required this.onOpen, this.multi = false, this.selected = const {}, this.onSelect, this.initialPage = 0, this.forceHotListId, this.liftCardId});
   final SgStore store;
   final void Function(SgCard) onOpen;
   final bool multi;
@@ -279,6 +290,8 @@ class SgKanban extends StatefulWidget {
   /// Capture hook. 0 is the first list. A fraction such as 0.5 rests between
   /// two snap points. `orderedLists.length` is the "+ Add list" column.
   final double initialPage;
+  final String? forceHotListId;
+  final String? liftCardId;
 
   /// The column takes this share of the pane, so about 18% of the next list
   /// stays on screen. (1 - 0.85) / 0.85 ≈ 0.18.
@@ -348,20 +361,37 @@ class _SgKanbanState extends State<SgKanban> {
     final b = widget.store.board!;
     final lists = b.orderedLists;
     final count = lists.length + 1;
+    final lift = widget.liftCardId == null ? null : widget.store.byId(widget.liftCardId);
     return LayoutBuilder(builder: (context, box) {
       return SizedBox(
         height: box.maxHeight,
         width: box.maxWidth,
-        child: ScrollConfiguration(
-          behavior: const SgScroll(),
-          child: PageView.builder(
-            controller: _pages,
-            padEnds: false,
-            pageSnapping: !_holdBetween,
-            itemCount: count,
-            itemBuilder: (context, i) => i == lists.length ? _addList() : _column(b, lists[i]),
+        child: Stack(children: [
+          ScrollConfiguration(
+            behavior: const SgScroll(),
+            child: PageView.builder(
+              controller: _pages,
+              padEnds: false,
+              pageSnapping: !_holdBetween,
+              itemCount: count,
+              itemBuilder: (context, i) => i == lists.length ? _addList() : _column(b, lists[i]),
+            ),
           ),
-        ),
+          if (lift != null)
+            Positioned(
+              left: box.maxWidth * 0.28,
+              top: box.maxHeight * 0.28,
+              child: Material(
+                elevation: 16,
+                color: Colors.transparent,
+                shadowColor: Colors.black87,
+                child: SizedBox(
+                  width: box.maxWidth * 0.55,
+                  child: Transform.scale(scale: 1.08, child: SgFace(card: lift, board: b, compact: true)),
+                ),
+              ),
+            ),
+        ]),
       );
     });
   }
@@ -372,7 +402,7 @@ class _SgKanbanState extends State<SgKanban> {
       onWillAcceptWithDetails: (d) => widget.store.byId(d.data) != null,
       onAcceptWithDetails: (d) => widget.store.moveCard(d.data, list.id),
       builder: (context, candidate, _) {
-        final hot = candidate.isNotEmpty;
+        final hot = candidate.isNotEmpty || widget.forceHotListId == list.id;
         return Padding(
           padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
           child: DecoratedBox(
@@ -482,7 +512,12 @@ class _KanbanColumnState extends State<_KanbanColumn> {
       padding: const EdgeInsets.only(bottom: 6),
       child: LongPressDraggable<String>(
         data: c.id,
-        feedback: SizedBox(width: 150, child: Transform.scale(scale: 1.04, child: SgFace(card: c, board: widget.board, compact: true))),
+        feedback: Material(
+          elevation: 12,
+          color: Colors.transparent,
+          shadowColor: Colors.black54,
+          child: SizedBox(width: 150, child: Transform.scale(scale: 1.06, child: SgFace(card: c, board: widget.board, compact: true))),
+        ),
         childWhenDragging: Opacity(opacity: 0.35, child: SgFace(card: c, board: widget.board, compact: true)),
         child: GestureDetector(
           onTap: () => widget.multi ? widget.onSelect?.call(c) : widget.onOpen(c),
@@ -951,23 +986,41 @@ class SgFiles extends StatelessWidget {
   final void Function(SgCard) onOpen;
   @override
   Widget build(BuildContext context) {
-    final files = [for (final c in store.board!.cards) ...c.files];
+    final pairs = <(SgFile, SgCard)>[
+      for (final c in store.board!.cards)
+        for (final f in c.files) (f, c),
+    ];
     return sgScroll(
-      child: Column(children: [
-        for (final f in files)
-          ListTile(
-            dense: true,
-            leading: const Icon(Icons.insert_drive_file_outlined, color: Colors.white),
-            title: Text(f.name, style: appFont(fontSize: 13, color: Colors.white)),
-            subtitle: Text(store.byId(f.cardId)?.title ?? '', style: appFont(fontSize: 11, color: Colors.white70)),
-            onTap: () {
-              final c = store.byId(f.cardId);
-              if (c != null) onOpen(c);
-            },
-          ),
-        if (files.isEmpty) Text('No files yet', style: appFont(color: Colors.white70)),
-      ]),
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Column(children: [
+          for (final (f, c) in pairs)
+            ListTile(
+              dense: true,
+              leading: _fileLeading(f),
+              title: Text(f.name, style: appFont(fontSize: 13, color: Colors.white)),
+              subtitle: Text(c.title, style: appFont(fontSize: 11, color: Colors.white70)),
+              onTap: () => onOpen(c),
+            ),
+          if (pairs.isEmpty) Text('No files yet', style: appFont(color: Colors.white70)),
+        ]),
+      ),
     );
+  }
+
+  Widget _fileLeading(SgFile f) {
+    final lower = f.name.toLowerCase();
+    if (lower.endsWith('.png') || lower.endsWith('.jpg') || lower.endsWith('.jpeg') || f.dataUrl.startsWith('data:image')) {
+      try {
+        return ClipRRect(borderRadius: BorderRadius.circular(4), child: Image.memory(_bytes(f.dataUrl), width: 40, height: 40, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.image_outlined, color: Colors.white)));
+      } catch (_) {
+        return const Icon(Icons.image_outlined, color: Colors.white);
+      }
+    }
+    if (lower.endsWith('.mp4') || lower.endsWith('.webm') || f.dataUrl.startsWith('data:video')) {
+      return const Icon(Icons.videocam_outlined, color: Colors.white);
+    }
+    return const Icon(Icons.insert_drive_file_outlined, color: Colors.white);
   }
 }
 
@@ -1147,7 +1200,7 @@ class SgCanvasBoard extends StatelessWidget {
 }
 
 class SgSurfaceView extends StatelessWidget {
-  const SgSurfaceView({super.key, required this.store, required this.onOpen, this.multi = false, this.selected = const {}, this.onSelect, this.forceFlip = false, this.kanbanPage = 0});
+  const SgSurfaceView({super.key, required this.store, required this.onOpen, this.multi = false, this.selected = const {}, this.onSelect, this.forceFlip = false, this.kanbanPage = 0, this.forceHotListId, this.liftCardId});
   final SgStore store;
   final void Function(SgCard) onOpen;
   final bool multi;
@@ -1155,6 +1208,8 @@ class SgSurfaceView extends StatelessWidget {
   final void Function(SgCard)? onSelect;
   final bool forceFlip;
   final double kanbanPage;
+  final String? forceHotListId;
+  final String? liftCardId;
 
   @override
   Widget build(BuildContext context) {
@@ -1164,7 +1219,7 @@ class SgSurfaceView extends StatelessWidget {
     }
     final s = store.board!.surface;
     return switch (s) {
-      SgSurface.kanban => SgKanban(store: store, onOpen: onOpen, multi: multi, selected: selected, onSelect: onSelect, initialPage: kanbanPage),
+      SgSurface.kanban => SgKanban(store: store, onOpen: onOpen, multi: multi, selected: selected, onSelect: onSelect, initialPage: kanbanPage, forceHotListId: forceHotListId, liftCardId: liftCardId),
       SgSurface.calendar => SgCalendar(store: store, onOpen: onOpen),
       SgSurface.notebook => SgNotebook(store: store, onOpen: onOpen),
       SgSurface.album => SgAlbum(store: store, onOpen: onOpen),

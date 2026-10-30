@@ -334,6 +334,8 @@ class SgCard {
   double dy;
 
   bool get hasHidden => hiddenNotes.isNotEmpty || hiddenKeys.isNotEmpty;
+  bool attrHidden(String key) => hiddenKeys.contains(key);
+
   List<String> get pages => notebook.split('---').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
 
   bool matchesPlace(String name) {
@@ -504,6 +506,12 @@ class SgBoard {
     return copy;
   }
 
+  List<SgCard> get visibleCards {
+    if (!autoFilterComplete) return List<SgCard>.from(cards);
+    final last = orderedLists.isEmpty ? '' : orderedLists.last.title;
+    return [for (final c in cards) if (!(c.status == last && last.isNotEmpty)) c];
+  }
+
   Map<String, Object?> toJson() => {
         'id': id,
         'name': name,
@@ -579,6 +587,8 @@ class SgStore extends ChangeNotifier {
   final List<SgBoard> boards = [];
   String? activeBoardId;
   final List<SgMessage> genie = [];
+  /// Recent values per dropdown key (status/list/assignee/…).
+  final Map<String, List<String>> history = {};
   final List<String> _undo = [];
   final List<String> _redo = [];
   String notice = '';
@@ -617,6 +627,7 @@ class SgStore extends ChangeNotifier {
     boards.clear();
     activeBoardId = null;
     genie.clear();
+    history.clear();
     _undo.clear();
     _redo.clear();
     notice = '';
@@ -657,6 +668,15 @@ class SgStore extends ChangeNotifier {
             genie
               ..clear()
               ..addAll([for (final m in g) if (m is Map) SgMessage.fromJson(m.cast<String, Object?>())]);
+          }
+          final h = j['history'];
+          if (h is Map) {
+            history
+              ..clear()
+              ..addAll({
+                for (final e in h.entries)
+                  if (e.value is List) e.key.toString(): [for (final v in e.value as List) v.toString()],
+              });
           }
         }
       }
@@ -728,6 +748,7 @@ class SgStore extends ChangeNotifier {
         'activeBoardId': activeBoardId,
         'atHome': atHome,
         'genie': [for (final m in genie) m.toJson()],
+        'history': {for (final e in history.entries) e.key: e.value},
       });
 
   void _checkpoint() {
@@ -775,6 +796,15 @@ class SgStore extends ChangeNotifier {
     genie
       ..clear()
       ..addAll([for (final m in (j['genie'] as List?) ?? const []) if (m is Map) SgMessage.fromJson(m.cast<String, Object?>())]);
+        final h = j['history'];
+        if (h is Map) {
+          history
+            ..clear()
+            ..addAll({
+              for (final e in h.entries)
+                if (e.value is List) e.key.toString(): [for (final v in e.value as List) v.toString()],
+            });
+        }
   }
 
   void setNotice(String text) {
@@ -844,6 +874,7 @@ class SgStore extends ChangeNotifier {
   void touch(void Function() change) {
     _checkpoint();
     change();
+    applyBehaviors();
     _commit();
   }
 
@@ -903,6 +934,38 @@ class SgStore extends ChangeNotifier {
     _commit();
   }
 
+  /// Board behaviors that reshape the live card order.
+  void applyBehaviors() {
+    final b = board;
+    if (b == null) return;
+    if (b.autoFilterComplete) {
+      // Filtering is applied at read time via [visibleCards].
+    }
+    if (b.autoSort) {
+      b.cards.sort((a, c) {
+        final ap = a.priority;
+        final cp = c.priority;
+        if (ap != cp) return cp.compareTo(ap);
+        return a.title.toLowerCase().compareTo(c.title.toLowerCase());
+      });
+    }
+    if (b.autoArrange) {
+      // Pack each list: higher priority first, then title.
+      for (final list in b.lists) {
+        final mine = b.cards.where((c) => c.listId == list.id).toList()
+          ..sort((a, c) {
+            if (a.priority != c.priority) return c.priority.compareTo(a.priority);
+            return a.title.toLowerCase().compareTo(c.title.toLowerCase());
+          });
+        // Rebuild order by removing and re-adding in sorted order within the board list.
+        for (final c in mine) {
+          b.cards.remove(c);
+        }
+        b.cards.addAll(mine);
+      }
+    }
+  }
+
   /// Hourly trigger: a card flagged `hourly` walks to the next status.
   int applyHourly() {
     final b = board;
@@ -937,6 +1000,18 @@ class SgStore extends ChangeNotifier {
     c.activity.add(SgActivity(at: DateTime.now().millisecondsSinceEpoch, text: 'Marked done'));
     _commit();
   }
+
+  void rememberHistory(String key, String value) {
+    final v = value.trim();
+    if (v.isEmpty) return;
+    final list = history.putIfAbsent(key, () => <String>[]);
+    list.remove(v);
+    list.insert(0, v);
+    if (list.length > 8) list.removeRange(8, list.length);
+    _commit();
+  }
+
+  List<String> historyFor(String key) => List<String>.from(history[key] ?? const []);
 
   /// Local Genie. Mass edits and type refactors run here. [callAiApi] is not
   /// invoked, because no provider key is configured.
