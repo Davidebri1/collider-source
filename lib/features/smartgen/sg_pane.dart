@@ -783,8 +783,10 @@ class _SgPaneState extends State<SgPane> {
     );
   }
 
-  /// Trello's board bar: the name, one star, and a "…" that holds the rest.
+  /// Trello's board bar: the name, one star, Align (always on-screen at phone
+  /// width), and a "…" that holds the rest.
   Widget _header(SgBoard b) {
+    final snap = b.snapAlign;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 4, 0),
       child: Row(children: [
@@ -798,6 +800,14 @@ class _SgPaneState extends State<SgPane> {
         ),
         _icon('Boards', Icons.grid_view_rounded, () { store.goHome(); setState(() {}); }),
         _icon(b.starred ? 'Unstar board' : 'Star board', b.starred ? Icons.star_rounded : Icons.star_outline_rounded, () => store.touch(() => b.starred = !b.starred), color: const Color(0xFFFFD56A)),
+        // Phone 440: view chips used to push Vision (and its free-drag Align)
+        // off-screen. Keep Align pinned in the board chrome on every view.
+        _icon(
+          snap ? 'Free place' : 'Align to grid',
+          snap ? Icons.grid_off_rounded : Icons.dashboard_customize_rounded,
+          () => store.touch(() => b.snapAlign = !b.snapAlign),
+          color: snap ? const Color(0xFFFFD56A) : Colors.white70,
+        ),
         _icon('Board menu', Icons.more_horiz, () => setState(() => _menu = !_menu)),
       ]),
     );
@@ -815,26 +825,22 @@ class _SgPaneState extends State<SgPane> {
   }
 
   Widget _viewChips(SgBoard b) {
-    return SizedBox(
-      height: 40,
-      child: ScrollConfiguration(
-          behavior: const SgScroll(),
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            children: [
-              for (final s in SgSurface.values)
-                Padding(
-                  padding: const EdgeInsets.only(right: 4),
-                  child: _glassChoice(
-                    label: s.label,
-                    selected: b.surface == s,
-                    size: 11,
-                    onSelected: (_) => store.touch(() => b.surface = s),
-                  ),
-                ),
-            ],
-          ),
+    // Wrap (not a horizontal ListView): at phone width ~440 every board view
+    // chip must stay reachable without horizontal off-screen scroll.
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 2, 8, 4),
+      child: Wrap(
+        spacing: 4,
+        runSpacing: 4,
+        children: [
+          for (final s in SgSurface.values)
+            _glassChoice(
+              label: s.label,
+              selected: b.surface == s,
+              size: 11,
+              onSelected: (_) => store.touch(() => b.surface = s),
+            ),
+        ],
       ),
     );
   }

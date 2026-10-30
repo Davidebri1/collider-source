@@ -281,12 +281,16 @@ class _SgFreePlaneState extends State<SgFreePlane> {
                 style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white70),
               ),
             ),
-            IconButton(
-              tooltip: snap ? 'Free place' : 'Align to grid',
-              iconSize: 20,
-              color: snap ? const Color(0xFFFFD56A) : Colors.white70,
-              onPressed: _toggleSnap,
-              icon: Icon(snap ? Icons.grid_off_rounded : Icons.grid_view_rounded),
+            Semantics(
+              button: true,
+              label: snap ? 'Free place' : 'Align to grid',
+              child: IconButton(
+                tooltip: snap ? 'Free place' : 'Align to grid',
+                iconSize: 20,
+                color: snap ? const Color(0xFFFFD56A) : Colors.white70,
+                onPressed: _toggleSnap,
+                icon: Icon(snap ? Icons.grid_off_rounded : Icons.grid_view_rounded),
+              ),
             ),
           ]),
         ),
