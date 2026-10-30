@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
 import '../../../core/files/web_file_pick.dart';
 import '../../../core/files/file_blobs.dart';
 import '../../../core/audio/music_player.dart';
@@ -325,7 +324,10 @@ class _FilesScreenState extends State<FilesScreen> {
     final lib = cat == 'music' ? MusicPlayer.library : const <MusicTrack>[];
     final p = MusicPlayer.instance;
     final cur = p.current;
-    return FGlass(
+    return Semantics(
+      container: true,
+      explicitChildNodes: true,
+      child: FGlass(
       radius: phone ? const BorderRadius.all(Radius.circular(52.8)) : const BorderRadius.only(topRight: Radius.circular(52.8), bottomRight: Radius.circular(52.8)),
       blur: 6, // ticker stays visible, blurred, behind Files
       gradient: const LinearGradient(begin: Alignment(-0.9, -1), end: Alignment(0.9, 1), colors: [Color(0x66262626), Color(0x66404040)]),
@@ -423,6 +425,7 @@ class _FilesScreenState extends State<FilesScreen> {
           )),
         ),
       ]),
+    ),
     );
   }
 
@@ -464,7 +467,11 @@ class _FilesScreenState extends State<FilesScreen> {
         ),
       );
 
-  Widget _photoTile(StoredFile f) => GestureDetector(
+  Widget _photoTile(StoredFile f) => Semantics(
+        button: true,
+        label: f.name,
+        onTap: () => _tapFile(f),
+        child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => _tapFile(f),
         onLongPress: () => _sel.toggle(f.id),
@@ -479,6 +486,7 @@ class _FilesScreenState extends State<FilesScreen> {
             _check(f),
           ]),
         ),
+      ),
       );
 
   Widget _tile(StoredFile f) {
@@ -486,6 +494,7 @@ class _FilesScreenState extends State<FilesScreen> {
     return Semantics(
       button: true,
       label: f.name,
+      onTap: () => _tapFile(f),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => _tapFile(f),
