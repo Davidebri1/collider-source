@@ -394,14 +394,23 @@ class MediaGen {
     try {
       switch (r.provider) {
         case 'pollinations-image':
-          final url = pollinationsUrl(prompt, f, model: r.remote);
-          // The source hands the URL straight to <Image>. Fetch it first so a
-          // refusal (Pollinations now answers 402) fails here, quietly,
-          // instead of leaving a broken image in the ticker.
-          final res = await _dio.get<List<int>>(url, options: Options(responseType: ResponseType.bytes));
-          final ct = res.headers.value('content-type') ?? 'image/jpeg';
-          if (!ct.startsWith('image/')) throw const MediaGenError('no image');
-          return MediaResult('image', url: 'data:$ct;base64,${base64Encode(res.data!)}');
+          // Retry transient Pollinations 402/429/503 like the text floor.
+          Object? last;
+          for (var attempt = 0; attempt < 4; attempt++) {
+            try {
+              final url = pollinationsUrl(prompt, f, model: r.remote, seed: math.Random().nextInt(1000000));
+              final res = await _dio.get<List<int>>(url, options: Options(responseType: ResponseType.bytes));
+              final ct = res.headers.value('content-type') ?? 'image/jpeg';
+              if (!ct.startsWith('image/')) throw const MediaGenError('no image');
+              return MediaResult('image', url: 'data:$ct;base64,${base64Encode(res.data!)}');
+            } on DioException catch (e) {
+              last = e;
+              final code = e.response?.statusCode ?? 0;
+              if (code != 402 && code != 429 && code != 503) rethrow;
+              await Future<void>.delayed(Duration(milliseconds: 400 * (attempt + 1)));
+            }
+          }
+          throw MediaGenError('provider ${(last is DioException) ? (last.response?.statusCode ?? 'unreachable') : 'unreachable'}');
         case 'openrouter-image':
           return MediaResult('image', url: await _image(r, prompt, f, imageDataUris));
         case 'openrouter-video':

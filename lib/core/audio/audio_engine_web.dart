@@ -10,6 +10,9 @@ class AudioEngine {
   void play(String url) {
     if (_el == null) {
       _el = web.HTMLAudioElement();
+      _el!.setAttribute('data-collider-audio', '1');
+      // Attach so the element is in the document (autoplay + playtests).
+      web.document.body?.appendChild(_el!);
       _el!.addEventListener('ended', ((web.Event _) { onEnded?.call(); }).toJS);
     }
     if (_src != url) {
@@ -23,6 +26,7 @@ class AudioEngine {
 
   void stop() {
     _el?.pause();
+    _el?.remove();
     _el = null;
     _src = '';
   }
