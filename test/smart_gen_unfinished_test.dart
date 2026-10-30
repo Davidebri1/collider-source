@@ -1,5 +1,6 @@
 import 'package:collider_flutter/features/smartgen/sg_model.dart';
 import 'package:collider_flutter/features/smartgen/sg_views.dart';
+import 'package:collider_flutter/features/smartgen/sg_free_drag.dart';
 import 'package:collider_flutter/features/smartgen/screens/smartgen_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -205,6 +206,104 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('Lift me'), findsWidgets);
+  });
+  test('R23 free positions persist across reload', () {
+    final s = SgStore()..ensureStarter();
+    final a = s.addCard(SgType.task)!;
+    final b = s.addCard(SgType.note)!;
+    s.touch(() {
+      a.dx = 88;
+      a.dy = 144;
+      b.dx = 210;
+      b.dy = 66;
+      s.board!.snapAlign = false;
+    });
+    final doc = {
+      'boards': [s.board!.toJson()],
+      'active': s.board!.id,
+      'genie': <Object?>[],
+    };
+    final board = SgBoard.fromJson((doc['boards'] as List).first as Map<String, Object?>);
+    expect(board.cards.firstWhere((c) => c.id == a.id).dx, 88);
+    expect(board.cards.firstWhere((c) => c.id == a.id).dy, 144);
+    expect(board.cards.firstWhere((c) => c.id == b.id).dx, 210);
+    expect(board.snapAlign, isFalse);
+  });
+
+  test('snap toggle aligns cards to masonry grid', () {
+    final s = SgStore()..ensureStarter();
+    final cards = <SgCard>[
+      s.addCard(SgType.task)!,
+      s.addCard(SgType.task)!,
+      s.addCard(SgType.task)!,
+      s.addCard(SgType.task)!,
+    ];
+    s.touch(() {
+      for (var i = 0; i < cards.length; i++) {
+        cards[i].dx = 40.0 + i * 17;
+        cards[i].dy = 90.0 + i * 23;
+      }
+      s.board!.snapAlign = false;
+    });
+    final plane = const Size(440, 700);
+    final slots = SgFreeLayouts.masonry(plane, cards.length);
+    s.touch(() {
+      s.board!.snapAlign = true;
+      SgFreeLayouts.applySlots(cards, slots);
+    });
+    expect(s.board!.snapAlign, isTrue);
+    for (var i = 0; i < cards.length; i++) {
+      expect(cards[i].dx, slots[i].left);
+      expect(cards[i].dy, slots[i].top);
+    }
+  });
+
+  test('free mode keeps arbitrary drop point', () {
+    final s = SgStore()..ensureStarter();
+    final c = s.addCard(SgType.poster)!;
+    s.touch(() {
+      s.board!.snapAlign = false;
+      c.dx = 173;
+      c.dy = 311;
+    });
+    expect(s.board!.snapAlign, isFalse);
+    expect(c.dx, 173);
+    expect(c.dy, 311);
+    // Round-trip JSON must keep the free point.
+    final back = SgCard.fromJson(c.toJson());
+    expect(back.dx, 173);
+    expect(back.dy, 311);
+  });
+
+  testWidgets('Vision board exposes Align to grid IconButton tooltip', (tester) async {
+    tester.view.physicalSize = const Size(440, 956);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final store = SgStore()..ensureStarter();
+    store.addCard(SgType.task)!..title = 'Mood';
+    store.addCard(SgType.poster)!..title = 'City';
+    store.touch(() => store.board!.surface = SgSurface.vision);
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SizedBox(width: 440, height: 900, child: SgVision(store: store, onOpen: (_) {})),
+      ),
+    ));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Vision board'), findsOneWidget);
+    final alignBtn = find.byIcon(Icons.grid_view_rounded);
+    expect(alignBtn, findsOneWidget);
+    // IconButton.tooltip is set for R8; resolve via the IconButton itself.
+    final btn = tester.widget<IconButton>(find.ancestor(of: alignBtn, matching: find.byType(IconButton)));
+    expect(btn.tooltip, 'Align to grid');
+    await tester.tap(alignBtn);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(store.board!.snapAlign, isTrue);
+    expect(find.byIcon(Icons.grid_off_rounded), findsOneWidget);
+    final freeBtn = tester.widget<IconButton>(find.ancestor(of: find.byIcon(Icons.grid_off_rounded), matching: find.byType(IconButton)));
+    expect(freeBtn.tooltip, 'Free place');
   });
 }
 

@@ -449,6 +449,7 @@ class SgBoard {
     this.autoFilterComplete = false,
     this.inheritColumnStatus = true,
     this.urgentAutoCalendar = true,
+    this.snapAlign = false,
     this.kind = SgBoardKind.notebook,
     List<String>? guests,
     List<SgList>? lists,
@@ -480,6 +481,8 @@ class SgBoard {
   bool autoFilterComplete;
   bool inheritColumnStatus;
   bool urgentAutoCalendar;
+  /// When true, free-plane tiles snap to the tidy grid; default is free place.
+  bool snapAlign;
   SgBoardKind kind;
   final List<String> guests;
   final List<SgList> lists;
@@ -527,6 +530,7 @@ class SgBoard {
         'autoFilterComplete': autoFilterComplete,
         'inheritColumnStatus': inheritColumnStatus,
         'urgentAutoCalendar': urgentAutoCalendar,
+        'snapAlign': snapAlign,
         'kind': kind.name,
         'guests': guests,
         'lists': [for (final l in lists) l.toJson()],
@@ -552,6 +556,7 @@ class SgBoard {
         autoFilterComplete: j['autoFilterComplete'] == true,
         inheritColumnStatus: j['inheritColumnStatus'] != false,
         urgentAutoCalendar: j['urgentAutoCalendar'] != false,
+        snapAlign: j['snapAlign'] == true,
         kind: SgBoardKind.values.asNameMap()[j['kind']] ?? SgBoardKind.notebook,
         guests: [for (final g in (j['guests'] as List?) ?? const []) g.toString()],
         lists: [for (final l in (j['lists'] as List?) ?? const []) if (l is Map) SgList.fromJson(l.cast<String, Object?>())],

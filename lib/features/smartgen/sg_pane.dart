@@ -435,6 +435,34 @@ class _SgPaneState extends State<SgPane> {
       if (q['panel'] == 'attachments' || q['files'] == '1') {
         // open editor already set via sg=editor; sections always visible
       }
+      // Free-drag / snap harness (capture-only).
+      if (q['snap'] == '1') {
+        b.snapAlign = true;
+      }
+      if (q['scatter'] == '1') {
+        b.snapAlign = false;
+        // Distinct free positions so the capture shows open-ended placement,
+        // not a stacked pile (R23 default free-drag).
+        const offsets = <List<double>>[
+          [18, 36],
+          [220, 48],
+          [48, 220],
+          [200, 250],
+          [28, 420],
+          [210, 450],
+          [60, 620],
+          [190, 660],
+        ];
+        for (var i = 0; i < b.cards.length; i++) {
+          final o = offsets[i % offsets.length];
+          b.cards[i].dx = o[0];
+          b.cards[i].dy = o[1];
+        }
+      }
+      if (q.containsKey('dx0') && b.cards.isNotEmpty) {
+        b.cards.first.dx = double.tryParse(q['dx0']!) ?? b.cards.first.dx;
+        b.cards.first.dy = double.tryParse(q['dy0'] ?? '') ?? b.cards.first.dy;
+      }
       final kp = q['kpage'];
       if (kp == 'last') {
         _kanbanPage = b.orderedLists.length.toDouble();
