@@ -122,10 +122,10 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
   Widget _track(double v, ValueChanged<double>? onChanged, {ValueChanged<double>? onEnd}) => SliderTheme(
         data: SliderThemeData(
           trackHeight: 4,
-          // v9.1.1: no visible progress bar; the strip still scrubs on drag.
-          activeTrackColor: Colors.transparent,
-          inactiveTrackColor: Colors.transparent,
-          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 0, elevation: 0, pressedElevation: 0),
+          // Player's own progress bar (PRD): visible scrub track; no other bars on this view.
+          activeTrackColor: Colors.white,
+          inactiveTrackColor: const Color(0x55FFFFFF),
+          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6, elevation: 0, pressedElevation: 0),
           overlayShape: SliderComponentShape.noOverlay,
           trackShape: const RoundedRectSliderTrackShape(),
         ),

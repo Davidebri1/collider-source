@@ -160,7 +160,7 @@ class LibrarySongRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const s = scale;
-    return SizedBox(
+    final row = SizedBox(
       height: height,
       child: Row(
         children: [
@@ -186,8 +186,17 @@ class LibrarySongRow extends StatelessWidget {
               ],
             ),
           ),
-          // row tap plays; no redundant per-row play button
         ],
+      ),
+    );
+    // Row tap plays (onPlay was previously unused — Music Play all / tracks did nothing).
+    if (onPlay == null) return row;
+    return Semantics(
+      button: true,
+      label: tooltip ?? (playing ? 'Pause $title' : 'Play $title'),
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(onTap: onPlay, child: row),
       ),
     );
   }

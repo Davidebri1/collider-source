@@ -130,7 +130,7 @@ const Map<String, _Route> _routes = {
   // Keyless text (Pollinations OpenAI-compatible endpoint)
   'free/pollinations-openai': _Route('pollinations-text', 'openai'),
   // Image
-  'img/flux-free': _Route('pollinations-image', 'flux'),
+  'img/flux-free': _Route('pollinations-image', 'sana'),  // free tier models list is ["sana"] (flux 402s)
   'img/gemini-3-1-flash-image': _Route('openrouter-image', 'google/gemini-3.1-flash-image-preview'),
   'img/gpt-5-image-mini': _Route('openrouter-image', 'openai/gpt-5-image-mini'),
   'img/gemini-3-pro-image': _Route('openrouter-image', 'google/gemini-3-pro-image-preview'),
@@ -377,7 +377,7 @@ class MediaGen {
   }
 
   /// chat.ts generateImageUrl.
-  static String pollinationsUrl(String prompt, GenFlags f, {String model = 'flux', int? seed}) {
+  static String pollinationsUrl(String prompt, GenFlags f, {String model = 'sana', int? seed}) {
     // Free-tier Pollinations 402s large portrait frames; keep the long edge ≤512.
     final full = arToSize(f.ar);
     final long = math.max(full.width, full.height);

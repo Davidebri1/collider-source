@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import '../../../core/files/web_file_pick.dart';
 import '../../../core/files/file_blobs.dart';
 import '../../../core/audio/music_player.dart';
 import '../../../core/files/file_store.dart';
@@ -88,7 +89,7 @@ class _FilesScreenState extends State<FilesScreen> {
 
   Future<void> _pickFile() async {
     try {
-      final res = await FilePicker.platform.pickFiles(allowMultiple: true, withData: true);
+      final res = await pickFilesWebFriendly(allowMultiple: true);
       if (res == null || res.files.isEmpty) return;
       final note = await _store.addPicked(res.files, 'files');
       if (note != null && mounted) await _alert(note);
