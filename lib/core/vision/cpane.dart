@@ -70,7 +70,11 @@ class CPane extends StatelessWidget {
   Widget build(BuildContext context) {
     final r = BorderRadius.circular(CPaneTokens.radius);
     final phoneWork = span == CPaneSpan.phoneBoard && CPaneTokens.phone(context);
-    final w = phoneWork ? (MediaQuery.sizeOf(context).width - 92) : CPaneTokens.width(context);
+    // Phone board: nearly full phone width, centred. Side rail floats OVER the
+    // pane and never offsets it (David: main.dart ticker comment; v9.2.0 Genie
+    // layout FAIL — LTRB(80,,12,) shifted the pane right and bled the right edge).
+    final screenW = MediaQuery.sizeOf(context).width;
+    final w = phoneWork ? (screenW - 24).clamp(300.0, screenW) : CPaneTokens.width(context);
     final maxH = maxHeight(context);
     // Fill panes are the work surfaces (Smart Gen, Files, Market). They use
     // the clearer work frost so the wallpaper stays readable through the
@@ -89,14 +93,17 @@ class CPane extends StatelessWidget {
       child: ClipRRect(borderRadius: r, child: child),
     );
     // Hug panes sit in the vertical centre of the band above the dock.
-    // Fill panes use that whole band. A phone board clears the side rail
-    // and runs from the safe area to just above the dock.
+    // Fill panes use that whole band. Phone board is centred like every other
+    // CPane — equal side margins, rail floats over.
     final topInset = MediaQuery.paddingOf(context).top + (phoneWork ? 8 : CPaneTokens.topGap);
     final bottomInset = phoneWork ? 78.0 : CShell.reserveOf(context);
     if (phoneWork) {
       return Padding(
-        padding: EdgeInsets.fromLTRB(80, topInset, 12, bottomInset),
-        child: SizedBox(key: bodyKey, width: double.infinity, height: double.infinity, child: glass),
+        padding: EdgeInsets.only(top: topInset, bottom: bottomInset),
+        child: Align(
+          alignment: Alignment.center,
+          child: SizedBox(key: bodyKey, width: w, height: double.infinity, child: glass),
+        ),
       );
     }
     return Padding(

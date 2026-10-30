@@ -767,13 +767,18 @@ class _SgPaneState extends State<SgPane> {
   }
 
   Widget _icon(String tip, IconData icon, VoidCallback onTap, {Color color = Colors.white}) {
-    return Tooltip(
-      message: tip,
-      child: IconButton(
-        onPressed: onTap,
-        icon: Icon(icon, color: color, size: 24),
-        padding: const EdgeInsets.all(8),
-        constraints: const BoxConstraints.tightFor(width: 44, height: 44),
+    return Semantics(
+      button: true,
+      label: tip,
+      child: Tooltip(
+        message: tip,
+        child: IconButton(
+          onPressed: onTap,
+          icon: Icon(icon, color: color, size: 24),
+          padding: const EdgeInsets.all(8),
+          constraints: const BoxConstraints.tightFor(width: 44, height: 44),
+          tooltip: tip,
+        ),
       ),
     );
   }
@@ -991,11 +996,13 @@ class _SgPaneState extends State<SgPane> {
   Widget _body(SgBoard b) {
     final open = store.byId(_openId);
     if (_overlay == 'create') return _create();
+    // Board menu must win over search/stats/genie so "…" always navigates
+    // (regression: overlays trapped the board and Statistics/Genie could not open).
+    if (_menu) return _menuBody(b);
     if (_overlay == 'search') return _search(b);
     if (_overlay == 'stats') return _stats(b);
     if (_overlay == 'genie') return _genie();
     if (_overlay == 'editor-bulk') return _bulkEdit(b);
-    if (_menu) return _menuBody(b);
     if (open != null) return _editor(b, open);
     return SgSurfaceView(store: store, onOpen: _open, multi: _multi, selected: _selected, forceFlip: _forceFlip, kanbanPage: _kanbanPage, forceHotListId: _forceHotListId, liftCardId: _liftCardId, onSelect: (c) => setState(() => _selected.contains(c.id) ? _selected.remove(c.id) : _selected.add(c.id)));
   }
@@ -1038,11 +1045,15 @@ class _SgPaneState extends State<SgPane> {
     return Padding(
       padding: const EdgeInsets.all(8),
       child: Column(children: [
-        TextField(
-          autofocus: true,
-          style: appFont(color: Colors.white, fontSize: 14),
-          decoration: const InputDecoration(hintText: 'Search cards', hintStyle: TextStyle(color: Colors.white54)),
-          onChanged: (v) => setState(() => _query = v),
+        Semantics(
+          label: 'Search cards',
+          textField: true,
+          child: TextField(
+            autofocus: true,
+            style: appFont(color: Colors.white, fontSize: 14),
+            decoration: const InputDecoration(hintText: 'Search cards', hintStyle: TextStyle(color: Colors.white54)),
+            onChanged: (v) => setState(() => _query = v),
+          ),
         ),
         Expanded(
           child: ListView(
@@ -1068,6 +1079,7 @@ class _SgPaneState extends State<SgPane> {
     final due = b.cards.where((c) => c.dueMs != null).length;
     final priority = b.cards.where((c) => c.priority > 0).length;
     return Padding(
+      key: const ValueKey('sg-stats'),
       padding: const EdgeInsets.all(8),
       child: Wrap(spacing: 8, runSpacing: 8, children: [
         _stat('Total', b.cards.length),
@@ -1107,90 +1119,129 @@ class _SgPaneState extends State<SgPane> {
   }
 
   Widget _genie() {
-    return Column(children: [
-      Row(children: [
-        Text('Genie', style: appFont(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
-        const Spacer(),
-        if (_genieBusy)
-          const Padding(
-            padding: EdgeInsets.only(right: 8),
-            child: SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white70)),
-          ),
-        Tooltip(
-          message: 'New conversation',
-          child: IconButton(onPressed: _genieBusy ? null : () => store.newConversation(), icon: const Icon(Icons.add_comment_outlined, color: Colors.white, size: 18)),
-        ),
-        Tooltip(
-          message: 'Close Genie',
-          child: IconButton(onPressed: () => setState(() => _overlay = ''), icon: const Icon(Icons.close_rounded, color: Colors.white, size: 18)),
-        ),
-      ]),
-      Expanded(
-        child: ListView(
+    // Dense Collider glass on the shared centred CPane (same _paper / padding
+    // as the inline editor). User bubbles right, Genie left; full-strength text.
+    // No progress bar (David: none except video/browser).
+    const youFill = Color(0xFF2F6F5E);
+    const botFill = Color(0xFF2A2D35);
+    final maxBubble = MediaQuery.sizeOf(context).width * 0.72;
+    return ColoredBox(
+      key: const ValueKey('sg-genie'),
+      color: _paper,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            for (final m in store.genie)
-              Align(
-                alignment: m.role == 'you' ? Alignment.centerRight : Alignment.centerLeft,
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 4),
-                  padding: const EdgeInsets.all(6),
-                  color: m.role == 'you' ? const Color(0x553D7A6A) : const Color(0x33FFFFFF),
-                  child: Text(m.attachment.isEmpty ? m.text : '${m.text}\n${m.attachment}', style: appFont(fontSize: 12, color: Colors.white)),
+            Row(children: [
+              Expanded(child: Text('Genie', style: appFont(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white))),
+              if (_genieBusy)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Text('…', style: appFont(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white70)),
                 ),
+              _icon('New conversation', Icons.add_comment_outlined, () {
+                if (!_genieBusy) store.newConversation();
+              }),
+              _icon('Close Genie', Icons.close_rounded, () => setState(() { _overlay = ''; _openId = null; _cover = false; })),
+            ]),
+            const SizedBox(height: 8),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.only(bottom: 8),
+                children: [
+                  for (final m in store.genie)
+                    Align(
+                      alignment: m.role == 'you' ? Alignment.centerRight : Alignment.centerLeft,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: maxBubble),
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: m.role == 'you' ? youFill : botFill,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            m.attachment.isEmpty ? m.text : '${m.text}\n${m.attachment}',
+                            style: appFont(fontSize: 14, color: Colors.white, height: 1.35),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
+            ),
+            Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF24272F),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: _line),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              child: Row(children: [
+                Tooltip(
+                  message: 'Attach a file',
+                  child: IconButton(
+                    onPressed: _genieBusy
+                        ? null
+                        : () async {
+                            final res = await FilePicker.platform.pickFiles(withData: true);
+                            if (res == null || res.files.isEmpty) return;
+                            final f = res.files.first;
+                            final bytes = f.bytes;
+                            if (bytes == null) return;
+                            final b64 = base64Encode(bytes);
+                            final mime = f.extension == 'png'
+                                ? 'image/png'
+                                : (f.extension == 'jpg' || f.extension == 'jpeg' ? 'image/jpeg' : 'application/octet-stream');
+                            final dataUrl = 'data:$mime;base64,$b64';
+                            final text = _genieInput.text.trim().isEmpty ? 'See attachment' : _genieInput.text.trim();
+                            _genieInput.clear();
+                            await _sendGenie(text, attachment: '${f.name}|$dataUrl');
+                          },
+                    icon: const Icon(Icons.attach_file, color: Colors.white, size: 18),
+                  ),
+                ),
+                Expanded(
+                  child: TextField(
+                    controller: _genieInput,
+                    enabled: !_genieBusy,
+                    style: appFont(color: Colors.white, fontSize: 14),
+                    decoration: const InputDecoration(
+                      hintText: 'Message Genie',
+                      hintStyle: TextStyle(color: Colors.white54),
+                      border: InputBorder.none,
+                      isDense: true,
+                    ),
+                    onSubmitted: (v) async {
+                      final t = v.trim();
+                      if (t.isEmpty) return;
+                      _genieInput.clear();
+                      await _sendGenie(t);
+                    },
+                  ),
+                ),
+                Tooltip(
+                  message: 'Send',
+                  child: IconButton(
+                    onPressed: _genieBusy
+                        ? null
+                        : () async {
+                            final t = _genieInput.text.trim();
+                            if (t.isEmpty) return;
+                            _genieInput.clear();
+                            await _sendGenie(t);
+                          },
+                    icon: const Icon(Icons.send_rounded, color: Colors.white),
+                  ),
+                ),
+              ]),
+            ),
           ],
         ),
       ),
-      Row(children: [
-        Tooltip(
-          message: 'Attach a file',
-          child: IconButton(
-            onPressed: _genieBusy
-                ? null
-                : () async {
-                    final res = await FilePicker.platform.pickFiles(withData: true);
-                    if (res == null || res.files.isEmpty) return;
-                    final f = res.files.first;
-                    final bytes = f.bytes;
-                    if (bytes == null) return;
-                    final b64 = base64Encode(bytes);
-                    final mime = f.extension == 'png' ? 'image/png' : (f.extension == 'jpg' || f.extension == 'jpeg' ? 'image/jpeg' : 'application/octet-stream');
-                    final dataUrl = 'data:$mime;base64,$b64';
-                    final text = _genieInput.text.trim().isEmpty ? 'See attachment' : _genieInput.text.trim();
-                    _genieInput.clear();
-                    await _sendGenie(text, attachment: '${f.name}|$dataUrl');
-                  },
-            icon: const Icon(Icons.attach_file, color: Colors.white, size: 18),
-          ),
-        ),
-        Expanded(child: TextField(
-          controller: _genieInput,
-          enabled: !_genieBusy,
-          style: appFont(color: Colors.white, fontSize: 13),
-          decoration: const InputDecoration(hintText: 'Message Genie', hintStyle: TextStyle(color: Colors.white38)),
-          onSubmitted: (v) async {
-            final t = v.trim();
-            if (t.isEmpty) return;
-            _genieInput.clear();
-            await _sendGenie(t);
-          },
-        )),
-        Tooltip(
-          message: 'Send',
-          child: IconButton(
-            onPressed: _genieBusy
-                ? null
-                : () async {
-                    final t = _genieInput.text.trim();
-                    if (t.isEmpty) return;
-                    _genieInput.clear();
-                    await _sendGenie(t);
-                  },
-            icon: const Icon(Icons.send_rounded, color: Colors.white),
-          ),
-        ),
-      ]),
-    ]);
+    );
   }
 
   static const Color _ink = Color(0xFFFFFFFF);
