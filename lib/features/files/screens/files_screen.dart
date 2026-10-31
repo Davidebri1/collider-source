@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import '../../../core/files/web_file_pick.dart';
+import 'package:file_picker/file_picker.dart';
 import '../../../core/files/file_blobs.dart';
 import '../../../core/audio/music_player.dart';
 import '../../../core/files/file_store.dart';
@@ -15,7 +15,6 @@ import '../../../core/figma/figma_stage.dart';
 import '../../music/song_row_parts.dart';
 import '../../theme/theme_living_media.dart';
 import '../widgets/video_player_view.dart';
-import '../widgets/thumb_view.dart';
 
 /// Map row 7 — Files. v8.4: a straight copy of Vision Pro Spatial UI Kit
 /// 71:7502 ("Albums", group 1336 x 835) at its own size, scaled as one unit
@@ -89,13 +88,20 @@ class _FilesScreenState extends State<FilesScreen> {
 
   Future<void> _pickFile() async {
     try {
-      final res = await pickFilesWebFriendly(allowMultiple: true);
+      final res = await FilePicker.platform.pickFiles(allowMultiple: true, withData: true);
       if (res == null || res.files.isEmpty) return;
       final note = await _store.addPicked(res.files, 'files');
       if (note != null && mounted) await _alert(note);
     } catch (_) {}
   }
 
+  IconData _icon(String type) => switch (type) {
+        'Image' => Icons.image_rounded,
+        'Video' => Icons.movie_outlined,
+        'Data' => Icons.table_chart_outlined,
+        'Writing' => Icons.notes_rounded,
+        _ => Icons.description_outlined,
+      };
 
   bool _inSpan(StoredFile f) {
     final now = DateTime.now();
@@ -274,7 +280,7 @@ class _FilesScreenState extends State<FilesScreen> {
                 child: Container(
                   decoration: BoxDecoration(color: const Color(0x4DFFFFFF), borderRadius: BorderRadius.circular(20)),
                   child: Row(children: [
-                    SizedBox(width: 47, height: 47, child: ClipRRect(borderRadius: BorderRadius.circular(8), child: ThumbView(file: recent.first))),
+                    SizedBox(width: 47, height: 47, child: Icon(_icon(recent.first.type), size: 26, color: const Color(0xFFDDDBD6))),
                     const SizedBox(width: 1.84),
                     Expanded(child: FText(recent.first.name, size: 16.56, weight: FontWeight.w600, color: const Color(0xFFDDDBD6))),
                     const SizedBox(width: 12),
@@ -297,7 +303,9 @@ class _FilesScreenState extends State<FilesScreen> {
                       width: 34,
                       height: 32,
                       color: const Color(0x33FFFFFF),
-                      child: ThumbView(file: recent[k], fontSize: 8),
+                      child: FileStore.isImage(recent[k].name)
+                          ? _Thumb(id: recent[k].id, fallback: _icon(recent[k].type))
+                          : Icon(_icon(recent[k].type), size: 18, color: const Color(0xFFDDDBD6)),
                     ),
                   ),
                   const SizedBox(width: 17.48),
@@ -316,10 +324,7 @@ class _FilesScreenState extends State<FilesScreen> {
     final lib = cat == 'music' ? MusicPlayer.library : const <MusicTrack>[];
     final p = MusicPlayer.instance;
     final cur = p.current;
-    return Semantics(
-      container: true,
-      explicitChildNodes: true,
-      child: FGlass(
+    return FGlass(
       radius: phone ? const BorderRadius.all(Radius.circular(52.8)) : const BorderRadius.only(topRight: Radius.circular(52.8), bottomRight: Radius.circular(52.8)),
       blur: 6, // ticker stays visible, blurred, behind Files
       gradient: const LinearGradient(begin: Alignment(-0.9, -1), end: Alignment(0.9, 1), colors: [Color(0x66262626), Color(0x66404040)]),
@@ -417,7 +422,6 @@ class _FilesScreenState extends State<FilesScreen> {
           )),
         ),
       ]),
-    ),
     );
   }
 
@@ -459,11 +463,7 @@ class _FilesScreenState extends State<FilesScreen> {
         ),
       );
 
-  Widget _photoTile(StoredFile f) => Semantics(
-        button: true,
-        label: f.name,
-        onTap: () => _tapFile(f),
-        child: GestureDetector(
+  Widget _photoTile(StoredFile f) => GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => _tapFile(f),
         onLongPress: () => _sel.toggle(f.id),
@@ -471,14 +471,13 @@ class _FilesScreenState extends State<FilesScreen> {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(16),
           child: Stack(fit: StackFit.expand, children: [
-            ColoredBox(color: const Color(0x33FFFFFF), child: ThumbView(file: f)),
+            ColoredBox(color: const Color(0x33FFFFFF), child: _Thumb(id: f.id, fallback: f.type == 'Video' ? Icons.play_circle_outline_rounded : Icons.image_outlined)),
             const DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment(0, -0.2), colors: [Color(0x66000000), Color(0x00000000)]))),
             Positioned(left: 12, top: 10, right: 12, child: Text(f.name, maxLines: 2, softWrap: true, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700))),
             if (f.type == 'Video') const Positioned(right: 10, bottom: 8, child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: 22)),
             _check(f),
           ]),
         ),
-      ),
       );
 
   Widget _tile(StoredFile f) {
@@ -486,7 +485,6 @@ class _FilesScreenState extends State<FilesScreen> {
     return Semantics(
       button: true,
       label: f.name,
-      onTap: () => _tapFile(f),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => _tapFile(f),
@@ -501,7 +499,9 @@ class _FilesScreenState extends State<FilesScreen> {
                 width: 152,
                 height: 153,
                 color: const Color(0x33FFFFFF),
-                child: ThumbView(file: f),
+                child: FileStore.isImage(f.name)
+                    ? _Thumb(id: f.id, fallback: _icon(f.type))
+                    : Icon(_icon(f.type), size: 52, color: const Color(0xCCFFFFFF)),
               ),
             ),
             if (_sel.has(f.id)) const Padding(padding: EdgeInsets.only(top: 4), child: Icon(Icons.check_circle_rounded, color: Color(0xFF0A84FF), size: 34)),
@@ -561,6 +561,42 @@ class _FilesScreenState extends State<FilesScreen> {
     final mime = FileStore.mimeFor(f.name);
     final ok = await FileBlobs.openExternal(f.name, bytes, mime, newTab: mime == 'application/pdf');
     if (!ok && mounted) await _alert('${f.name} could not be opened');
+  }
+}
+
+/// Image tile thumbnail from the stored bytes.
+class _Thumb extends StatefulWidget {
+  final String id;
+  final IconData fallback;
+  const _Thumb({required this.id, required this.fallback});
+
+  @override
+  State<_Thumb> createState() => _ThumbState();
+}
+
+class _ThumbState extends State<_Thumb> {
+  static final Map<String, Uint8List> _cache = {};
+  Uint8List? _bytes;
+
+  @override
+  void initState() {
+    super.initState();
+    _bytes = _cache[widget.id];
+    if (_bytes == null) {
+      FileStore.instance.bytesOf(widget.id).then((b) {
+        if (b == null || !mounted) return;
+        _cache[widget.id] = b;
+        setState(() => _bytes = b);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final b = _bytes;
+    if (b == null) return Center(child: Icon(widget.fallback, size: 34, color: VColors.textSecondary));
+    return Image.memory(b, fit: BoxFit.cover, gaplessPlayback: true, cacheWidth: 360,
+        errorBuilder: (_, __, ___) => Center(child: Icon(widget.fallback, size: 34, color: VColors.textSecondary)));
   }
 }
 

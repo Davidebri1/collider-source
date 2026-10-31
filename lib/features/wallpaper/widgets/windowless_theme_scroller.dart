@@ -4,10 +4,10 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../../core/media/theme_catalog.dart';
 import '../../../core/vision/category_nav.dart';
+import 'package:video_player/video_player.dart';
 import '../../../models/theme_def.dart';
 import '../../../core/vision/vision_kit.dart';
 import '../../theme/theme_living_media.dart';
-import '../../theme/live_cover_video.dart';
 import '../../theme/theme_pack_store.dart';
 
 /// REQ-06 Theme Gallery (map row 6, Vision Pro Spatial UI Kit 69-1926): the
@@ -275,33 +275,76 @@ class _PreviewWindow extends StatefulWidget {
 }
 
 class _PreviewWindowState extends State<_PreviewWindow> {
+  VideoPlayerController? _c;
+  double? _scrub;
+
+  @override
+  void initState() {
+    super.initState();
+    final url = widget.theme.videoUrl;
+    if (widget.theme.isLive && url != null) {
+      final c = VideoPlayerController.networkUrl(Uri.parse(url), videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true));
+      _c = c;
+      c.setLooping(true);
+      c.setVolume(0);
+      c.addListener(_tick);
+      c.initialize().then((_) {
+        if (!mounted) return;
+        c.play();
+        setState(() {});
+      }).catchError((_) {});
+    }
+  }
+
+  void _tick() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _c?.removeListener(_tick);
+    _c?.dispose();
+    super.dispose();
+  }
+
+  Widget _capsule(Widget child) => ClipRRect(
+        borderRadius: BorderRadius.circular(VRadius.full),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            height: 32,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(color: const Color(0x66808080), borderRadius: BorderRadius.circular(VRadius.full)),
+            child: child,
+          ),
+        ),
+      );
+
   @override
   Widget build(BuildContext context) {
     final t = widget.theme;
+    final c = _c;
+    final ready = c != null && c.value.isInitialized;
+    final dur = ready ? c.value.duration.inMilliseconds : 0;
+    final frac = _scrub ?? (dur > 0 ? c!.value.position.inMilliseconds / dur : 0.0);
     return ClipRRect(
       borderRadius: BorderRadius.circular(VRadius.xl),
       child: Stack(
         fit: StackFit.expand,
         children: [
           ThemePosterImage(theme: t, fit: BoxFit.cover, fullBleed: true),
-          if (t.isLive && t.videoUrl != null)
-            LiveCoverVideo(key: ValueKey('gal-${t.id}'), url: t.videoUrl!),
-          // Tap the image to expand; Back (top-left) is the only in-gallery dismiss.
-          Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: widget.onExpand)),
-          Positioned(
-            top: 10, left: 10,
-            child: VPress(
-              key: const ValueKey('gallery-back'),
-              onTap: widget.onBack,
-              tooltip: 'Back',
-              child: Container(
-                width: 36, height: 36,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(color: const Color(0x66000000), borderRadius: BorderRadius.circular(999)),
-                child: const Icon(Icons.chevron_left_rounded, color: Colors.white, size: 28),
-              ),
+          if (ready)
+            FittedBox(
+              fit: BoxFit.cover,
+              clipBehavior: Clip.hardEdge,
+              child: SizedBox(width: c.value.size.width, height: c.value.size.height, child: VideoPlayer(c)),
             ),
-          ),
+          // David (repeatedly): nothing sits on top of a theme image or video.
+          // The back / Expand View / Set / title / scrubber overlays came back
+          // from the v9-final import and the v8.7 restore (50a61a7); they are
+          // gone here and media_check.py fails if any widget overlaps the image.
+          // Tap the image to view it full screen; Set lives below.
+          Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: widget.onExpand)),
         ],
       ),
     );
@@ -309,11 +352,43 @@ class _PreviewWindowState extends State<_PreviewWindow> {
 }
 
 /// A silent looping wallpaper (Expand View of a live theme).
-class _LoopVideo extends StatelessWidget {
+class _LoopVideo extends StatefulWidget {
   final String url;
   const _LoopVideo({super.key, required this.url});
   @override
-  Widget build(BuildContext context) => LiveCoverVideo(url: url);
+  State<_LoopVideo> createState() => _LoopVideoState();
+}
+
+class _LoopVideoState extends State<_LoopVideo> {
+  late final VideoPlayerController _c = VideoPlayerController.networkUrl(Uri.parse(widget.url), videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true));
+
+  @override
+  void initState() {
+    super.initState();
+    _c.setLooping(true);
+    _c.setVolume(0);
+    _c.initialize().then((_) {
+      if (!mounted) return;
+      _c.play();
+      setState(() {});
+    }).catchError((_) {});
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_c.value.isInitialized) return const SizedBox.shrink();
+    return FittedBox(
+      fit: BoxFit.cover,
+      clipBehavior: Clip.hardEdge,
+      child: SizedBox(width: _c.value.size.width, height: _c.value.size.height, child: VideoPlayer(_c)),
+    );
+  }
 }
 
 /// Horizontal edge fade for thumbnail strips.

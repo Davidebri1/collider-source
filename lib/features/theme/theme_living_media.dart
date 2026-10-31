@@ -6,7 +6,6 @@ import 'package:video_player/video_player.dart';
 import '../../core/media/theme_catalog.dart';
 import '../../core/media/first_frame.dart';
 import '../../models/theme_def.dart';
-import 'live_cover_video.dart';
 
 /// Media source helpers. A media string is either an absolute URL (streamed
 /// from the collider-media host) or a bundled asset path.
@@ -232,8 +231,6 @@ class _ThemeLivingBackdropState extends State<ThemeLivingBackdrop> {
   }
 
   Future<void> _boot() async {
-    // Web paints via LiveCoverVideo in build(); skip video_player there.
-    if (kIsWeb) return;
     final gen = ++_generation;
     final path = widget.theme.videoPath;
     if (!widget.preferVideo || path == null || path.isEmpty) return;
@@ -277,20 +274,6 @@ class _ThemeLivingBackdropState extends State<ThemeLivingBackdrop> {
 
   @override
   Widget build(BuildContext context) {
-    // Web: real HTML <video> (LiveCoverVideo) over the poster. video_player's
-    // texture path was stuttery and soft; CSS keeps the element hidden until
-    // a frame is ready so the poster is never blanked.
-    if (kIsWeb && widget.preferVideo && (widget.theme.videoUrl ?? '').isNotEmpty) {
-      final media = Stack(
-        fit: StackFit.expand,
-        children: [
-          ThemePosterImage(theme: widget.theme, fullBleed: true, filterQuality: FilterQuality.high),
-          LiveCoverVideo(key: ValueKey('bd-${widget.theme.id}'), url: widget.theme.videoUrl!),
-        ],
-      );
-      if (widget.builderAmbient) return BuilderAmbientFilter.wrap(media);
-      return media;
-    }
     final c = _controller;
     final showVideo = _ready && c != null && c.value.isInitialized;
     final media = Stack(
@@ -339,7 +322,7 @@ class ThemeCoverMedia extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final useVideo = playVideo && theme.isLive;
+    final useVideo = playVideo && theme.isLive && !kIsWeb;
     if (useVideo) {
       return ThemeLivingBackdrop(
         key: ValueKey('cover-vid-${theme.id}'),
