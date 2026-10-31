@@ -1,0 +1,212 @@
+# Build Flutter web on every push to main, attach zip + source bundle to the
+# v9.2.0-smartgen release, write sha256. Uses GITHUB_TOKEN only — no new PATs.
+# Provider secrets stay in the Cloudflare Worker. COLLIDER_PROXY defaults in
+# lib/core/api/media_gen.dart to https://collider-keys.ebridavid.workers.dev.
+name: Build and release web
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: collider-source-build-release
+  cancel-in-progress: false
+
+env:
+  FLUTTER_VERSION: '3.47.5'
+  RELEASE_TAG: v9.2.0-smartgen
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Guard — refuse to build if lib/ still embeds key literals
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import re, sys
+          from pathlib import Path
+          roots = [Path('lib'), Path('tool')]
+          needles = [
+              'sk-or-v1-', 'gsk_', 'nvapi-', 'vck_', 'sk-cp-', 'sk-pm', 'user_3we',
+          ]
+          # Any sk- token of 30+ chars (sk- + 27 more)
+          sk_long = re.compile(r'sk-[A-Za-z0-9_\-]{27,}')
+          bad = []
+          for root in roots:
+              if not root.exists():
+                  continue
+              for p in root.rglob('*'):
+                  if not p.is_file():
+                      continue
+                  if p.suffix not in {'.dart', '.sh', '.md', '.json', '.yml', '.yaml', '.js', '.ts'}:
+                      # still scan .dart primarily; skip binaries
+                      if p.suffix not in {'.dart', '.sh'}:
+                          continue
+                  try:
+                      text = p.read_text(encoding='utf-8', errors='replace')
+                  except Exception:
+                      continue
+                  for n in needles:
+                      if n in text:
+                          bad.append(f'{p}: contains {n!r}')
+                  for m in sk_long.finditer(text):
+                      # Allow short public URL path segments; flag long sk- secrets
+                      bad.append(f'{p}: long sk- literal ({len(m.group())} chars)')
+          if bad:
+              print('REFUSING BUILD — key literals in source:', file=sys.stderr)
+              for b in bad[:50]:
+                  print(' ', b, file=sys.stderr)
+              sys.exit(1)
+          print('lib/tool key guard: clean')
+          PY
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Verify Flutter pin
+        run: |
+          set -euo pipefail
+          flutter --version
+          echo "Expected box pin: Flutter 3.47.5 / 6a19cca564"
+
+      - name: Build web (no embedded keys; proxy default in source)
+        env:
+          # Do not set COLLIDER_ALLOW_EMBEDDED_KEYS. Do not inject provider secrets.
+          # COLLIDER_PROXY defaults in Dart; optional override only:
+          COLLIDER_PROXY: ${{ vars.COLLIDER_PROXY }}
+        run: |
+          set -euo pipefail
+          # If Variable unset, leave unset so Dart defaultValue is used.
+          if [[ -z "${COLLIDER_PROXY:-}" ]]; then
+            unset COLLIDER_PROXY
+            echo "Using Dart default COLLIDER_PROXY (collider-keys.ebridavid.workers.dev)"
+          else
+            echo "COLLIDER_PROXY override from vars (length ${#COLLIDER_PROXY})"
+          fi
+          bash tool/build_web.sh
+
+      - name: Guard — fail if main.dart.js contains key literals
+        run: |
+          set -euo pipefail
+          JS=build/web/main.dart.js
+          test -f "$JS"
+          python3 - <<'PY'
+          import re, sys, hashlib
+          from pathlib import Path
+          js = Path('build/web/main.dart.js').read_text(encoding='utf-8', errors='replace')
+          needles = ['sk-or-v1-', 'gsk_', 'nvapi-', 'vck_', 'sk-cp-', 'sk-pm', 'user_3we']
+          bad = [n for n in needles if n in js]
+          sk_long = re.compile(r'sk-[A-Za-z0-9_\-]{27,}')
+          longs = sk_long.findall(js)
+          if bad or longs:
+              print('REFUSING RELEASE — key literals in main.dart.js:', file=sys.stderr)
+              for n in bad:
+                  print(f'  needle {n!r}', file=sys.stderr)
+              for s in longs[:10]:
+                  print(f'  long sk- ({len(s)} chars)', file=sys.stderr)
+              sys.exit(1)
+          # Must contain the Worker host (baked default or override)
+          if 'collider-keys.ebridavid.workers.dev' not in js and 'COLLIDER_PROXY' not in js:
+              # compiled const usually inlines the default string
+              print('WARNING: Worker host string not found in bundle', file=sys.stderr)
+          if 'collider-keys.ebridavid.workers.dev' not in js:
+              print('REFUSING RELEASE — proxy URL missing from main.dart.js', file=sys.stderr)
+              sys.exit(1)
+          h = hashlib.sha256(js.encode()).hexdigest()
+          print('main.dart.js key guard: clean')
+          print('main.dart.js sha256', h)
+          Path('/tmp/main.dart.js.sha256').write_text(h + '\n')
+          PY
+
+      - name: Pack zip (index.html at root, no artifacts)
+        id: zip
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, zipfile
+          from pathlib import Path
+          src = Path('build/web')
+          out = Path('collider-9.2.0-web.zip')
+          if out.exists(): out.unlink()
+          with zipfile.ZipFile(out, 'w', compression=zipfile.ZIP_DEFLATED) as z:
+              for p in sorted(src.rglob('*')):
+                  if not p.is_file(): continue
+                  rel = p.relative_to(src).as_posix()
+                  if 'artifacts' in Path(rel).parts: continue
+                  z.write(p, rel)
+          b = out.read_bytes()
+          Path('/tmp/zip.sha256').write_text(hashlib.sha256(b).hexdigest())
+          Path('/tmp/zip.size').write_text(str(len(b)))
+          print('sha256', hashlib.sha256(b).hexdigest())
+          print('size', len(b))
+          PY
+          echo "sha256=$(cat /tmp/zip.sha256)" >> "$GITHUB_OUTPUT"
+          echo "size=$(cat /tmp/zip.size)" >> "$GITHUB_OUTPUT"
+          echo "js_sha256=$(cat /tmp/main.dart.js.sha256)" >> "$GITHUB_OUTPUT"
+
+      - name: Create source bundle
+        run: |
+          set -euo pipefail
+          TIP=$(git rev-parse HEAD)
+          if git rev-parse -q --verify "refs/tags/${RELEASE_TAG}" >/dev/null; then
+            BASE=$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")
+            if git merge-base --is-ancestor "$BASE" "$TIP" && [[ "$BASE" != "$TIP" ]]; then
+              git bundle create collider-source.bundle "^$BASE" HEAD
+            else
+              git bundle create collider-source.bundle HEAD
+            fi
+          else
+            git bundle create collider-source.bundle HEAD
+          fi
+          git bundle verify collider-source.bundle
+          sha256sum collider-source.bundle | tee /tmp/bundle.sha256
+
+      - name: Write release metadata
+        run: |
+          set -euo pipefail
+          TIP=$(git rev-parse HEAD)
+          python3 - <<PY
+          import json, pathlib
+          meta = {
+            "id": "main-${{ github.run_number }}",
+            "label": "main ${{ github.sha }}",
+            "url": "https://github.com/${{ github.repository }}/releases/download/${{ env.RELEASE_TAG }}/collider-9.2.0-web.zip",
+            "sha256": pathlib.Path('/tmp/zip.sha256').read_text().strip(),
+            "size": int(pathlib.Path('/tmp/zip.size').read_text().strip()),
+            "commit": "$TIP",
+            "main_dart_js_sha256": pathlib.Path('/tmp/main.dart.js.sha256').read_text().strip(),
+            "bundle_sha256": pathlib.Path('/tmp/bundle.sha256').read_text().split()[0],
+          }
+          pathlib.Path('release-meta.json').write_text(json.dumps(meta, indent=2) + '\n')
+          print(json.dumps(meta, indent=2))
+          PY
+
+      - name: Upsert GitHub Release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" \
+              --title "$RELEASE_TAG" \
+              --notes "Automated web builds from main. Latest assets overwritten each push."
+          fi
+          gh release upload "$RELEASE_TAG" \
+            collider-9.2.0-web.zip \
+            collider-source.bundle \
+            release-meta.json \
+            --clobber
