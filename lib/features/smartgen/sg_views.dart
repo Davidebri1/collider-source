@@ -550,14 +550,17 @@ class _KanbanColumnState extends State<_KanbanColumn> {
     const ink = Color(0xFFFFFFFF);
     const muted = Color(0xB3FFFFFF);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(14, 10, 4, 4),
-        child: Row(children: [
-          Expanded(child: Text(widget.list.title, style: appFont(fontSize: 16, fontWeight: FontWeight.w700, color: ink))),
-          IconButton(
-            tooltip: 'List menu',
-            onPressed: () => setState(() => _menu = !_menu),
-            icon: const Icon(Icons.more_horiz, color: muted, size: 22),
+      SizedBox(
+        height: 44,
+        child: Stack(alignment: Alignment.center, children: [
+          Text(widget.list.title, textAlign: TextAlign.center, style: appFont(fontSize: 16, fontWeight: FontWeight.w700, color: ink)),
+          Align(
+            alignment: Alignment.centerRight,
+            child: IconButton(
+              tooltip: 'List menu',
+              onPressed: () => setState(() => _menu = !_menu),
+              icon: const Icon(Icons.more_horiz, color: muted, size: 22),
+            ),
           ),
         ]),
       ),
@@ -828,7 +831,7 @@ class _SgNotebookState extends State<SgNotebook> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Text(title, style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
+        Text(title, textAlign: TextAlign.center, style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
         const SizedBox(height: 8),
         Expanded(
           child: Stack(children: [
@@ -942,13 +945,13 @@ class SgStory extends StatelessWidget {
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               Container(
                 height: 32,
-                alignment: Alignment.centerLeft,
+                alignment: Alignment.center,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
                   color: Color(c.color | 0xFF000000),
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
                 ),
-                child: Text('Frame ${i + 1}', style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
+                child: Text('Frame ${i + 1}', textAlign: TextAlign.center, style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
               ),
               Expanded(
                 child: Padding(
@@ -1043,7 +1046,7 @@ class SgSwim extends StatelessWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-          child: Text('Swimlanes', style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white70)),
+          child: Text('Swimlanes', textAlign: TextAlign.center, style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white70)),
         ),
         Expanded(
           child: ListView.builder(
@@ -1058,7 +1061,7 @@ class SgSwim extends StatelessWidget {
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                   Padding(
                     padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-                    child: Text(t.label, style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
+                    child: Text(t.label, textAlign: TextAlign.center, style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
                   ),
                   SizedBox(
                     height: 148,
@@ -1233,17 +1236,26 @@ class _SgFilesState extends State<SgFiles> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-          child: Row(children: [
-            const Icon(Icons.folder_open_rounded, size: 16, color: Color(0xFFFFD56A)),
-            const SizedBox(width: 6),
-            Text('Files', style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white70)),
-            const Spacer(),
-            _sortChip('type', 'Type'),
-            const SizedBox(width: 4),
-            _sortChip('name', 'Name'),
-            const SizedBox(width: 8),
-            Text('${pairs.length}', style: appFont(fontSize: 12, color: Colors.white54)),
-          ]),
+          child: SizedBox(
+            height: 36,
+            child: Stack(alignment: Alignment.center, children: [
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.folder_open_rounded, size: 16, color: Color(0xFFFFD56A)),
+                const SizedBox(width: 6),
+                Text('Files', textAlign: TextAlign.center, style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white70)),
+              ]),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  _sortChip('type', 'Type'),
+                  const SizedBox(width: 4),
+                  _sortChip('name', 'Name'),
+                  const SizedBox(width: 8),
+                  Text('${pairs.length}', style: appFont(fontSize: 12, color: Colors.white54)),
+                ]),
+              ),
+            ]),
+          ),
         ),
         Expanded(
           child: pairs.isEmpty

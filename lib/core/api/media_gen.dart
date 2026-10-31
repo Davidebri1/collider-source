@@ -237,6 +237,11 @@ class MediaGen {
   ({String base, String key}) _wire(_Route r) {
     // OpenRouter removed. CrazyRouter carries crazy:true media rows and any
     // remaining openrouter-* media that still resolves through this helper.
+    // When COLLIDER_PROXY is set the Worker holds the key — do not throw here
+    // (hasCredentials reads .key and must stay side-effect free on boot).
+    if (_proxy.isNotEmpty) {
+      return (base: _crazyRouterBase, key: 'proxy');
+    }
     if (_crazyRouterKey.isEmpty) throw const MediaGenError('no-key');
     return (base: _crazyRouterBase, key: _crazyRouterKey);
   }

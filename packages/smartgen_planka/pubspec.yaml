@@ -1,0 +1,53 @@
+name: planka_app
+description: Planka Flutter app (AGPL-3.0 + Commons Clause) vendored for Collider Smart Gen.
+publish_to: 'none'
+version: 0.0.9+collider
+
+environment:
+  sdk: '>=3.4.3 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+  provider: ^6.1.2
+  flutter_riverpod: ^2.5.1
+  floating_action_bubble: ^1.1.4
+  intl: ^0.20.2
+  top_snackbar_flutter: ^3.1.0
+  html: ^0.15.4
+  markdown_editor_plus: ^0.2.15
+  shared_preferences: ^2.3.2
+  omni_datetime_picker: ^2.0.3
+  widget_zoom: ^0.0.4
+  image_picker: ^1.1.2
+  file_picker: ^10.3.0
+  mime: ^1.0.6
+  easy_localization: ^3.0.7
+  table_calendar: ^3.1.2
+  trina_grid: ^1.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+dependency_overrides:
+  font_awesome_flutter: ^11.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/translations/
+    - assets/labelColors.json
+  fonts:
+    - family: GoogleSansFlex
+      fonts:
+        - asset: assets/fonts/GoogleSansFlex-400.ttf
+          weight: 400
+        - asset: assets/fonts/GoogleSansFlex-500.ttf
+          weight: 500
+        - asset: assets/fonts/GoogleSansFlex-600.ttf
+          weight: 600
+        - asset: assets/fonts/GoogleSansFlex-700.ttf
+          weight: 700

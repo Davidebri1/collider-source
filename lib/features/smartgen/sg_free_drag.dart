@@ -268,28 +268,32 @@ class _SgFreePlaneState extends State<SgFreePlane> {
     return ColoredBox(
       color: Colors.transparent,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 6, 4, 2),
-          child: Row(children: [
-            if (widget.titleIcon != null) ...[
-              Icon(widget.titleIcon, size: 16, color: widget.titleIconColor),
-              const SizedBox(width: 6),
-            ],
-            Expanded(
-              child: Text(
+        SizedBox(
+          height: 40,
+          child: Stack(alignment: Alignment.center, children: [
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              if (widget.titleIcon != null) ...[
+                Icon(widget.titleIcon, size: 16, color: widget.titleIconColor),
+                const SizedBox(width: 6),
+              ],
+              Text(
                 widget.title ?? '',
+                textAlign: TextAlign.center,
                 style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white70),
               ),
-            ),
-            Semantics(
-              button: true,
-              label: snap ? 'Free place' : 'Align to grid',
-              child: IconButton(
-                tooltip: snap ? 'Free place' : 'Align to grid',
-                iconSize: 20,
-                color: snap ? const Color(0xFFFFD56A) : Colors.white70,
-                onPressed: _toggleSnap,
-                icon: Icon(snap ? Icons.grid_off_rounded : Icons.grid_view_rounded),
+            ]),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Semantics(
+                button: true,
+                label: snap ? 'Free place' : 'Align to grid',
+                child: IconButton(
+                  tooltip: snap ? 'Free place' : 'Align to grid',
+                  iconSize: 20,
+                  color: snap ? const Color(0xFFFFD56A) : Colors.white70,
+                  onPressed: _toggleSnap,
+                  icon: Icon(snap ? Icons.grid_off_rounded : Icons.grid_view_rounded),
+                ),
               ),
             ),
           ]),

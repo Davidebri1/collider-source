@@ -1,0 +1,18 @@
+OCR / wording notes (read from captures 2026-10-31)
+
+OURS (standalone packages/smartgen_planka, ?sgcap=1):
+- home: Project 1 + Create Project + FAB; empty app_name (no "Planka")
+- boards: Boards for Project 1
+- board: Lists for Board; To Do list; cards Draft brief (Design label), Gather refs; due chips; Add Card; Filter/Align/Views/Board menu icons
+- card: Draft brief; Design label; 05.11.2026; Description "Outline the first pass."; Tasks / Attachments / Comments
+- Board menu: Board menu; Genie icon-only; Members; Invite to workspace; About this board; Change visibility; Change background; Settings; Labels; Stickers; Custom Fields; Power-Ups; Automation; Table; Search; Archived items; Filter cards; Copy board; Email-to-board settings; Print, export, and share; Activity; Align switch; Leave board; Close board
+- Custom Fields: Details group; Status dropdown; Points number; type chips
+- Table: Board/Table/Calendar/Timeline tabs; Name/List/Due; list names (To Do/Doing/Done) after fix
+- Calendar / Timeline: due-sorted cards
+- search / filter / cover / labels: capture sheets present
+
+STOCK planka_app (planka_stock): Projects / Boards / Lists for Board 1 / card / Board menu / labels — single-list board parity.
+
+Trello iOS (Mobbin): photo board bg, richer card chrome; Board menu lowercase-m wording matched.
+
+BLANK GREY (Collider host): Entire Collider web (home AND ?app=smartgen) paints #C0C0C0 under SwiftShader here; standalone planka paints. Cause: Collider host CanvasKit/WebGL scene (not a ?app=smartgen console route error). Defensive fixes: gate ThemeLivingBackdrop under smartgen; EasyLocalization errorWidget; FileBlobs load timeout; Auth tryAutoLogin no-op; ProxyProviders keep previous.

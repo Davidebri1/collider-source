@@ -451,7 +451,12 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     // which used to leave ?app= on the home screen.
     const openable = {'smartgen', 'market', 'themes', 'premium', 'music', 'files', 'consensus', 'apps'};
     final appLink = Uri.base.queryParameters['app'];
-    if (appLink != null && openable.contains(appLink)) _activeDrawer = appLink;
+    if (appLink != null && openable.contains(appLink)) {
+      _activeDrawer = appLink;
+    } else if (_activeDrawer == null && Uri.base.queryParameters['drawer'] == null) {
+      // Smart Gen opens by default (planka_app drop-in).
+      _activeDrawer = 'smartgen';
+    }
     final cq = Uri.base.queryParameters['cat'];
     if (cq != null) _activeCategory = ModelCategory.values.firstWhere((c) => c.name == cq, orElse: () => ModelCategory.general);
     if (Uri.base.queryParameters['genopts'] == '1' && _activeCategory.isMedia) _genOptionsOpen = true;
@@ -2232,7 +2237,10 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // opaque #000 -> #111 root and its own ambient loop over the whole
           // viewport, so Plane 0 was invisible there while still decoding a
           // full-bleed still on every swipe during idle playback.
-          if (_activeDrawer != 'premium') ...[
+          // Smart Gen embeds its own Flutter MaterialApp/CanvasKit surface. Keeping
+          // ThemeLivingBackdrop's video/WebGL layer underneath exhausts SwiftShader and
+          // paints the whole host #C0C0C0 (standalone planka web paints fine without it).
+          if (_activeDrawer != 'premium' && _activeDrawer != 'smartgen') ...[
           Positioned.fill(
             child: ThemeLivingBackdrop(
               key: ValueKey('live-${_currentTheme.id}-${_currentTheme.videoPath ?? _currentTheme.assetPath}'),
@@ -2247,6 +2255,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             ),
           ),
           ],
+          if (_activeDrawer == 'smartgen')
+            const Positioned.fill(child: ColoredBox(color: Color(0xFF0079BF))),
 
           // Base ambient dim. Overlays and work surfaces bring their own VScrim
           // (kit overlay 0.35 + medium blur) so the wallpaper stays visible;

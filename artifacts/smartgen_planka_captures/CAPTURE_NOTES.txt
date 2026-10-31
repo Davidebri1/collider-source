@@ -1,0 +1,15 @@
+Smart Gen planka_app drop-in capture notes (America/Denver)
+
+Web build: OK (tool/build_web.sh, base-href=/collider-app/, COLLIDER_PROXY set).
+Full Collider web screenshots at 440x956: BLOCKED — Chrome WebGL1/2 blocklisted on this box
+(ContextResult::kFatalFailure: WebGL2 blocklisted). Live GitHub Pages Collider also paints
+solid #C0C0C0 under the same Chrome. Prior e2e PNGs from this machine used a GPU path that
+is no longer available.
+
+Ours captures under artifacts/smartgen_planka_captures/ours/ are solid grey placeholders.
+Sheet: artifacts/smartgen_planka_captures/sheet/compare_sheet.png
+
+Stock refs: stock/planka_mobile.png, planka_dash.png, planka_home.png
+Trello Mobbin: trello/board_lists.jpg, board_menu.jpg, board_action.jpg, card_detail.jpg, board_emptyish.jpg
+
+Cannot certify "≥ stock planka_app" visually until WebGL captures work.

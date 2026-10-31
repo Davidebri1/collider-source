@@ -1,0 +1,161 @@
+{
+  "at": "2026-10-31T07:34:36.216Z",
+  "viewport": {
+    "w": 440,
+    "h": 956,
+    "deviceScaleFactor": 2
+  },
+  "root": "/workspace/sgrev/v920/collider/packages/smartgen_planka/build/web",
+  "shots": [
+    {
+      "name": "00_home",
+      "mid": [
+        0,
+        121,
+        191,
+        255
+      ],
+      "bytes": 29194
+    },
+    {
+      "name": "01_boards",
+      "mid": [
+        254,
+        247,
+        255,
+        255
+      ],
+      "bytes": 27972
+    },
+    {
+      "name": "02_board",
+      "mid": [
+        0,
+        121,
+        191,
+        255
+      ],
+      "bytes": 50701
+    },
+    {
+      "name": "03_card_detail",
+      "mid": [
+        254,
+        247,
+        255,
+        255
+      ],
+      "bytes": 60379
+    },
+    {
+      "name": "04_board_menu",
+      "mid": [
+        254,
+        247,
+        255,
+        255
+      ],
+      "bytes": 100399
+    },
+    {
+      "name": "05_custom_fields",
+      "mid": [
+        254,
+        247,
+        255,
+        255
+      ],
+      "bytes": 28921
+    },
+    {
+      "name": "05b_custom_fields_add",
+      "mid": [
+        117,
+        113,
+        117,
+        255
+      ],
+      "bytes": 57935
+    },
+    {
+      "name": "06_search",
+      "mid": [
+        254,
+        247,
+        255,
+        255
+      ],
+      "bytes": 10216
+    },
+    {
+      "name": "07_filter",
+      "mid": [
+        0,
+        56,
+        88,
+        255
+      ],
+      "bytes": 36521
+    },
+    {
+      "name": "08_table",
+      "mid": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "bytes": 45882
+    },
+    {
+      "name": "09_calendar",
+      "mid": [
+        254,
+        247,
+        255,
+        255
+      ],
+      "bytes": 47855
+    },
+    {
+      "name": "10_timeline",
+      "mid": [
+        254,
+        247,
+        255,
+        255
+      ],
+      "bytes": 41705
+    },
+    {
+      "name": "11_cover",
+      "mid": [
+        0,
+        56,
+        88,
+        255
+      ],
+      "bytes": 54940
+    },
+    {
+      "name": "12_labels",
+      "mid": [
+        0,
+        56,
+        88,
+        255
+      ],
+      "bytes": 22701
+    },
+    {
+      "name": "13_freedrag",
+      "mid": [
+        0,
+        121,
+        191,
+        255
+      ],
+      "bytes": 42797
+    }
+  ]
+}

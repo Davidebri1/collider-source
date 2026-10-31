@@ -54,7 +54,7 @@ class _SgPowerKanbanState extends State<SgPowerKanban> {
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(12, 10, 4, 6),
-              child: Text(list.title, style: appFont(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white)),
+              child: Text(list.title, textAlign: TextAlign.center, style: appFont(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white)),
             ),
           ),
         ],

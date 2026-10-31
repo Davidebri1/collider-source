@@ -13,9 +13,11 @@ import 'sg_model.dart';
 import 'sg_views.dart';
 
 class SgPane extends StatefulWidget {
-  const SgPane({super.key, required this.onClose, this.section = 'tasks'});
+  const SgPane({super.key, required this.onClose, this.section = 'tasks', this.onOpenKanbanInPlanka});
   final VoidCallback onClose;
   final String section;
+  /// Kanban-type boards open in planka_app; other kinds stay on this live pane.
+  final VoidCallback? onOpenKanbanInPlanka;
 
   @override
   State<SgPane> createState() => _SgPaneState();
@@ -619,10 +621,13 @@ class _SgPaneState extends State<SgPane> {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Row(children: [
-              Expanded(child: Text('Boards', style: appFont(fontSize: 22, fontWeight: FontWeight.w700, color: Colors.white))),
-              _icon('Close', Icons.close, widget.onClose),
-            ]),
+            SizedBox(
+              height: 44,
+              child: Stack(alignment: Alignment.center, children: [
+                Text('Boards', textAlign: TextAlign.center, style: appFont(fontSize: 22, fontWeight: FontWeight.w700, color: Colors.white)),
+                Align(alignment: Alignment.centerRight, child: _icon('Close', Icons.close, widget.onClose)),
+              ]),
+            ),
             const SizedBox(height: 10),
             TextField(
               controller: _newBoardName,
@@ -678,10 +683,10 @@ class _SgPaneState extends State<SgPane> {
   }
 
   Widget _homeSectionLabel(IconData icon, String label, Color color) {
-    return Row(children: [
+    return Row(mainAxisAlignment: MainAxisAlignment.center, children: [
       Icon(icon, size: 16, color: color),
       const SizedBox(width: 6),
-      Text(label, style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
+      Text(label, textAlign: TextAlign.center, style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
     ]);
   }
 
@@ -689,6 +694,10 @@ class _SgPaneState extends State<SgPane> {
     final bg = Color((board.background | 0xFF000000));
     final accent = Color.lerp(bg, Colors.black, 0.35)!;
     void open() {
+      if (board.surface == SgSurface.kanban && widget.onOpenKanbanInPlanka != null) {
+        widget.onOpenKanbanInPlanka!();
+        return;
+      }
       store.openBoard(board.id);
       setState(() {});
     }
@@ -763,6 +772,11 @@ class _SgPaneState extends State<SgPane> {
     if (name.isEmpty) return; // do not invent a default board name
     store.createBoard(name, goHome: false);
     _newBoardName.clear();
+    // New boards default to kanban → open in Planka when the host provides it.
+    if (widget.onOpenKanbanInPlanka != null) {
+      widget.onOpenKanbanInPlanka!();
+      return;
+    }
     setState(() {});
   }
 
@@ -842,7 +856,14 @@ class _SgPaneState extends State<SgPane> {
                   label: s.label,
                   selected: b.surface == s,
                   size: 11,
-                  onSelected: (_) => store.touch(() => b.surface = s),
+                  onSelected: (_) {
+                    store.touch(() => b.surface = s);
+                    if (s == SgSurface.kanban && widget.onOpenKanbanInPlanka != null) {
+                      widget.onOpenKanbanInPlanka!();
+                    } else {
+                      setState(() {});
+                    }
+                  },
                 ),
               ),
           ],
@@ -921,10 +942,13 @@ class _SgPaneState extends State<SgPane> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
         children: [
-          Row(children: [
-            Expanded(child: Text('Board menu', style: appFont(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white))),
-            _icon('Close', Icons.close, () => setState(() => _menu = false)),
-          ]),
+          SizedBox(
+            height: 44,
+            child: Stack(alignment: Alignment.center, children: [
+              Text('Board menu', textAlign: TextAlign.center, style: appFont(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white)),
+              Align(alignment: Alignment.centerRight, child: _icon('Close', Icons.close, () => setState(() => _menu = false))),
+            ]),
+          ),
           _menuAction(Icons.search_rounded, 'Search', () => setState(() { _menu = false; _overlay = 'search'; })),
           _menuAction(Icons.bar_chart_rounded, 'Statistics', () => setState(() { _menu = false; _overlay = 'stats'; })),
           _menuAction(Icons.checklist_rounded, _multi ? 'Stop selecting' : 'Select cards', () => setState(() { _menu = false; _multi = !_multi; })),
@@ -942,10 +966,10 @@ class _SgPaneState extends State<SgPane> {
           }),
           _menuAction(Icons.auto_awesome_rounded, 'Genie', () => setState(() { _menu = false; _overlay = 'genie'; })),
           const SizedBox(height: 8),
-          Text('Members', style: appFont(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
+          Text('Members', textAlign: TextAlign.center, style: appFont(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
           Text(b.guests.join(', '), style: appFont(fontSize: 13, color: Colors.white)),
           const SizedBox(height: 10),
-          Text('Background', style: appFont(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
+          Text('Background', textAlign: TextAlign.center, style: appFont(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
           const SizedBox(height: 4),
           Wrap(spacing: 6, children: [
             for (final color in [0xFF0079BF, 0xFF519839, 0xFFB04632, 0xFF89609E])
@@ -955,7 +979,7 @@ class _SgPaneState extends State<SgPane> {
               ),
           ]),
           const SizedBox(height: 10),
-          Text('Board kind', style: appFont(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
+          Text('Board kind', textAlign: TextAlign.center, style: appFont(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
           Wrap(spacing: 4, children: [
             for (final k in SgBoardKind.values)
               _glassChoice(
@@ -974,7 +998,7 @@ class _SgPaneState extends State<SgPane> {
           _toggle('Hide complete', b.autoFilterComplete, (v) => store.touch(() => b.autoFilterComplete = v)),
           _toggle('Inherit column status', b.inheritColumnStatus, (v) => store.touch(() => b.inheritColumnStatus = v)),
           _toggle('Urgent on today', b.urgentAutoCalendar, (v) => store.touch(() => b.urgentAutoCalendar = v)),
-          Text('Status control', style: appFont(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
+          Text('Status control', textAlign: TextAlign.center, style: appFont(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
           Wrap(spacing: 4, children: [
             for (final k in SgStatusKind.values)
               _glassChoice(label: _statusKindLabel(k), selected: b.statusKind == k, size: 10, onSelected: (_) => store.touch(() => b.statusKind = k)),
@@ -1145,18 +1169,26 @@ class _SgPaneState extends State<SgPane> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(children: [
-              Expanded(child: Text('Genie', style: appFont(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white))),
-              if (_genieBusy)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: Text('…', style: appFont(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white70)),
+            SizedBox(
+              height: 44,
+              child: Stack(alignment: Alignment.center, children: [
+                Text('Genie', textAlign: TextAlign.center, style: appFont(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    if (_genieBusy)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Text('…', style: appFont(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white70)),
+                      ),
+                    _icon('New conversation', Icons.add_comment_outlined, () {
+                      if (!_genieBusy) store.newConversation();
+                    }),
+                    _icon('Close Genie', Icons.close_rounded, () => setState(() { _overlay = ''; _openId = null; _cover = false; })),
+                  ]),
                 ),
-              _icon('New conversation', Icons.add_comment_outlined, () {
-                if (!_genieBusy) store.newConversation();
-              }),
-              _icon('Close Genie', Icons.close_rounded, () => setState(() { _overlay = ''; _openId = null; _cover = false; })),
-            ]),
+              ]),
+            ),
             const SizedBox(height: 8),
             Expanded(
               child: ListView(
@@ -1312,11 +1344,11 @@ class _SgPaneState extends State<SgPane> {
     return Padding(
       key: key,
       padding: const EdgeInsets.only(top: 18),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
           Icon(icon, size: 18, color: _ink),
           const SizedBox(width: 8),
-          Expanded(child: Text(title, style: appFont(fontSize: 16, fontWeight: FontWeight.w700, color: _ink), overflow: TextOverflow.ellipsis)),
+          Flexible(child: Text(title, textAlign: TextAlign.center, style: appFont(fontSize: 16, fontWeight: FontWeight.w700, color: _ink), overflow: TextOverflow.ellipsis)),
         ]),
         const SizedBox(height: 8),
         ...children,
@@ -1379,19 +1411,25 @@ class _SgPaneState extends State<SgPane> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
               children: [
-                Row(children: [
-                  Tooltip(
-                    message: 'Back',
-                    child: IconButton(
-                      onPressed: () => setState(() => _cover = false),
-                      icon: const Icon(Icons.arrow_back_rounded, color: _ink),
+                SizedBox(
+                  height: 44,
+                  child: Stack(alignment: Alignment.center, children: [
+                    Text('Cover', textAlign: TextAlign.center, style: appFont(fontSize: 20, fontWeight: FontWeight.w700, color: _ink)),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Tooltip(
+                        message: 'Back',
+                        child: IconButton(
+                          onPressed: () => setState(() => _cover = false),
+                          icon: const Icon(Icons.arrow_back_rounded, color: _ink),
+                        ),
+                      ),
                     ),
-                  ),
-                  Expanded(child: Text('Cover', style: appFont(fontSize: 20, fontWeight: FontWeight.w700, color: _ink))),
-                ]),
+                  ]),
+                ),
                 SgCover(card: c, height: 120),
                 const SizedBox(height: 16),
-                Text('Colors', style: appFont(fontSize: 16, fontWeight: FontWeight.w700, color: _ink)),
+                Text('Colors', textAlign: TextAlign.center, style: appFont(fontSize: 16, fontWeight: FontWeight.w700, color: _ink)),
                 const SizedBox(height: 8),
                 Wrap(spacing: 8, runSpacing: 8, children: [
                   for (final argb in _coverSwatches)
@@ -1832,7 +1870,7 @@ class _SgPaneState extends State<SgPane> {
       child: Padding(
         padding: const EdgeInsets.all(8),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Text('Edit ${cards.length}', style: appFont(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
+          Text('Edit ${cards.length}', textAlign: TextAlign.center, style: appFont(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
           Text(cards.map((c) => c.title).join(', '), style: appFont(fontSize: 11, color: Colors.white70)),
           const SizedBox(height: 8),
           Text('Status', style: appFont(fontSize: 11, color: Colors.white70)),

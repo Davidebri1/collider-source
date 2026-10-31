@@ -1,12 +1,15 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:planka_app/embed.dart';
 
+import '../../../core/api/media_gen.dart';
+import '../../../core/files/file_blobs.dart';
+import '../planka_migrate.dart';
+import '../sg_model.dart';
 import '../sg_pane.dart';
 
-/// Parses the Smart Gen agent's reply into the derived need, how the cards
-/// serve it, and the proposed cards. Kept out of the widget so it can be
-/// tested against the shapes a model actually returns.
 ({String need, String serve, List<(String title, String note)> cards}) parseSmartGen(String out) {
   final need = RegExp(r'NEED:\s*(.+)').firstMatch(out)?.group(1)?.trim() ?? '';
   final serve = RegExp(r'SERVE:\s*(.+)').firstMatch(out)?.group(1)?.trim() ?? '';
@@ -24,14 +27,115 @@ import '../sg_pane.dart';
   return (need: need, serve: serve, cards: cards);
 }
 
-/// Smart Gen, hosted in the one centred pane. The board, the lists and the
-/// card fields follow the trello-clone model. The surfaces follow the
-/// binding ledger: one card set, switched in place.
-class SmartGenScreen extends StatelessWidget {
-  const SmartGenScreen({super.key, required this.onClose, this.section = 'tasks'});
+/// Surfaces that open in the planka_app board UI. Every other [SgSurface] keeps
+/// the live SgPane screen (notebook, album, vision, …) with boards.json intact.
+const kPlankaSurfaces = {'kanban'};
+
+bool smartGenSectionIsLive(String section) {
+  if (section == 'tasks' || section == 'live') return true;
+  if (section == 'planka' || section.isEmpty) return false;
+  // Named surface e.g. album / notebook / vision → live screen.
+  if (kPlankaSurfaces.contains(section)) return false;
+  return SgSurface.values.asNameMap().containsKey(section);
+}
+
+/// Smart Gen — kanban boards in planka_app; all other kinds in live SgPane.
+class SmartGenScreen extends StatefulWidget {
+  const SmartGenScreen({super.key, required this.onClose, this.section = 'planka'});
   final VoidCallback onClose;
   final String section;
 
   @override
-  Widget build(BuildContext context) => SgPane(onClose: onClose, section: section);
+  State<SmartGenScreen> createState() => _SmartGenScreenState();
+}
+
+class _SmartGenScreenState extends State<SmartGenScreen> {
+  Future<void>? _ready;
+  static const _blobId = 'smartgen/planka.json';
+  late bool _live;
+
+  @override
+  void initState() {
+    super.initState();
+    _live = smartGenSectionIsLive(widget.section);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _ready ??= () async {
+      await ensurePlankaReady(
+        genie: (messages) => MediaGen.instance.genie(messages),
+        save: (json) async {
+          await FileBlobs.put(_blobId, Uint8List.fromList(utf8.encode(json)));
+        },
+        load: () async {
+          try {
+            final raw = await FileBlobs.get(_blobId).timeout(const Duration(seconds: 2));
+            if (raw == null || raw.isEmpty) return null;
+            return utf8.decode(raw);
+          } catch (_) {
+            return null;
+          }
+        },
+        attachmentPut: (id, bytes) async {
+          await FileBlobs.put(id, bytes);
+        },
+        attachmentGet: (id) => FileBlobs.get(id),
+      );
+      await migrateLegacySmartGenIntoPlanka();
+      await SgStore.instance.init();
+      seedPlankaCaptureIfRequested();
+    }();
+
+    return FutureBuilder<void>(
+      future: _ready,
+      builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return const ColoredBox(color: Color(0xFF0079BF), child: SizedBox.expand());
+        }
+        if (snap.hasError) {
+          return SgPane(onClose: widget.onClose, section: 'tasks');
+        }
+        if (_live) {
+          final liveSection = widget.section == 'planka' ? 'tasks' : widget.section;
+          return SgPane(
+            onClose: () {
+              // From the planka hub, back returns to kanban UI; otherwise close Smart Gen.
+              if (widget.section == 'planka') {
+                setState(() => _live = false);
+              } else {
+                widget.onClose();
+              }
+            },
+            section: liveSection,
+            onOpenKanbanInPlanka: () => setState(() => _live = false),
+          );
+        }
+        return _PersistHost(
+          child: PlankaNavigator(
+            onClose: widget.onClose,
+            onOpenLiveSurfaces: () => setState(() => _live = true),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _PersistHost extends StatefulWidget {
+  const _PersistHost({required this.child});
+  final Widget child;
+  @override
+  State<_PersistHost> createState() => _PersistHostState();
+}
+
+class _PersistHostState extends State<_PersistHost> {
+  @override
+  void dispose() {
+    persistPlanka();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
