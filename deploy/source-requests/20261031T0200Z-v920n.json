@@ -1,9 +1,0 @@
-{
-  "id": "v920n-unified-main",
-  "label": "Fast-forward main to unified v920n tip; retag v9.2.0-smartgen",
-  "bundle_url": "https://github.com/Davidebri1/collider-source/releases/download/v9.2.0-smartgen/collider-source-v9.2.0-v920n.bundle",
-  "sha256": "7c934246f56b95b2e9810e3b301a1eda1a20afdf87fd4183cadd2ac9a4b871d9",
-  "size": 101346158,
-  "tip": "64f3dfe98f9eee4c1846c6976bdff77966c87836",
-  "tag": "v9.2.0-smartgen"
-}
