@@ -1,0 +1,8 @@
+name = "collider-keys"
+main = "src/index.js"
+compatibility_date = "2026-10-30"
+
+# Secrets (set in dashboard — never commit values):
+#   CRAZYROUTER_KEY, NVIDIA_KEY, COMMANDCODE_KEY, COMMANDCODE_BASE,
+#   OPENCODE_KEY (optional), MINIMAX_KEY
+# Do NOT set VERCEL_KEY here; Vercel returns later as a secret only if needed.

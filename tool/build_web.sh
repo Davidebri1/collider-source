@@ -16,17 +16,20 @@ map_define() {
   fi
 }
 
-# Providers: CrazyRouter, NVIDIA, OpenCode, Command Code, MiniMax (+ Vercel AI Gateway relay).
-# OpenRouter / Groq removed.
-map_define CRAZYROUTER_KEY COLLIDER_CRAZYROUTER_KEY
-map_define NVIDIA_KEY COLLIDER_NVIDIA_KEY
-map_define COMMANDCODE_KEY COLLIDER_COMMANDCODE_KEY
-map_define COMMANDCODE_BASE COLLIDER_COMMANDCODE_BASEURL
-map_define OPENCODE_KEY COLLIDER_OPENCODE_KEY
-map_define MINIMAX_KEY COLLIDER_MINIMAX_KEY
-map_define VERCEL_KEY COLLIDER_VERCEL_KEY
+# Production web: COLLIDER_PROXY only (Cloudflare Worker holds keys).
+# Optional provider dart-defines are for non-web / emergency — omit on Pages builds.
+# OpenRouter / Groq / Vercel removed from the browser bundle.
 map_define COLLIDER_PROXY COLLIDER_PROXY
 map_define COLLIDER_THEMES COLLIDER_THEMES
+# Emergency-only (empty in CI web builds):
+if [[ "${COLLIDER_ALLOW_EMBEDDED_KEYS:-}" == "1" ]]; then
+  map_define CRAZYROUTER_KEY COLLIDER_CRAZYROUTER_KEY
+  map_define NVIDIA_KEY COLLIDER_NVIDIA_KEY
+  map_define COMMANDCODE_KEY COLLIDER_COMMANDCODE_KEY
+  map_define COMMANDCODE_BASE COLLIDER_COMMANDCODE_BASEURL
+  map_define OPENCODE_KEY COLLIDER_OPENCODE_KEY
+  map_define MINIMAX_KEY COLLIDER_MINIMAX_KEY
+fi
 
 # Report which defines are present (names only — never values).
 present=()
@@ -39,7 +42,7 @@ done
 if ((${#present[@]})); then
   echo "build_web: dart-defines present: ${present[*]}"
 else
-  echo "build_web: no provider dart-defines (using compile-time defaults)"
+  echo "build_web: no dart-defines beyond script defaults (keys must be empty; use COLLIDER_PROXY)"
 fi
 
 BASE_HREF="${BASE_HREF:-/collider-app/}"

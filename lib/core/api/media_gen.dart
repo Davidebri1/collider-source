@@ -5,12 +5,12 @@ import 'dart:async';
 // generateImageUrl, and wire.ts wireFor). Same endpoints, same request
 // bodies, same polling.
 //
-// Keys: providers are CrazyRouter, NVIDIA, OpenCode, Command Code, MiniMax.
-// Vercel AI Gateway (VERCEL_KEY) is the browser CORS relay for NVIDIA-hosted
-// and other gateway models. OpenRouter and Groq are removed.
-// --dart-define still wins when set. Exact define names: CRAZYROUTER_KEY,
-// NVIDIA_KEY, COMMANDCODE_KEY, OPENCODE_KEY, MINIMAX_KEY, VERCEL_KEY,
-// COMMANDCODE_BASE, COLLIDER_PROXY. Never log key values.
+// Keys: NEVER embed provider secrets in the web bundle.
+// Browser calls go through COLLIDER_PROXY (Cloudflare Worker collider-keys).
+// Optional --dart-define keys are for non-web / emergency only and default empty.
+// Providers via Worker: CrazyRouter, NVIDIA, OpenCode, Command Code, MiniMax.
+// Vercel removed (revoked); may return later as a Worker secret only.
+// OpenRouter / Groq removed. Never log key values.
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -19,15 +19,15 @@ import 'package:dio/dio.dart';
 
 import '../../models/media_specs.dart';
 
-const String _crazyRouterKey = String.fromEnvironment('CRAZYROUTER_KEY', defaultValue: 'sk-pm0H6kks2wssFlxnDkEqrGEDqURxx08OhnO1GrLbkXY79B2I');
-const String _nvidiaKey = String.fromEnvironment('NVIDIA_KEY', defaultValue: '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');
-const String _commandCodeKey = String.fromEnvironment('COMMANDCODE_KEY', defaultValue: 'user_3weajS7rpC9U2LTCqYDhKXssBvtD1f9XV9MgHjLbegnso4xAn3bgrPebpNeViV9mD9U2RUDA7PyxosB2Xb3JALcn');
+// Empty defaults — production web builds must ship with COLLIDER_PROXY only.
+const String _crazyRouterKey = String.fromEnvironment('CRAZYROUTER_KEY');
+const String _nvidiaKey = String.fromEnvironment('NVIDIA_KEY');
+const String _commandCodeKey = String.fromEnvironment('COMMANDCODE_KEY');
 const String _commandCodeBase = String.fromEnvironment('COMMANDCODE_BASE', defaultValue: 'https://api.commandcode.ai/provider/v1');
-const String _openCodeKey = String.fromEnvironment('OPENCODE_KEY'); // no default — supply via dart-define
-const String _minimaxKey = String.fromEnvironment('MINIMAX_KEY', defaultValue: 'sk-cp-sWMThFmr0w3SNDAFewqQEDWLs5Ur4sbZLmUvjAGuv4hSVwm3W2N3Zzqj6kTPhnlTiYYVrqLI5yVbTmq1l4yRy54_q3E-HWbSa-pGcwQeUDMBLYw7MslfTw0');
-const String _vercelKey = String.fromEnvironment('VERCEL_KEY', defaultValue: 'vck_7oSmBggwbXRHGxuXe4nbTAobu3MIMq3SwNhEjMXuwgjYEUq4IL2pPz7n');
-/// Server that forwards to providers that refuse browser calls (NVIDIA, OpenCode).
-const String _proxy = String.fromEnvironment('COLLIDER_PROXY');
+const String _openCodeKey = String.fromEnvironment('OPENCODE_KEY');
+const String _minimaxKey = String.fromEnvironment('MINIMAX_KEY');
+/// Cloudflare Worker (collider-keys). Default is the live Worker URL; override via --dart-define.
+const String _proxy = String.fromEnvironment('COLLIDER_PROXY', defaultValue: 'https://collider-keys.ebridavid.workers.dev');
 
 const Map<String, ({String base, String key, bool cors})> _textWires = {
   'cr': (base: 'https://crazyrouter.com/v1', key: _crazyRouterKey, cors: true),
@@ -35,10 +35,15 @@ const Map<String, ({String base, String key, bool cors})> _textWires = {
   'cc': (base: _commandCodeBase, key: _commandCodeKey, cors: true),
   'oc': (base: 'https://opencode.ai/zen/v1', key: _openCodeKey, cors: false),
   'mm': (base: 'https://api.minimax.io/v1', key: _minimaxKey, cors: true),
-  // Vercel AI Gateway — CORS-open relay (NVIDIA DeepSeek, Laguna S, GLM, …).
-  'vc': (base: 'https://ai-gateway.vercel.sh/v1', key: _vercelKey, cors: true),
 };
-const Map<String, String> _proxyRoute = {'nv': 'nvidia', 'oc': 'opencode'};
+/// Worker ?u= names. Every wire can go through COLLIDER_PROXY (preferred).
+const Map<String, String> _proxyRoute = {
+  'cr': 'crazyrouter',
+  'nv': 'nvidia',
+  'oc': 'opencode',
+  'cc': 'commandcode',
+  'mm': 'minimax',
+};
 
 /// CrazyRouter serves the same models under bare slugs rather than namespaced
 /// ones, so a remote id is rewritten before it goes out on that wire.
@@ -46,21 +51,20 @@ String _wireSlug(String wire, String remote) =>
     wire == 'cr' ? (_slugOverrides[remote] ?? remote.split('/').last) : remote;
 
 /// Each text model's ordered list of (wire, remote id) attempts.
-/// No OpenRouter / Groq. NVIDIA-first where only NIM serves the id; Vercel
-/// gateway covers browser CORS for NVIDIA-catalog models.
+/// No OpenRouter / Groq / Vercel. Browser traffic uses COLLIDER_PROXY.
 const Map<String, List<(String, String)>> _text = {
-  'free/glm-5-3-flash': [('cr', 'glm-5.3-flash'), ('vc', 'zai/glm-5.3-flash'), ('nv', 'z-ai/glm-5.3-flash')],
-  'free/laguna-s-2-1': [('vc', 'poolside/laguna-s-2.1'), ('cr', 'laguna-s-2.1'), ('nv', 'poolside/laguna-s-2.1'), ('cc', 'poolside/laguna-s-2.1-free')],
+  'free/glm-5-3-flash': [('cr', 'glm-5.3-flash'), ('nv', 'z-ai/glm-5.3-flash')],
+  'free/laguna-s-2-1': [('cr', 'laguna-s-2.1'), ('nv', 'poolside/laguna-s-2.1'), ('cc', 'poolside/laguna-s-2.1-free')],
   'free/laguna-xs-2-1': [('nv', 'poolside/laguna-xs-2.1'), ('cr', 'laguna-xs-2.1')],
   'free/ling-3-1-flash': [('cr', 'ling-3.1-flash'), ('cc', 'inclusionai/ling-3.1-flash:free')],
-  'free/nemotron-3-5-lightning': [('vc', 'nvidia/nemotron-3.5-lightning'), ('nv', 'nvidia/nemotron-3.5-lightning-30b-a3b'), ('cr', 'nemotron-3.5-lightning')],
-  'pro/glm-5-3': [('cr', 'glm-5.3'), ('vc', 'zai/glm-5.3'), ('nv', 'z-ai/glm-5.3'), ('oc', 'glm-5.3'), ('cc', 'zai-org/GLM-5.3')],
-  'pro/deepseek-4-1-flash': [('vc', 'deepseek/deepseek-v4.1-flash'), ('nv', 'deepseek-ai/deepseek-v4.1-flash'), ('cr', 'deepseek-v4.1-flash'), ('oc', 'deepseek-v4.1-flash'), ('cc', 'deepseek/deepseek-v4.1-flash')],
+  'free/nemotron-3-5-lightning': [('nv', 'nvidia/nemotron-3.5-lightning-30b-a3b'), ('cr', 'nemotron-3.5-lightning')],
+  'pro/glm-5-3': [('cr', 'glm-5.3'), ('nv', 'z-ai/glm-5.3'), ('oc', 'glm-5.3'), ('cc', 'zai-org/GLM-5.3')],
+  'pro/deepseek-4-1-flash': [('nv', 'deepseek-ai/deepseek-v4.1-flash'), ('cr', 'deepseek-v4.1-flash'), ('oc', 'deepseek-v4.1-flash'), ('cc', 'deepseek/deepseek-v4.1-flash')],
   // MiniMax M3.1 Flash via MiniMax direct (Genie + Consensus agent 1).
-  'pro/minimax-m3': [('mm', 'MiniMax-M3.1-Flash'), ('vc', 'minimax/MiniMax-M3.1-Flash'), ('mm', 'MiniMax-M3'), ('cr', 'minimax-m2.5')],
-  'pro/mimo-v2-6-flash': [('cr', 'mimo-v2.6-flash'), ('vc', 'xiaomi/mimo-v2.6-flash'), ('cc', 'xiaomi/mimo-v2.6-flash')],
-  'pro/nemotron-3-ultra': [('nv', 'nvidia/nemotron-3-ultra-550b-a55b'), ('vc', 'nvidia/nemotron-3-ultra-550b-a55b'), ('cr', 'nemotron-3-ultra'), ('cc', 'nvidia/nemotron-3-ultra-550b-a55b')],
-  'elite/kimi-k3': [('cr', 'kimi-k3'), ('vc', 'moonshotai/kimi-k3'), ('nv', 'moonshotai/kimi-k3'), ('oc', 'kimi-k3'), ('cc', 'moonshotai/Kimi-K3')],
+  'pro/minimax-m3': [('mm', 'MiniMax-M3.1-Flash'), ('mm', 'MiniMax-M3'), ('cr', 'minimax-m2.5')],
+  'pro/mimo-v2-6-flash': [('cr', 'mimo-v2.6-flash'), ('cc', 'xiaomi/mimo-v2.6-flash')],
+  'pro/nemotron-3-ultra': [('nv', 'nvidia/nemotron-3-ultra-550b-a55b'), ('cr', 'nemotron-3-ultra'), ('cc', 'nvidia/nemotron-3-ultra-550b-a55b')],
+  'elite/kimi-k3': [('cr', 'kimi-k3'), ('nv', 'moonshotai/kimi-k3'), ('oc', 'kimi-k3'), ('cc', 'moonshotai/Kimi-K3')],
 };
 
 /// Consensus agent 1 (headcount / essence / groups): MiniMax M3.1 Flash direct.
@@ -242,15 +246,11 @@ class MediaGen {
 
   bool isRoutable(String modelId) => _routes.containsKey(modelId) || _text.containsKey(modelId.replaceFirst('code-', ''));
 
-  /// A wire is usable when a key can reach it. A direct, CORS-open wire needs a
-  /// key in the browser bundle. A proxied wire needs only the proxy: the server
-  /// holds that provider's key, so an empty local key is not a failure there.
-  /// Requiring one anyway made every proxied model report "no-key" without the
-  /// request ever leaving the device.
+  /// Prefer COLLIDER_PROXY (Worker holds keys). Direct keys are optional and
+  /// empty in production web builds so nothing secret ships in main.dart.js.
   bool _wireUsable(String w) {
-    final t = _textWires[w]!;
-    // CORS-open: need a key. Non-CORS: proxy preferred; direct key still usable on device.
-    return t.cors ? t.key.isNotEmpty : (_proxy.isNotEmpty || t.key.isNotEmpty);
+    if (_proxy.isNotEmpty && _proxyRoute.containsKey(w)) return true;
+    return _textWires[w]!.key.isNotEmpty;
   }
 
   String _keyFor(String w) => _textWires[w]!.key;
@@ -259,20 +259,23 @@ class MediaGen {
   Future<String> _textCall(String w, String remote, List<Map<String, String>> messages, {int? maxTokens}) async {
     final t = _textWires[w]!;
     final key = _keyFor(w);
-    final viaProxy = !t.cors && _proxy.isNotEmpty;
+    final viaProxy = _proxy.isNotEmpty && _proxyRoute.containsKey(w);
     if (!viaProxy && key.isEmpty) throw const MediaGenError('no-key');
     final url = viaProxy ? '$_proxy/api/p?u=${_proxyRoute[w]}' : '${t.base}/chat/completions';
     try {
       final res = await _dio.post(url,
           data: {'model': _wireSlug(w, remote), 'messages': messages, if (maxTokens != null) 'max_tokens': maxTokens},
-          options: Options(headers: viaProxy ? {'Content-Type': 'application/json'} : {'Content-Type': 'application/json', 'Authorization': 'Bearer $key'}, receiveTimeout: const Duration(seconds: 180)));
+          options: Options(
+            headers: viaProxy
+                ? {'Content-Type': 'application/json'}
+                : {'Content-Type': 'application/json', 'Authorization': 'Bearer $key'},
+            receiveTimeout: const Duration(seconds: 180),
+          ));
       final msg = res.data['choices']?[0]?['message'];
       final text = _messageText(msg);
       if (text.isEmpty) throw const MediaGenError('empty');
       return text;
     } on DioException catch (e) {
-      // NVIDIA's free tier sheds load with 503/429 for a moment; wait and let
-      // the next attempt (the same model again) go out.
       final sc = e.response?.statusCode;
       if (w == 'nv' && (sc == 503 || sc == 429)) await Future<void>.delayed(const Duration(milliseconds: 1500));
       if (e.type == DioExceptionType.receiveTimeout || e.type == DioExceptionType.connectionTimeout) throw const MediaGenError('timeout');
