@@ -1,0 +1,131 @@
+# Apply a verified git bundle onto main (fast-forward only) and move tag v9.2.0-smartgen.
+#
+# Davidebri1 uploads this file via the GitHub web UI, attaches the bundle (+ web zip) to the
+# v9.2.0-smartgen release, then pushes deploy/source-requests/*.json on a SIDE BRANCH
+# (not main — a commit on main would make tip not a fast-forward). Box gh cannot push.
+name: Apply source bundle
+
+on:
+  push:
+    paths: ['deploy/source-requests/**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: collider-source-apply-bundle
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout triggering ref
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref }}
+
+      - name: Ensure origin/main is present
+        run: |
+          set -euo pipefail
+          git fetch origin main:refs/remotes/origin/main
+          echo "origin/main=$(git rev-parse origin/main)"
+
+      - name: Select request JSON
+        id: req
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(find deploy/source-requests -type f -name '*.json' ! -name '.*' | sort)
+          if [[ ${#files[@]} -eq 0 ]]; then
+            echo "No request JSON under deploy/source-requests/; nothing to do."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ ${#files[@]} -gt 1 ]]; then
+            echo "Multiple pending requests; apply exactly one at a time:" >&2
+            printf '  %s\n' "${files[@]}" >&2
+            exit 1
+          fi
+          REQ="${files[0]}"
+          echo "Using $REQ"
+          echo "file=$REQ" >> "$GITHUB_OUTPUT"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          python3 - "$REQ" <<'PY'
+          import json, sys, os
+          d = json.load(open(sys.argv[1]))
+          for k in ("bundle_url", "sha256", "size", "tip"):
+              if k not in d:
+                  raise SystemExit(f"request missing {k}")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as o:
+              o.write(f"bundle_url={d['bundle_url']}\n")
+              o.write(f"sha256={d['sha256']}\n")
+              o.write(f"size={d['size']}\n")
+              o.write(f"tip={d['tip']}\n")
+              o.write(f"tag={d.get('tag', 'v9.2.0-smartgen')}\n")
+          PY
+
+      - name: Download and verify bundle
+        if: steps.req.outputs.skip != 'true'
+        env:
+          BUNDLE_URL: ${{ steps.req.outputs.bundle_url }}
+          EXPECT_SHA: ${{ steps.req.outputs.sha256 }}
+          EXPECT_SIZE: ${{ steps.req.outputs.size }}
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/source.bundle "$BUNDLE_URL"
+          SIZE=$(wc -c < /tmp/source.bundle | tr -d ' ')
+          SHA=$(sha256sum /tmp/source.bundle | awk '{print $1}')
+          echo "downloaded size=$SIZE sha256=$SHA"
+          [[ "$SIZE" == "$EXPECT_SIZE" ]] || { echo "size mismatch: got $SIZE want $EXPECT_SIZE" >&2; exit 1; }
+          [[ "$SHA" == "$EXPECT_SHA" ]] || { echo "sha256 mismatch: got $SHA want $EXPECT_SHA" >&2; exit 1; }
+          git bundle verify /tmp/source.bundle
+
+      - name: Fetch tip from bundle (require fast-forward from origin/main)
+        if: steps.req.outputs.skip != 'true'
+        env:
+          EXPECT_TIP: ${{ steps.req.outputs.tip }}
+        run: |
+          set -euo pipefail
+          git fetch /tmp/source.bundle HEAD:refs/heads/incoming-bundle
+          GOT=$(git rev-parse incoming-bundle)
+          echo "got tip $GOT"
+          [[ "$GOT" == "$EXPECT_TIP" ]] || { echo "tip mismatch: got $GOT want $EXPECT_TIP" >&2; exit 1; }
+          if ! git merge-base --is-ancestor origin/main incoming-bundle; then
+            echo "NOT a fast-forward: origin/main is not an ancestor of $GOT" >&2
+            git log --oneline --graph --decorate origin/main incoming-bundle | head -40 >&2
+            exit 1
+          fi
+          echo "fast-forward OK"
+
+      - name: Fast-forward main and move tag
+        if: steps.req.outputs.skip != 'true'
+        env:
+          TIP: ${{ steps.req.outputs.tip }}
+          TAG: ${{ steps.req.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # Fast-forward only: git push refspec to an ancestor tip fails if not FF.
+          git push origin "refs/heads/incoming-bundle:refs/heads/main"
+          git tag -f "$TAG" "$TIP"
+          git push -f origin "refs/tags/$TAG"
+          echo "main and tag $TAG now at $TIP"
+
+      - name: Remove request file on triggering branch
+        if: steps.req.outputs.skip != 'true'
+        env:
+          REQ_FILE: ${{ steps.req.outputs.file }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          # Stay on the triggering ref (side branch). Do not rewrite main here.
+          if [[ ! -f "$REQ_FILE" ]]; then
+            echo "request file already gone"
+            exit 0
+          fi
+          git rm -f "$REQ_FILE"
+          git commit -m "chore: consume source-request $(basename "$REQ_FILE")"
+          git push origin "HEAD:${{ github.ref }}"
