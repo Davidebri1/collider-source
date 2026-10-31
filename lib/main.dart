@@ -1358,52 +1358,69 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       // produced which response, because source identity is not an input it
       // uses — need and intent are derived from the prompt, and the responses
       // are read against that.
+      // Consensus agent 1 — MiniMax M3.1 Flash (headcount / groups).
       final judge = await MediaGen.instance.consensus([
         {
           'role': 'system',
-          'content': 'You are the Collider consensus recorder. Several models each independently '
+          'content': 'You are Collider Consensus Agent 1 (recorder). Several models each independently '
               'answered one message. You record what is there. You do not advise, rank, or evaluate '
-              'correctness.\n\n'
+              'correctness. You do NOT count logical chains — another agent does that.\n\n'
               'Work in this order.\n'
               '1. From the user message, derive the need and the intent.\n'
               '2. For each response, simplify it to its base minimal distinction or sentiment: the '
               'actionable portion that serves the derived need.\n'
               '3. Group the responses by that sentiment. Resolve democratically: the sentiment with '
-              'the most members is the consensus.\n'
-              '4. Count the logical chain depth of each response. A logical chain is a sequential '
-              'clarification or simplification that extends logic and serves the need. An explicit '
-              'chain reads until the next clause is not logically dependent on the previous. '
-              'Implicit chains count too: a definition, statement, or narrative element that '
-              'directly supports a logical conclusion, evidentiary after the point or preemptive '
-              'before it. A technical definition standing alone never extends beyond 1 however many '
-              'appear; it must attach to a larger logical point to extend. An apparent split is '
-              'clarification and counts as the same chain. There is one prompt, one chain; anything '
-              'outside that is ad libbing and does not count. Do not count words or characters, and '
-              'do not use keyword or regex counting. Count meaning.\n'
-              '5. Report the maximum chain length for each response.\n\n'
+              'the most members is the consensus.\n\n'
               'Answer with exactly these lines and nothing else. Do not add commentary.\n'
               'RATIO: <count of responses in the winning group>/<total responses>\n'
               'SUMMARY: <the winning sentiment copied verbatim from a member response>\n'
               'Then one GROUP line per sentiment group, in order of size, largest first:\n'
-              'GROUP: <sentiment> = <response number>, <response number>\n'
-              'Then one CHAIN line per response:\n'
-              'CHAIN: <response number> = <chain count> chains, max <max length>\n'
-              'Then one final line:\n'
-              'CONSENSUS_CHAIN: <chain count> chains, max <the largest max length among its members>'
+              'GROUP: <sentiment> = <response number>, <response number>'
         },
         {
           'role': 'user',
           'content': 'MESSAGE\n$prompt\n\nRESPONSES (${answers.length})\n${[for (var i = 0; i < answers.length; i++) '--- ${i + 1} ---\n${answers[i].$2}'].join('\n\n')}'
         },
       ]);
+      // Consensus agent 2 — NVIDIA DeepSeek 4.1 Flash (logical / link chain analysis).
+      String chainsJudge = '';
+      try {
+        chainsJudge = await MediaGen.instance.logicalChains([
+          {
+            'role': 'system',
+            'content': 'You are Collider Consensus Agent 2 (logical chain analysis). Count logical '
+                'chain depth in each numbered response. A logical chain is a sequential clarification '
+                'or simplification that extends logic and serves the need. An explicit chain reads '
+                'until the next clause is not logically dependent on the previous. Implicit chains '
+                'count too: a definition, statement, or narrative element that directly supports a '
+                'logical conclusion. A technical definition standing alone never extends beyond 1; '
+                'it must attach to a larger logical point to extend. Do not count words or characters. '
+                'Count meaning.\n\n'
+                'Answer with exactly these lines and nothing else.\n'
+                'Then one CHAIN line per response:\n'
+                'CHAIN: <response number> = <chain count> chains, max <max length>\n'
+                'Then one final line:\n'
+                'CONSENSUS_CHAIN: <chain count> chains, max <the largest max length among consensus members>'
+          },
+          {
+            'role': 'user',
+            'content': 'MESSAGE\n$prompt\n\nRESPONSES (${answers.length})\n${[for (var i = 0; i < answers.length; i++) '--- ${i + 1} ---\n${answers[i].$2}'].join('\n\n')}\n\n'
+                'AGENT_1_RECAP\n$judge'
+          },
+        ]);
+      } catch (_) {
+        // Agent 2 failure must not wipe Agent 1's headcount — leave chains empty.
+        chainsJudge = '';
+      }
       final ratioMatch = RegExp(r'RATIO:\s*(\d+)\s*/\s*(\d+)').firstMatch(judge);
       final line = RegExp(r'^SUMMARY:\s*(.+)$', multiLine: true).firstMatch(judge)?.group(1)?.trim() ?? judge.split('\n').first;
       // Every line carrying the label, not just the first one. A single-row
       // regex silently drops the rest of the table, which is how 3 of 4 chain
       // rows disappeared once already.
       final groups = _fieldLines(judge, 'GROUP');
-      final chains = _fieldLines(judge, 'CHAIN');
-      final consensusChain = _fieldLines(judge, 'CONSENSUS_CHAIN');
+      final chainSrc = chainsJudge.isNotEmpty ? chainsJudge : judge;
+      final chains = _fieldLines(chainSrc, 'CHAIN');
+      final consensusChain = _fieldLines(chainSrc, 'CONSENSUS_CHAIN');
       if (!mounted) return;
       setState(() {
         _isConsensusGenerating = false;

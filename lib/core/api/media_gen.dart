@@ -5,12 +5,12 @@ import 'dart:async';
 // generateImageUrl, and wire.ts wireFor). Same endpoints, same request
 // bodies, same polling.
 //
-// Keys: the source ships provider keys inline (chat.ts / minimax.ts / fal.ts:
-// `process.env.X || "<fallback>"`). David required that pattern — do not strip
-// the fallbacks. --dart-define still wins when set (rotated key, no code change).
-// Exact define names: OPENROUTER_KEY, CRAZYROUTER_KEY, NVIDIA_KEY,
-// COMMANDCODE_KEY, OPENCODE_KEY, MINIMAX_KEY, GROQ_KEYS, COLLIDER_PROXY.
-// Never log key values.
+// Keys: providers are CrazyRouter, NVIDIA, OpenCode, Command Code, MiniMax.
+// Vercel AI Gateway (VERCEL_KEY) is the browser CORS relay for NVIDIA-hosted
+// and other gateway models. OpenRouter and Groq are removed.
+// --dart-define still wins when set. Exact define names: CRAZYROUTER_KEY,
+// NVIDIA_KEY, COMMANDCODE_KEY, OPENCODE_KEY, MINIMAX_KEY, VERCEL_KEY,
+// COMMANDCODE_BASE, COLLIDER_PROXY. Never log key values.
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -19,27 +19,24 @@ import 'package:dio/dio.dart';
 
 import '../../models/media_specs.dart';
 
-const String _openRouterKey = String.fromEnvironment('OPENROUTER_KEY', defaultValue: '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');
 const String _crazyRouterKey = String.fromEnvironment('CRAZYROUTER_KEY', defaultValue: 'sk-pm0H6kks2wssFlxnDkEqrGEDqURxx08OhnO1GrLbkXY79B2I');
-const String _openRouterBase = 'https://openrouter.ai/api/v1';
-// David's keys — source inline fallbacks restored (collidermergedx3-glm).
 const String _nvidiaKey = String.fromEnvironment('NVIDIA_KEY', defaultValue: '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');
-const String _commandCodeKey = String.fromEnvironment('COMMANDCODE_KEY');
-const String _openCodeKey = String.fromEnvironment('OPENCODE_KEY');
-const String _minimaxKey = String.fromEnvironment('MINIMAX_KEY');
-/// Comma-separated Groq keys (source EXPO_PUBLIC_GROQ_API_KEYS).
-const String _groqKeysRaw = String.fromEnvironment('GROQ_KEYS', defaultValue: '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,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');
-final List<String> _groqKeys = _groqKeysRaw.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+const String _commandCodeKey = String.fromEnvironment('COMMANDCODE_KEY', defaultValue: 'user_3weajS7rpC9U2LTCqYDhKXssBvtD1f9XV9MgHjLbegnso4xAn3bgrPebpNeViV9mD9U2RUDA7PyxosB2Xb3JALcn');
+const String _commandCodeBase = String.fromEnvironment('COMMANDCODE_BASE', defaultValue: 'https://api.commandcode.ai/provider/v1');
+const String _openCodeKey = String.fromEnvironment('OPENCODE_KEY'); // no default — supply via dart-define
+const String _minimaxKey = String.fromEnvironment('MINIMAX_KEY', defaultValue: 'sk-cp-sWMThFmr0w3SNDAFewqQEDWLs5Ur4sbZLmUvjAGuv4hSVwm3W2N3Zzqj6kTPhnlTiYYVrqLI5yVbTmq1l4yRy54_q3E-HWbSa-pGcwQeUDMBLYw7MslfTw0');
+const String _vercelKey = String.fromEnvironment('VERCEL_KEY', defaultValue: 'vck_7oSmBggwbXRHGxuXe4nbTAobu3MIMq3SwNhEjMXuwgjYEUq4IL2pPz7n');
 /// Server that forwards to providers that refuse browser calls (NVIDIA, OpenCode).
 const String _proxy = String.fromEnvironment('COLLIDER_PROXY');
+
 const Map<String, ({String base, String key, bool cors})> _textWires = {
-  'or': (base: 'https://openrouter.ai/api/v1', key: _openRouterKey, cors: true),
   'cr': (base: 'https://crazyrouter.com/v1', key: _crazyRouterKey, cors: true),
-  'gq': (base: 'https://api.groq.com/openai/v1', key: '', cors: true), // key from _groqKeys
   'nv': (base: 'https://integrate.api.nvidia.com/v1', key: _nvidiaKey, cors: false),
-  'cc': (base: 'https://api.commandcode.ai/provider/v1', key: _commandCodeKey, cors: true),
+  'cc': (base: _commandCodeBase, key: _commandCodeKey, cors: true),
   'oc': (base: 'https://opencode.ai/zen/v1', key: _openCodeKey, cors: false),
   'mm': (base: 'https://api.minimax.io/v1', key: _minimaxKey, cors: true),
+  // Vercel AI Gateway — CORS-open relay (NVIDIA DeepSeek, Laguna S, GLM, …).
+  'vc': (base: 'https://ai-gateway.vercel.sh/v1', key: _vercelKey, cors: true),
 };
 const Map<String, String> _proxyRoute = {'nv': 'nvidia', 'oc': 'opencode'};
 
@@ -49,35 +46,33 @@ String _wireSlug(String wire, String remote) =>
     wire == 'cr' ? (_slugOverrides[remote] ?? remote.split('/').last) : remote;
 
 /// Each text model's ordered list of (wire, remote id) attempts.
+/// No OpenRouter / Groq. NVIDIA-first where only NIM serves the id; Vercel
+/// gateway covers browser CORS for NVIDIA-catalog models.
 const Map<String, List<(String, String)>> _text = {
-  // CrazyRouter first among CORS-open wires (OpenRouter key currently 401).
-  // Every original wire stays in the chain — OpenRouter is not forced-only.
-  'free/glm-5-3-flash': [('cr', 'glm-5.3-flash'), ('or', 'z-ai/glm-5.3-flash'), ('nv', 'z-ai/glm-5.3-flash')],
-  'free/laguna-s-2-1': [('cr', 'laguna-s-2.1'), ('or', 'poolside/laguna-s-2.1'), ('cc', 'poolside/laguna-s-2.1-free')],
-  'free/laguna-xs-2-1': [('cr', 'laguna-xs-2.1'), ('or', 'poolside/laguna-xs-2.1'), ('nv', 'poolside/laguna-xs-2.1')],
-  'free/ling-3-1-flash': [('cr', 'ling-3.1-flash'), ('or', 'inclusionai/ling-3.1-flash:free'), ('cc', 'inclusionai/ling-3.1-flash:free')],
-  'free/nemotron-3-5-lightning': [('cr', 'nemotron-3.5-lightning'), ('nv', 'nvidia/nemotron-3.5-lightning-30b-a3b'), ('or', 'nvidia/nemotron-3.5-lightning-30b-a3b')],
-  'pro/glm-5-3': [('cr', 'glm-5.3'), ('or', 'z-ai/glm-5.3'), ('nv', 'z-ai/glm-5.3'), ('oc', 'glm-5.3'), ('cc', 'zai-org/GLM-5.3')],
-  'pro/deepseek-4-1-flash': [('cr', 'deepseek-v4.1-flash'), ('or', 'deepseek/deepseek-v4.1-flash'), ('nv', 'deepseek-ai/deepseek-v4.1-flash'), ('oc', 'deepseek-v4.1-flash'), ('cc', 'deepseek/deepseek-v4.1-flash')],
-  'pro/minimax-m3': [('cr', 'minimax-m2.5'), ('cr', 'minimax-m3'), ('nv', 'minimaxai/minimax-m3'), ('mm', 'MiniMax-M3'), ('cc', 'MiniMaxAI/MiniMax-M3'), ('oc', 'minimax-m3')],
-  'pro/mimo-v2-6-flash': [('cr', 'mimo-v2.6-flash'), ('or', 'xiaomi/mimo-v2.6-flash'), ('cc', 'xiaomi/mimo-v2.6-flash')],
-  'pro/nemotron-3-ultra': [('cr', 'nemotron-3-ultra'), ('nv', 'nvidia/nemotron-3-ultra-550b-a55b'), ('or', 'nvidia/nemotron-3-ultra-550b-a55b'), ('cc', 'nvidia/nemotron-3-ultra-550b-a55b')],
-  'elite/kimi-k3': [('cr', 'kimi-k3'), ('or', 'moonshotai/kimi-k3'), ('nv', 'moonshotai/kimi-k3'), ('oc', 'kimi-k3'), ('cc', 'moonshotai/Kimi-K3')],
+  'free/glm-5-3-flash': [('cr', 'glm-5.3-flash'), ('vc', 'zai/glm-5.3-flash'), ('nv', 'z-ai/glm-5.3-flash')],
+  'free/laguna-s-2-1': [('vc', 'poolside/laguna-s-2.1'), ('cr', 'laguna-s-2.1'), ('nv', 'poolside/laguna-s-2.1'), ('cc', 'poolside/laguna-s-2.1-free')],
+  'free/laguna-xs-2-1': [('nv', 'poolside/laguna-xs-2.1'), ('cr', 'laguna-xs-2.1')],
+  'free/ling-3-1-flash': [('cr', 'ling-3.1-flash'), ('cc', 'inclusionai/ling-3.1-flash:free')],
+  'free/nemotron-3-5-lightning': [('vc', 'nvidia/nemotron-3.5-lightning'), ('nv', 'nvidia/nemotron-3.5-lightning-30b-a3b'), ('cr', 'nemotron-3.5-lightning')],
+  'pro/glm-5-3': [('cr', 'glm-5.3'), ('vc', 'zai/glm-5.3'), ('nv', 'z-ai/glm-5.3'), ('oc', 'glm-5.3'), ('cc', 'zai-org/GLM-5.3')],
+  'pro/deepseek-4-1-flash': [('vc', 'deepseek/deepseek-v4.1-flash'), ('nv', 'deepseek-ai/deepseek-v4.1-flash'), ('cr', 'deepseek-v4.1-flash'), ('oc', 'deepseek-v4.1-flash'), ('cc', 'deepseek/deepseek-v4.1-flash')],
+  // MiniMax M3.1 Flash via MiniMax direct (Genie + Consensus agent 1).
+  'pro/minimax-m3': [('mm', 'MiniMax-M3.1-Flash'), ('vc', 'minimax/MiniMax-M3.1-Flash'), ('mm', 'MiniMax-M3'), ('cr', 'minimax-m2.5')],
+  'pro/mimo-v2-6-flash': [('cr', 'mimo-v2.6-flash'), ('vc', 'xiaomi/mimo-v2.6-flash'), ('cc', 'xiaomi/mimo-v2.6-flash')],
+  'pro/nemotron-3-ultra': [('nv', 'nvidia/nemotron-3-ultra-550b-a55b'), ('vc', 'nvidia/nemotron-3-ultra-550b-a55b'), ('cr', 'nemotron-3-ultra'), ('cc', 'nvidia/nemotron-3-ultra-550b-a55b')],
+  'elite/kimi-k3': [('cr', 'kimi-k3'), ('vc', 'moonshotai/kimi-k3'), ('nv', 'moonshotai/kimi-k3'), ('oc', 'kimi-k3'), ('cc', 'moonshotai/Kimi-K3')],
 };
 
-/// The judge for the Consensus Agent and the Smart Gen agent, strongest first.
-/// Each entry expands to that model's full backup list before the next model
-/// is tried, so the judge survives any one provider being down. The keyless
-/// floor underneath them all lives in `consensus`.
+/// Consensus agent 1 (headcount / essence / groups): MiniMax M3.1 Flash direct.
 const List<String> consensusModels = [
   'pro/minimax-m3',
-  'elite/kimi-k3',
-  'pro/deepseek-4-1-flash',
-  'pro/glm-5-3',
-  'free/glm-5-3-flash',
-  'pro/nemotron-3-ultra',
-  'free/nemotron-3-5-lightning',
 ];
+
+/// Consensus agent 2 (logical chain / "link" analysis): NVIDIA DeepSeek 4.1 Flash.
+const List<String> logicalChainModels = [
+  'pro/deepseek-4-1-flash',
+];
+
 
 /// chat.ts friendlyErrorMessage, restored: our own words, never provider text.
 String friendlyErrorMessage(Object error) {
@@ -85,17 +80,25 @@ String friendlyErrorMessage(Object error) {
   // chat.ts friendlyErrorMessage — David's words, verbatim.
   if (RegExp(r'\b429\b').hasMatch(msg)) return 'This model is getting a lot of requests right now — try again in a moment.';
   if (RegExp(r'\b401\b|\b403\b').hasMatch(msg)) return "This model couldn't be reached with your current access — try again or switch models.";
-  if (RegExp(r'timeout|network|fetch', caseSensitive: false).hasMatch(msg)) return "Couldn't reach this model — check your connection and try again.";
+  if (RegExp(r'\b404\b').hasMatch(msg)) return "This model isn't available through any connected provider right now.";
+  if (RegExp(r'timeout|network|fetch|cors|unreachable', caseSensitive: false).hasMatch(msg)) return "Couldn't reach this model — check your connection and try again.";
   if (RegExp(r'\b5\d\d\b').hasMatch(msg)) return 'This model is temporarily unavailable. Try again shortly.';
   if (RegExp(r'\b402\b|quota|insufficient|funds|balance|usage limit').hasMatch(msg)) return 'This model is temporarily unavailable. Try another.';
   return 'Something went wrong generating a response. Try again.';
 }
 
 String _stripThink(String t) {
-  var s = t.replaceAll(RegExp(r'<think>[\s\S]*?</think>'), '');
-  s = s.replaceAll(RegExp(r'^[\s\S]*</think>'), '');
-  // Unclosed think / reasoning tags (some providers stream the plan into content).
-  s = s.replaceAll(RegExp(r'<think>[\s\S]*'), '');
+  var s = t.replaceAll(RegExp(r'<think>[\s\S]*?</think>', caseSensitive: false), '');
+  s = s.replaceAll(RegExp(r'^[\s\S]*</think>', caseSensitive: false), '');
+  // Unclosed think: keep any visible answer after the tag; if none, drop the tag body.
+  final unclosed = RegExp(r'<think>([\s\S]*)', caseSensitive: false).firstMatch(s);
+  if (unclosed != null) {
+    final body = unclosed.group(1) ?? '';
+    // Heuristic: last paragraph after a blank line is often the answer draft.
+    final parts = body.split(RegExp(r'\n\s*\n'));
+    final tail = parts.length > 1 ? parts.last.trim() : '';
+    s = s.replaceFirst(RegExp(r'<think>[\s\S]*', caseSensitive: false), tail);
+  }
   s = s.replaceAll(RegExp(r'<\|.*?\|>'), '');
   return s.trim();
 }
@@ -228,11 +231,14 @@ class MediaGen {
   final Dio _dio = Dio(BaseOptions(connectTimeout: const Duration(seconds: 15), receiveTimeout: const Duration(minutes: 6)));
 
   ({String base, String key}) _wire(_Route r) {
-    if (r.crazy && _crazyRouterKey.isNotEmpty) return (base: _crazyRouterBase, key: _crazyRouterKey);
-    return (base: _openRouterBase, key: _openRouterKey);
+    // OpenRouter removed. CrazyRouter carries crazy:true media rows and any
+    // remaining openrouter-* media that still resolves through this helper.
+    if (_crazyRouterKey.isEmpty) throw const MediaGenError('no-key');
+    return (base: _crazyRouterBase, key: _crazyRouterKey);
   }
 
-  String _slug(_Route r) => r.crazy && _crazyRouterKey.isNotEmpty ? (_slugOverrides[r.remote] ?? r.remote) : r.remote;
+  String _slug(_Route r) =>
+      _slugOverrides[r.remote] ?? (r.crazy ? r.remote.split('/').last : r.remote);
 
   bool isRoutable(String modelId) => _routes.containsKey(modelId) || _text.containsKey(modelId.replaceFirst('code-', ''));
 
@@ -242,16 +248,12 @@ class MediaGen {
   /// Requiring one anyway made every proxied model report "no-key" without the
   /// request ever leaving the device.
   bool _wireUsable(String w) {
-    if (w == 'gq') return _groqKeys.isNotEmpty;
     final t = _textWires[w]!;
     // CORS-open: need a key. Non-CORS: proxy preferred; direct key still usable on device.
     return t.cors ? t.key.isNotEmpty : (_proxy.isNotEmpty || t.key.isNotEmpty);
   }
 
-  String _keyFor(String w) {
-    if (w == 'gq') return _groqKeys.isEmpty ? '' : _groqKeys.first;
-    return _textWires[w]!.key;
-  }
+  String _keyFor(String w) => _textWires[w]!.key;
 
   /// One OpenAI-compatible call on a text wire. Throws a raw error string.
   Future<String> _textCall(String w, String remote, List<Map<String, String>> messages, {int? maxTokens}) async {
@@ -263,7 +265,7 @@ class MediaGen {
     try {
       final res = await _dio.post(url,
           data: {'model': _wireSlug(w, remote), 'messages': messages, if (maxTokens != null) 'max_tokens': maxTokens},
-          options: Options(headers: viaProxy ? {'Content-Type': 'application/json'} : {'Content-Type': 'application/json', 'Authorization': 'Bearer $key'}, receiveTimeout: const Duration(seconds: 90)));
+          options: Options(headers: viaProxy ? {'Content-Type': 'application/json'} : {'Content-Type': 'application/json', 'Authorization': 'Bearer $key'}, receiveTimeout: const Duration(seconds: 180)));
       final msg = res.data['choices']?[0]?['message'];
       final text = _messageText(msg);
       if (text.isEmpty) throw const MediaGenError('empty');
@@ -359,21 +361,34 @@ class MediaGen {
     throw first ?? const MediaGenError('no-key');
   }
 
-  /// The judge for the Consensus Agent and the Smart Gen agent. Walks
-  /// [consensusModels] strongest first; each model is exhausted across all of
-  /// its own provider backups before the next one is considered, and the
-  /// keyless floor only runs once every one of them has failed. An outage on
-  /// any single provider therefore costs nothing but latency.
+  /// Consensus agent 1 — MiniMax M3.1 Flash via MiniMax direct.
+  /// Headcount / essence / sentiment groups (RATIO, SUMMARY, GROUP).
   Future<String> consensus(List<Map<String, String>> messages) async {
     for (final id in consensusModels) {
       final tries = _text[id];
       if (tries == null) continue;
       try {
-        return await _chain(tries, messages, fallback: false);
+        return await _chain(tries, messages, maxTokens: 2048, fallback: false);
       } catch (_) {}
     }
-    return _chain(const [], messages);
+    throw const MediaGenError('Consensus agent 1 (MiniMax M3.1 Flash) unreachable');
   }
+
+  /// Consensus agent 2 — NVIDIA DeepSeek 4.1 Flash (logical / "link" chain analysis).
+  /// Returns CHAIN / CONSENSUS_CHAIN lines per the Consensus Agent spec.
+  Future<String> logicalChains(List<Map<String, String>> messages) async {
+    for (final id in logicalChainModels) {
+      final tries = _text[id];
+      if (tries == null) continue;
+      try {
+        return await _chain(tries, messages, maxTokens: 2048, fallback: false);
+      } catch (_) {}
+    }
+    throw const MediaGenError('Consensus agent 2 (DeepSeek 4.1 Flash) unreachable');
+  }
+
+  /// Smart Gen Genie — MiniMax M3.1 Flash via MiniMax direct (same as consensus agent 1).
+  Future<String> genie(List<Map<String, String>> messages) => consensus(messages);
 
   /// chat.ts hasCredentials: is there a key for the wire this route uses?
   /// Pollinations is keyless in the source (it now answers 402, D61).
@@ -521,7 +536,9 @@ class MediaGen {
     if (tx != null) {
       try {
         // Enough tokens for reasoning models to finish the visible answer.
-        return await _chain(tx, messages, maxTokens: 1024);
+        // 2048 so reasoning models can close <think> and still emit an answer.
+        // fallback:false — never attribute a Pollinations reply to a named model.
+        return await _chain(tx, messages, maxTokens: 2048, fallback: false);
       } catch (e) {
         throw MediaGenError(friendlyErrorMessage(e));
       }

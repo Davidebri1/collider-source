@@ -581,32 +581,15 @@ class SgMessage {
 }
 
 /// Same AI client Home uses on the live web build when `/api` is absent
-/// ([MediaGen.instance.chat]): MiniMax M3 / GLM Flash / etc., with that client's
+/// ([MediaGen.instance.genie]): MiniMax M3.1 Flash via MiniMax direct, with that client's
 /// own wire chain and keyless floor. No new keys or providers.
 /// Same client Home uses: [MediaGen.instance.chat] for the selected model row
 /// (MiniMax M3 / GLM Flash / …). One model attempt, then one [MediaGen.consensus]
 /// pass (the Smart Gen agent path in media_gen). Avoids spamming the keyless
 /// Pollinations floor that every failed wire falls through to.
 Future<String> homePathGenieChat(List<Map<String, String>> messages) async {
-  Object? last;
-  for (final id in const ['pro/minimax-m3', 'free/glm-5-3-flash']) {
-    try {
-      return await MediaGen.instance.chat(id, messages);
-    } catch (e) {
-      last = e;
-      final s = '$e'.toLowerCase();
-      // Floor already answered — do not burn more keyless calls.
-      if (s.contains('pollinations') || s.contains('402')) break;
-    }
-  }
-  try {
-    return await MediaGen.instance.consensus(messages);
-  } catch (e) {
-    last = e;
-  }
-  final err = last;
-  if (err != null) throw err;
-  throw const MediaGenError('no-key');
+  // David: Smart Gen Genie = MiniMax M3.1 Flash via MiniMax direct.
+  return MediaGen.instance.genie(messages);
 }
 
 typedef GenieLlm = Future<String> Function(List<Map<String, String>> messages);
