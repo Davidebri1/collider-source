@@ -5,14 +5,12 @@ import 'dart:async';
 // generateImageUrl, and wire.ts wireFor). Same endpoints, same request
 // bodies, same polling.
 //
-// Keys: the source ships its provider keys inline in the bundle. This build
-// does NOT (DEVIATIONS D58): a public GitHub Pages bundle would hand them to
-// anyone. They are read from --dart-define at build time and are empty in
-// the hosted build, so a run fails quietly at send time (D59).
+// Keys: the source ships provider keys inline (chat.ts / minimax.ts / fal.ts:
+// `process.env.X || "<fallback>"`). David required that pattern — do not strip
+// the fallbacks. --dart-define still wins when set (rotated key, no code change).
 // Exact define names: OPENROUTER_KEY, CRAZYROUTER_KEY, NVIDIA_KEY,
-// COMMANDCODE_KEY, OPENCODE_KEY, MINIMAX_KEY, COLLIDER_PROXY.
-// Box/CI: set COLLIDER_OPENROUTER_KEY (etc.) and run tool/build_web.sh —
-// see docs/DART_DEFINES.md. Never log key values.
+// COMMANDCODE_KEY, OPENCODE_KEY, MINIMAX_KEY, GROQ_KEYS, COLLIDER_PROXY.
+// Never log key values.
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -21,43 +19,50 @@ import 'package:dio/dio.dart';
 
 import '../../models/media_specs.dart';
 
-const String _openRouterKey = String.fromEnvironment('OPENROUTER_KEY');
-const String _crazyRouterKey = String.fromEnvironment('CRAZYROUTER_KEY');
+const String _openRouterKey = String.fromEnvironment('OPENROUTER_KEY', defaultValue: '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');
+const String _crazyRouterKey = String.fromEnvironment('CRAZYROUTER_KEY', defaultValue: 'sk-pm0H6kks2wssFlxnDkEqrGEDqURxx08OhnO1GrLbkXY79B2I');
 const String _openRouterBase = 'https://openrouter.ai/api/v1';
-// v8.5 text wires (David's keys, given at build time with --dart-define).
-const String _nvidiaKey = String.fromEnvironment('NVIDIA_KEY');
+// David's keys — source inline fallbacks restored (collidermergedx3-glm).
+const String _nvidiaKey = String.fromEnvironment('NVIDIA_KEY', defaultValue: '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');
 const String _commandCodeKey = String.fromEnvironment('COMMANDCODE_KEY');
 const String _openCodeKey = String.fromEnvironment('OPENCODE_KEY');
 const String _minimaxKey = String.fromEnvironment('MINIMAX_KEY');
+/// Comma-separated Groq keys (source EXPO_PUBLIC_GROQ_API_KEYS).
+const String _groqKeysRaw = String.fromEnvironment('GROQ_KEYS', defaultValue: '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,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');
+final List<String> _groqKeys = _groqKeysRaw.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
 /// Server that forwards to providers that refuse browser calls (NVIDIA, OpenCode).
 const String _proxy = String.fromEnvironment('COLLIDER_PROXY');
 const Map<String, ({String base, String key, bool cors})> _textWires = {
+  'or': (base: 'https://openrouter.ai/api/v1', key: _openRouterKey, cors: true),
+  'cr': (base: 'https://crazyrouter.com/v1', key: _crazyRouterKey, cors: true),
+  'gq': (base: 'https://api.groq.com/openai/v1', key: '', cors: true), // key from _groqKeys
   'nv': (base: 'https://integrate.api.nvidia.com/v1', key: _nvidiaKey, cors: false),
   'cc': (base: 'https://api.commandcode.ai/provider/v1', key: _commandCodeKey, cors: true),
   'oc': (base: 'https://opencode.ai/zen/v1', key: _openCodeKey, cors: false),
   'mm': (base: 'https://api.minimax.io/v1', key: _minimaxKey, cors: true),
-  'cr': (base: 'https://crazyrouter.com/v1', key: _crazyRouterKey, cors: true),
 };
 const Map<String, String> _proxyRoute = {'nv': 'nvidia', 'oc': 'opencode'};
 
 /// CrazyRouter serves the same models under bare slugs rather than namespaced
 /// ones, so a remote id is rewritten before it goes out on that wire.
 String _wireSlug(String wire, String remote) =>
-    wire == 'cr' ? (_slugOverrides[remote] ?? remote) : remote;
+    wire == 'cr' ? (_slugOverrides[remote] ?? remote.split('/').last) : remote;
 
 /// Each text model's ordered list of (wire, remote id) attempts.
 const Map<String, List<(String, String)>> _text = {
-  'free/glm-5-3-flash': [('nv', 'z-ai/glm-5.3-flash'), ('nv', 'z-ai/glm-5.3-flash')],
-  'free/laguna-s-2-1': [('cc', 'poolside/laguna-s-2.1-free')],
-  'free/laguna-xs-2-1': [('nv', 'poolside/laguna-xs-2.1'), ('nv', 'poolside/laguna-xs-2.1')],
-  'free/ling-3-1-flash': [('cc', 'inclusionai/ling-3.1-flash:free')],
-  'free/nemotron-3-5-lightning': [('nv', 'nvidia/nemotron-3.5-lightning-30b-a3b')],
-  'pro/glm-5-3': [('nv', 'z-ai/glm-5.3'), ('oc', 'glm-5.3'), ('cc', 'zai-org/GLM-5.3')],
-  'pro/deepseek-4-1-flash': [('nv', 'deepseek-ai/deepseek-v4.1-flash'), ('oc', 'deepseek-v4.1-flash'), ('cc', 'deepseek/deepseek-v4.1-flash')],
-  'pro/minimax-m3': [('mm', 'MiniMax-M3'), ('cc', 'MiniMaxAI/MiniMax-M3'), ('oc', 'minimax-m3')],
-  'pro/mimo-v2-6-flash': [('cc', 'xiaomi/mimo-v2.6-flash')],
-  'pro/nemotron-3-ultra': [('nv', 'nvidia/nemotron-3-ultra-550b-a55b'), ('cc', 'nvidia/nemotron-3-ultra-550b-a55b')],
-  'elite/kimi-k3': [('nv', 'moonshotai/kimi-k3'), ('oc', 'kimi-k3'), ('cc', 'moonshotai/Kimi-K3')],
+  // CrazyRouter first among CORS-open wires (OpenRouter key currently 401).
+  // Every original wire stays in the chain — OpenRouter is not forced-only.
+  'free/glm-5-3-flash': [('cr', 'glm-5.3-flash'), ('or', 'z-ai/glm-5.3-flash'), ('nv', 'z-ai/glm-5.3-flash')],
+  'free/laguna-s-2-1': [('cr', 'laguna-s-2.1'), ('or', 'poolside/laguna-s-2.1'), ('cc', 'poolside/laguna-s-2.1-free')],
+  'free/laguna-xs-2-1': [('cr', 'laguna-xs-2.1'), ('or', 'poolside/laguna-xs-2.1'), ('nv', 'poolside/laguna-xs-2.1')],
+  'free/ling-3-1-flash': [('cr', 'ling-3.1-flash'), ('or', 'inclusionai/ling-3.1-flash:free'), ('cc', 'inclusionai/ling-3.1-flash:free')],
+  'free/nemotron-3-5-lightning': [('cr', 'nemotron-3.5-lightning'), ('nv', 'nvidia/nemotron-3.5-lightning-30b-a3b'), ('or', 'nvidia/nemotron-3.5-lightning-30b-a3b')],
+  'pro/glm-5-3': [('cr', 'glm-5.3'), ('or', 'z-ai/glm-5.3'), ('nv', 'z-ai/glm-5.3'), ('oc', 'glm-5.3'), ('cc', 'zai-org/GLM-5.3')],
+  'pro/deepseek-4-1-flash': [('cr', 'deepseek-v4.1-flash'), ('or', 'deepseek/deepseek-v4.1-flash'), ('nv', 'deepseek-ai/deepseek-v4.1-flash'), ('oc', 'deepseek-v4.1-flash'), ('cc', 'deepseek/deepseek-v4.1-flash')],
+  'pro/minimax-m3': [('cr', 'minimax-m2.5'), ('cr', 'minimax-m3'), ('nv', 'minimaxai/minimax-m3'), ('mm', 'MiniMax-M3'), ('cc', 'MiniMaxAI/MiniMax-M3'), ('oc', 'minimax-m3')],
+  'pro/mimo-v2-6-flash': [('cr', 'mimo-v2.6-flash'), ('or', 'xiaomi/mimo-v2.6-flash'), ('cc', 'xiaomi/mimo-v2.6-flash')],
+  'pro/nemotron-3-ultra': [('cr', 'nemotron-3-ultra'), ('nv', 'nvidia/nemotron-3-ultra-550b-a55b'), ('or', 'nvidia/nemotron-3-ultra-550b-a55b'), ('cc', 'nvidia/nemotron-3-ultra-550b-a55b')],
+  'elite/kimi-k3': [('cr', 'kimi-k3'), ('or', 'moonshotai/kimi-k3'), ('nv', 'moonshotai/kimi-k3'), ('oc', 'kimi-k3'), ('cc', 'moonshotai/Kimi-K3')],
 };
 
 /// The judge for the Consensus Agent and the Smart Gen agent, strongest first.
@@ -77,18 +82,36 @@ const List<String> consensusModels = [
 /// chat.ts friendlyErrorMessage, restored: our own words, never provider text.
 String friendlyErrorMessage(Object error) {
   final msg = '$error';
-  if (msg.contains('no-key')) return "This model isn't connected in this build yet. Pick another model.";
-  if (msg.contains('cors')) return "Couldn't reach this model from the browser. Try again or switch models.";
-  if (RegExp(r'\b402\b|quota|insufficient|funds|balance|usage limit').hasMatch(msg)) return 'This model is temporarily unavailable. Try another.';
+  // chat.ts friendlyErrorMessage — David's words, verbatim.
   if (RegExp(r'\b429\b').hasMatch(msg)) return 'This model is getting a lot of requests right now — try again in a moment.';
   if (RegExp(r'\b401\b|\b403\b').hasMatch(msg)) return "This model couldn't be reached with your current access — try again or switch models.";
-  if (RegExp(r'timeout|network|fetch|unreachable', caseSensitive: false).hasMatch(msg)) return "Couldn't reach this model — check your connection and try again.";
+  if (RegExp(r'timeout|network|fetch', caseSensitive: false).hasMatch(msg)) return "Couldn't reach this model — check your connection and try again.";
   if (RegExp(r'\b5\d\d\b').hasMatch(msg)) return 'This model is temporarily unavailable. Try again shortly.';
-  if (msg.contains('empty')) return 'This model returned an empty reply. Try again, or pick another.';
+  if (RegExp(r'\b402\b|quota|insufficient|funds|balance|usage limit').hasMatch(msg)) return 'This model is temporarily unavailable. Try another.';
   return 'Something went wrong generating a response. Try again.';
 }
 
-String _stripThink(String t) => t.replaceAll(RegExp(r'<think>[\s\S]*?</think>'), '').replaceAll(RegExp(r'^[\s\S]*</think>'), '').trim();
+String _stripThink(String t) {
+  var s = t.replaceAll(RegExp(r'<think>[\s\S]*?</think>'), '');
+  s = s.replaceAll(RegExp(r'^[\s\S]*</think>'), '');
+  // Unclosed think / reasoning tags (some providers stream the plan into content).
+  s = s.replaceAll(RegExp(r'<think>[\s\S]*'), '');
+  s = s.replaceAll(RegExp(r'<\|.*?\|>'), '');
+  return s.trim();
+}
+
+/// OpenAI-compatible message body: prefer visible content, then reasoning fields.
+String _messageText(dynamic msg) {
+  if (msg is! Map) return '';
+  for (final k in ['content', 'reasoning_content', 'reasoning']) {
+    final v = msg[k];
+    if (v is String && v.trim().isNotEmpty) {
+      final cleaned = _stripThink(v);
+      if (cleaned.isNotEmpty) return cleaned;
+    }
+  }
+  return '';
+}
 const String _crazyRouterBase = 'https://crazyrouter.com/v1';
 
 class _Route {
@@ -219,26 +242,30 @@ class MediaGen {
   /// Requiring one anyway made every proxied model report "no-key" without the
   /// request ever leaving the device.
   bool _wireUsable(String w) {
+    if (w == 'gq') return _groqKeys.isNotEmpty;
     final t = _textWires[w]!;
-    return t.cors ? t.key.isNotEmpty : _proxy.isNotEmpty;
+    // CORS-open: need a key. Non-CORS: proxy preferred; direct key still usable on device.
+    return t.cors ? t.key.isNotEmpty : (_proxy.isNotEmpty || t.key.isNotEmpty);
+  }
+
+  String _keyFor(String w) {
+    if (w == 'gq') return _groqKeys.isEmpty ? '' : _groqKeys.first;
+    return _textWires[w]!.key;
   }
 
   /// One OpenAI-compatible call on a text wire. Throws a raw error string.
   Future<String> _textCall(String w, String remote, List<Map<String, String>> messages, {int? maxTokens}) async {
     final t = _textWires[w]!;
-    final viaProxy = !t.cors;
-    if (viaProxy) {
-      if (_proxy.isEmpty) throw const MediaGenError('cors');
-    } else if (t.key.isEmpty) {
-      throw const MediaGenError('no-key');
-    }
+    final key = _keyFor(w);
+    final viaProxy = !t.cors && _proxy.isNotEmpty;
+    if (!viaProxy && key.isEmpty) throw const MediaGenError('no-key');
     final url = viaProxy ? '$_proxy/api/p?u=${_proxyRoute[w]}' : '${t.base}/chat/completions';
     try {
       final res = await _dio.post(url,
           data: {'model': _wireSlug(w, remote), 'messages': messages, if (maxTokens != null) 'max_tokens': maxTokens},
-          options: Options(headers: viaProxy ? {'Content-Type': 'application/json'} : {'Content-Type': 'application/json', 'Authorization': 'Bearer ${t.key}'}, receiveTimeout: const Duration(seconds: 90)));
+          options: Options(headers: viaProxy ? {'Content-Type': 'application/json'} : {'Content-Type': 'application/json', 'Authorization': 'Bearer $key'}, receiveTimeout: const Duration(seconds: 90)));
       final msg = res.data['choices']?[0]?['message'];
-      final text = _stripThink(msg?['content'] as String? ?? '');
+      final text = _messageText(msg);
       if (text.isEmpty) throw const MediaGenError('empty');
       return text;
     } on DioException catch (e) {
@@ -493,22 +520,23 @@ class MediaGen {
     final tx = _text[modelId.replaceFirst('code-', '')];
     if (tx != null) {
       try {
-        return await _chain(tx, messages);
+        // Enough tokens for reasoning models to finish the visible answer.
+        return await _chain(tx, messages, maxTokens: 1024);
       } catch (e) {
         throw MediaGenError(friendlyErrorMessage(e));
       }
     }
     final r = _routes[modelId];
-    if (r == null) throw const MediaGenError('this model has no chat route in this build');
+    if (r == null) throw const MediaGenError('not routed');
     if (r.provider == 'pollinations-text') return _pollinationsText(messages);
-    if (r.provider != 'openrouter') throw const MediaGenError('this model has no chat route in this build');
-    if (!hasCredentials(modelId)) throw const MediaGenError('no OpenRouter API key in this build');
+    if (r.provider != 'openrouter') throw const MediaGenError('not routed');
+    if (!hasCredentials(modelId)) throw const MediaGenError('no-key');
     final w = _wire(r);
     try {
       final res = await _dio.post('${w.base}/chat/completions',
-          data: {'model': _slug(r), 'messages': messages}, options: Options(headers: _headers(w.key)));
-      final text = res.data['choices']?[0]?['message']?['content'] as String? ?? '';
-      if (text.trim().isEmpty) throw const MediaGenError('provider returned an empty answer');
+          data: {'model': _slug(r), 'messages': messages, 'max_tokens': 1024}, options: Options(headers: _headers(w.key)));
+      final text = _messageText(res.data['choices']?[0]?['message']);
+      if (text.isEmpty) throw const MediaGenError('provider returned an empty answer');
       return text;
     } on DioException catch (e) {
       throw MediaGenError('provider ${e.response?.statusCode ?? 'unreachable'}: ${_errBody(e)}');

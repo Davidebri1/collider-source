@@ -70,7 +70,7 @@ class _AccountSheetState extends State<AccountSheet> {
           _Row(
             leading: const CircleAvatar(radius: 20, backgroundColor: Color(0x33FFFFFF), child: Icon(Icons.person_rounded, color: Colors.white70)),
             title: 'Sign in',
-            onTap: () => showVAlert(context, icon: Icons.person_outline_rounded, title: "Sign-in isn't available on this link", actions: const [VAlertChoice('OK')]),
+            onTap: () => showVAlert(context, icon: Icons.person_outline_rounded, title: 'Sign-In Unavailable', actions: const [VAlertChoice('OK')]),
           ),
         ]),
         const SizedBox(height: VSpace.sm),

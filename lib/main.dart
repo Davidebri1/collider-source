@@ -942,7 +942,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       _closeAllPanes();
       _settingsOpen = false; // peers replace each other
       _activeDrawer = targetDrawer;
-      _isComposerSummoned = (targetDrawer == null);
+      if (targetDrawer != null) _isComposerSummoned = false; // tuck when leaving home; never auto-summon
       if (targetDrawer == 'themes') {
         _savedThemeBeforePreview = _currentTheme;
       }
@@ -968,9 +968,12 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       _zoomedModelDef = null;
       _localHistoryModel = null;
       _isMobileSideNavOpen = false;
+      // Theme Gallery / Premium: a second tap must not dismiss without Set.
+      // Only Set, Back, or Esc close those surfaces (David t465u).
+      if (wasOpen && (id == 'themes' || id == 'premium')) return;
       _settingsOpen = false;
       _activeDrawer = null;
-      if (wasOpen) return; // tapping the open peer's button closes it
+      if (wasOpen) return; // other peers still toggle closed
       if (id == 'settings') {
         _settingsOpen = true;
       } else {
@@ -1422,7 +1425,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      final msg = friendlyErrorMessage(e).replaceFirst('This model', 'The consensus recorder');
+      final msg = friendlyErrorMessage(e);
       setState(() {
         _isConsensusGenerating = false;
         // A failure is not a score.
@@ -2215,7 +2218,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           if (_activeDrawer != 'premium') ...[
           Positioned.fill(
             child: ThemeLivingBackdrop(
-              key: ValueKey('live-${_currentTheme.id}-${_currentTheme.videoPath ?? _currentTheme.assetPath}-${_activeDrawer == 'premium' ? 'ambient' : 'live'}'),
+              key: ValueKey('live-${_currentTheme.id}-${_currentTheme.videoPath ?? _currentTheme.assetPath}'),
               theme: _currentTheme,
               // Asset-swap: live loop + Builder BackgroundVideo filter when Premium Market
               // (supersedes prior H6 sharp-tint / preferVideo:false)
@@ -2232,7 +2235,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // (kit overlay 0.35 + medium blur) so the wallpaper stays visible;
           // the theme gallery keeps a light tint.
           // v9.1.4 (playtest #14): dissolves out instead of a hard cut.
-            Positioned.fill(child: MaterializeSwitch(show: _activeDrawer == 'themes', builder: (_) => GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => setState(_closeAllPanes), child: const SizedBox.expand()))), // David: Gallery never dims or blurs the wallpaper
+            // Theme Gallery: no tap-outside dismiss (t465u). Close only via Back / Set.
+            // David: Gallery never dims or blurs the wallpaper.
           // v9.1.3 depth rule: a work surface over the main view blurs (takes
           // away the background's capability) and dims (cinematic focus) what
           // is behind it. Nothing sits flat over the main view.
@@ -2243,34 +2247,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // focus behind the writing surface. Previously summoning only
           // reflowed the layout, so the composer read as a flat overlay stuck
           // on top of the room rather than a nearer plane in it.
-          Positioned.fill(
-            child: IgnorePointer(
-              ignoring: !_isComposerSummoned,
-              child: AnimatedOpacity(
-                duration: VMotion.base,
-                curve: Curves.easeOutCubic,
-                opacity: _isComposerSummoned ? 1 : 0,
-                child: BackdropFilter(
-                  filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.black.withValues(alpha: 0.22),
-                          Colors.black.withValues(alpha: 0.34),
-                          Colors.black.withValues(alpha: 0.58),
-                        ],
-                        stops: const [0.0, 0.55, 1.0],
-                      ),
-                    ),
-                    child: const SizedBox.expand(),
-                  ),
-                ),
-              ),
-            ),
-          ),
+          // Black mist removed (v920l): agent-added LinearGradient bottom fade
+          // (commit a9b13a2) was not from David / PRD. KeyboardDof covers typing blur.
+
           // v8.7: depth of field while typing: the room behind goes soft.
           Positioned.fill(
             child: IgnorePointer(

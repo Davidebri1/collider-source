@@ -216,7 +216,14 @@ class ThemeCatalog extends ChangeNotifier {
     _posters = {for (final o in all) if ('${o['name']}'.startsWith('posters/')) '${o['name']}'.substring(8).replaceAll(RegExp(r'\.jpg$'), ''): o['url'] as String};
     final maps = [for (final o in all) if (!'${o['name']}'.startsWith('posters/') && !'${o['name']}'.startsWith('thumbs/')) o];
     final songs = [for (final o in maps) if (_kind(o) == 'audio') o];
-    final themes = [for (final o in maps) if (_kind(o) != 'audio') _r2Theme(o, songs)];
+    // Sibling stills (same basename as a .mp4) are the sharp posters for live themes.
+    // Without this, live themes fell through to FirstFrames (often blank until capture).
+    final stillByBase = <String, String>{
+      for (final o in maps)
+        if (_kind(o) == 'image')
+          niceName('${o['name']}').toLowerCase(): o['url'] as String,
+    };
+    final themes = [for (final o in maps) if (_kind(o) != 'audio') _r2Theme(o, songs, stillByBase)];
     // v9.1: every R2 song is in the music library, with the art of the
     // wallpaper it shares the most tags with.
     _r2Songs = [
@@ -298,7 +305,7 @@ class ThemeCatalog extends ChangeNotifier {
     return '${mediaBaseUrl}thumbs%2F${Uri.encodeComponent(base)}.jpg';
   }
 
-  WallpaperTheme _r2Theme(Map o, [List<Map> songs = const []]) {
+  WallpaperTheme _r2Theme(Map o, [List<Map> songs = const [], Map<String, String> stillByBase = const {}]) {
     final url = o['url'] as String;
     final name = '${o['name']}';
     final still = _kind(o) == 'image';
@@ -320,8 +327,12 @@ class ThemeCatalog extends ChangeNotifier {
     return WallpaperTheme(
       id: 'r2-$name',
       name: _nameOr(niceName(name), tags),
-      // The sharp poster when one exists; the browser-captured frame only as a fallback.
-      assetPath: still ? url : (_posters[name] ?? FirstFrames.srcFor(url)),
+      // Sharp poster: posters/ map, else sibling still (same title), else first-frame capture.
+      assetPath: still
+          ? url
+          : (_posters[name] ??
+              stillByBase[niceName(name).toLowerCase()] ??
+              FirstFrames.srcFor(url)),
       videoPath: still ? null : url,
       creator: 'David Ebri',
       // v9.1.6 (PRD "Wallpapers & Music"): live loops are premium, sold one
