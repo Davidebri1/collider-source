@@ -131,7 +131,7 @@ class _FCardScreenState extends State<FCardScreen> with SingleTickerProviderStat
           ]),
           builder: (ctx, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const ColoredBox(color: Colors.white, child: SizedBox.expand());
+              return const ColoredBox(color: Color(0xFF0E1016), child: SizedBox.expand());
             } else if (snapshot.hasError) {
               return Center(child: Text('${'error'.tr()}: ${snapshot.error}'));
             } else {

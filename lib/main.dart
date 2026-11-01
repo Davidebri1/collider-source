@@ -450,12 +450,16 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     // call: GitHub Pages and a missing API return before that call finishes,
     // which used to leave ?app= on the home screen.
     const openable = {'smartgen', 'market', 'themes', 'premium', 'music', 'files', 'consensus', 'apps'};
-    final appLink = Uri.base.queryParameters['app'];
+    final appLink = Uri.base.queryParameters['app'] ?? _hashQuery('app');
     if (appLink != null && openable.contains(appLink)) {
       _activeDrawer = appLink;
     } else if (_activeDrawer == null && Uri.base.queryParameters['drawer'] == null) {
-      // Smart Gen opens by default (planka_app drop-in).
-      _activeDrawer = 'smartgen';
+      // Hash deep-links: #/boards, #/smartgen, #/projects → open Smart Gen.
+      // Do not open Smart Gen by default — home is the Collider start screen.
+      final fragPath = _hashPath();
+      if (fragPath == 'boards' || fragPath == 'smartgen' || fragPath == 'projects') {
+        _activeDrawer = 'smartgen';
+      }
     }
     final cq = Uri.base.queryParameters['cat'];
     if (cq != null) _activeCategory = ModelCategory.values.firstWhere((c) => c.name == cq, orElse: () => ModelCategory.general);
@@ -486,6 +490,23 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
   void _initializeTickerItems() {
     _tickerItems = [];
+  }
+
+
+  /// Path from the URL hash (`#/boards` → `boards`). Empty when none.
+  static String _hashPath() {
+    final frag = Uri.base.fragment.trim();
+    if (frag.isEmpty) return '';
+    final path = frag.split('?').first;
+    return path.replaceFirst(RegExp(r'^/+'), '').split('/').first;
+  }
+
+  /// Query value from the hash (`#/?app=smartgen` or `#/boards?app=…`).
+  static String? _hashQuery(String key) {
+    final frag = Uri.base.fragment.trim();
+    if (frag.isEmpty || !frag.contains('?')) return null;
+    final q = frag.substring(frag.indexOf('?') + 1);
+    return Uri.splitQueryString(q)[key];
   }
 
   String _ago(DateTime t) {
@@ -536,9 +557,14 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     }
     if (qp['ask'] != null && qp['ask']!.trim().isNotEmpty) unawaited(_onSendPrompt(qp['ask']!));
     const openable = {'smartgen', 'market', 'themes', 'premium', 'music', 'files', 'consensus', 'apps'};
-    final app = qp['app'];
+    final app = qp['app'] ?? _hashQuery('app');
     if (app != null && openable.contains(app)) {
       setState(() => _activeDrawer = app);
+    } else {
+      final fragPath = _hashPath();
+      if (fragPath == 'boards' || fragPath == 'smartgen' || fragPath == 'projects') {
+        setState(() => _activeDrawer = 'smartgen');
+      }
     }
     if (_tickerItems.isNotEmpty) {
       setState(() {

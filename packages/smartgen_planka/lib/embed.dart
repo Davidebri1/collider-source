@@ -82,19 +82,32 @@ class PlankaNavigator extends StatelessWidget {
                 child: ScrollConfiguration(
                   behavior: const _NoScrollbarBehavior(),
                   child: Material(
-                    color: const Color(0xFF0079BF),
+                    color: const Color(0xFF0E1016),
                     child: Navigator(
+                      // Honour host hash routes (#/boards, #/projects, #/search, …).
+                      initialRoute: () {
+                        final frag = Uri.base.fragment.trim();
+                        if (frag.isEmpty) return '/';
+                        var path = frag.split('?').first;
+                        if (!path.startsWith('/')) path = '/$path';
+                        if (path == '/boards' || path == '/smartgen') return '/';
+                        return path;
+                      }(),
                       onGenerateRoute: (settings) {
                         final name = settings.name ?? '/';
                         WidgetBuilder builder;
-                        if (name == '/' || name == '/projects') {
+                        if (name == '/' || name == '/projects' || name == '/boards') {
                           builder = (_) => _PlankaHome(
                                 onClose: onClose,
                                 onOpenLiveSurfaces: onOpenLiveSurfaces,
                               );
                         } else {
                           final routes = pl.plankaRoutes();
-                          builder = routes[name] ?? (_) => _PlankaHome(onClose: onClose);
+                          builder = routes[name] ??
+                              (_) => _PlankaHome(
+                                    onClose: onClose,
+                                    onOpenLiveSurfaces: onOpenLiveSurfaces,
+                                  );
                         }
                         return MaterialPageRoute<void>(
                           settings: settings,

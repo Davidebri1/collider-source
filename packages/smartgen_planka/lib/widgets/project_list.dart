@@ -40,7 +40,12 @@ class ProjectListState extends State<ProjectList> {
   Widget build(BuildContext context) {
     /// Check if projects are null or empty
     if (widget.projects.isEmpty) {
-      return const ColoredBox(color: Colors.white, child: SizedBox.expand());
+      return const ColoredBox(
+        color: Color(0xFF0E1016),
+        child: Center(
+          child: Text('No boards yet', style: TextStyle(fontSize: 15, color: Colors.white70)),
+        ),
+      );
     }
 
     return Padding(

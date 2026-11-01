@@ -30,8 +30,12 @@ class _BoardScreenState extends State<BoardScreen> {
     final backgroundImageUrl = widget.project?.backgroundImage?['url'];
 
     return Scaffold(
+      backgroundColor: const Color(0xFF0E1016),
       appBar: AppBar(
-        title: Text('${'boards_for'.tr()} ${widget.project!.name}'),
+        backgroundColor: const Color(0xFF0E1016),
+        foregroundColor: Colors.white,
+        centerTitle: true,
+        title: const Text('Boards'),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
@@ -56,7 +60,7 @@ class _BoardScreenState extends State<BoardScreen> {
           future: Provider.of<BoardProvider>(context, listen: false)
               .fetchBoards(projectId: widget.project!.id, context: context),
           builder: (ctx, snapshot) => snapshot.connectionState == ConnectionState.waiting
-              ? const ColoredBox(color: Colors.white, child: SizedBox.expand())
+              ? const ColoredBox(color: Color(0xFF0E1016), child: SizedBox.expand())
               : Consumer<BoardProvider>(
             builder: (ctx, boardProvider, _) {
               // Fetch users once after the boards are fetched

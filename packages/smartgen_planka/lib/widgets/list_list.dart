@@ -637,18 +637,26 @@ class _ListListState extends State<ListList> {
       // Parse JSON and convert each color to a Color object
       final Map<String, dynamic> jsonMap = json.decode(jsonString);
       setState(() {
-        labelColors = jsonMap.map((key, value) => MapEntry(key, _parseColor(value)));
+        final next = <String, Color>{};
+        jsonMap.forEach((key, value) {
+          final hex = value is String ? value : (value == null ? '' : '$value');
+          if (hex.isEmpty) return;
+          try {
+            next[key] = _parseColor(hex);
+          } catch (_) {}
+        });
+        if (next.isNotEmpty) labelColors = next;
       });
     } catch (e) {
-      print("Error loading or parsing colors: $e");
+      debugPrint('Error loading or parsing colors: $e');
     }
   }
 
   // Convert hex color string to Color object
   Color _parseColor(String hexColor) {
-    hexColor = hexColor.toUpperCase().replaceAll("#", "");
+    hexColor = hexColor.toUpperCase().replaceAll('#', '');
     if (hexColor.length == 6) {
-      hexColor = "FF" + hexColor; // Add opacity if missing
+      hexColor = 'FF$hexColor'; // Add opacity if missing
     }
     return Color(int.parse(hexColor, radix: 16));
   }
