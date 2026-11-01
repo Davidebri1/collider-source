@@ -19,6 +19,7 @@ import './features/views/views_screen.dart';
 import './features/search/search_screen.dart';
 import './features/genie/genie_screen.dart';
 import './features/archive/archive_screen.dart';
+import './features/labels/labels_screen.dart';
 
 List<SingleChildWidget> plankaProviders() => [
       ChangeNotifierProvider(create: (_) => AuthProvider()),
@@ -58,6 +59,10 @@ Map<String, WidgetBuilder> plankaRoutes() => {
       '/lists': (ctx) => ListScreen(),
       '/card': (ctx) => FCardScreen(),
       '/boardmenu': (ctx) => const BoardMenuScreen(),
+      '/labels': (ctx) {
+        final id = ModalRoute.of(ctx)?.settings.arguments as String?;
+        return LabelsScreen(boardId: id);
+      },
       '/customfields': (ctx) => const CustomFieldsScreen(),
       '/views': (ctx) => const ViewsScreen(),
       '/search': (ctx) => const SearchScreen(),
@@ -66,20 +71,25 @@ Map<String, WidgetBuilder> plankaRoutes() => {
     };
 
 ThemeData plankaTheme(BuildContext context) {
-  final base = Theme.of(context).textTheme.apply(
-        fontFamily: 'GoogleSansFlex',
-        fontSizeFactor: 0.8,
-        fontSizeDelta: 2.0,
-      );
+  // Stock planka_app ThemeData. Force dark ink so Collider's dark host theme
+  // cannot leak light-on-light text into card headings.
+  const ink = Color(0xFF212121);
   return ThemeData(
+    brightness: Brightness.light,
     primarySwatch: Colors.indigo,
-    fontFamily: 'GoogleSansFlex',
-    textTheme: base,
-    // David: headers centre; left align is for data fields only.
-    appBarTheme: const AppBarTheme(centerTitle: true),
-    scrollbarTheme: ScrollbarThemeData(
-      thickness: WidgetStateProperty.all(0),
-      thumbVisibility: WidgetStateProperty.all(false),
+    scaffoldBackgroundColor: const Color(0xFFF3F0F7),
+    // Avoid TextStyle.apply(fontSizeFactor) — Flutter 3.47 asserts when any
+    // TextTheme style has a null fontSize (M3 defaults).
+    textTheme: ThemeData.light().textTheme.apply(
+      bodyColor: ink,
+      displayColor: ink,
+    ),
+    appBarTheme: const AppBarTheme(
+      backgroundColor: Color(0xFFF3F0F7),
+      foregroundColor: ink,
+      elevation: 0,
+      centerTitle: true,
+      titleTextStyle: TextStyle(color: ink, fontSize: 18, fontWeight: FontWeight.w500),
     ),
   );
 }

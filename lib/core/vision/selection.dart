@@ -1,8 +1,8 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'materialize.dart';
 import 'vision_kit.dart' show VFrost;
+import '../account_sync/synced_prefs.dart';
 
 /// v9.1 multi-select: long-press an item to start selecting, tap to add or
 /// remove, then act on all of them from the floating bar.
@@ -136,9 +136,8 @@ class HistoryEdits extends ChangeNotifier {
     if (_loaded) return;
     _loaded = true;
     try {
-      final p = await SharedPreferences.getInstance();
-      hidden.addAll(p.getStringList('hist_hidden_v1') ?? const []);
-      for (final s in p.getStringList('hist_titles_v1') ?? const <String>[]) {
+      hidden.addAll(await SyncedPrefs.getStringList('hist_hidden_v1') ?? const []);
+      for (final s in await SyncedPrefs.getStringList('hist_titles_v1') ?? const <String>[]) {
         final i = s.indexOf('\u0001');
         if (i > 0) titles[s.substring(0, i)] = s.substring(i + 1);
       }
@@ -147,9 +146,8 @@ class HistoryEdits extends ChangeNotifier {
   }
   Future<void> _save() async {
     try {
-      final p = await SharedPreferences.getInstance();
-      await p.setStringList('hist_hidden_v1', hidden.toList());
-      await p.setStringList('hist_titles_v1', [for (final e in titles.entries) '${e.key}\u0001${e.value}']);
+      await SyncedPrefs.setStringList('hist_hidden_v1', hidden.toList());
+      await SyncedPrefs.setStringList('hist_titles_v1', [for (final e in titles.entries) '${e.key}\u0001${e.value}']);
     } catch (_) {}
   }
   Future<void> hide(Iterable<String> ids) async {

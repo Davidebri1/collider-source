@@ -17,12 +17,21 @@ class BoardScreen extends StatefulWidget {
 
 class _BoardScreenState extends State<BoardScreen> {
   bool _usersFetched = false; // Track if users have been fetched
+  Future<void>? _boardsFuture;
 
   // Callback method to refresh the lists
   void _refreshBoards() {
     setState(() {
-      Provider.of<BoardProvider>(context, listen: false).fetchBoards(projectId: widget.project!.id, context: context);
+      _boardsFuture = Provider.of<BoardProvider>(context, listen: false)
+          .fetchBoards(projectId: widget.project!.id, context: context);
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _boardsFuture ??= Provider.of<BoardProvider>(context, listen: false)
+        .fetchBoards(projectId: widget.project!.id, context: context);
   }
 
   @override
@@ -30,12 +39,8 @@ class _BoardScreenState extends State<BoardScreen> {
     final backgroundImageUrl = widget.project?.backgroundImage?['url'];
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0E1016),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0E1016),
-        foregroundColor: Colors.white,
-        centerTitle: true,
-        title: const Text('Boards'),
+        title: Text('${'boards_for'.tr()} ${widget.project!.name}'),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
@@ -57,10 +62,9 @@ class _BoardScreenState extends State<BoardScreen> {
         )
             : null,
         child: FutureBuilder(
-          future: Provider.of<BoardProvider>(context, listen: false)
-              .fetchBoards(projectId: widget.project!.id, context: context),
+          future: _boardsFuture,
           builder: (ctx, snapshot) => snapshot.connectionState == ConnectionState.waiting
-              ? const ColoredBox(color: Color(0xFF0E1016), child: SizedBox.expand())
+              ? const Center(child: CircularProgressIndicator())
               : Consumer<BoardProvider>(
             builder: (ctx, boardProvider, _) {
               // Fetch users once after the boards are fetched

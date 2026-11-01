@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../Provider/provider_list.dart';
 import '../models/inputs.dart';
 import 'board_list.dart';
-import 'text_field.dart';
 
 class KanbanBoard extends StatefulWidget {
   const KanbanBoard(
@@ -34,6 +33,7 @@ class KanbanBoard extends StatefulWidget {
     this.onListTap,
     this.onListLongPress,
     this.onListCreate,
+    this.onRequestCreateList,
     super.key,
   });
 
@@ -51,6 +51,7 @@ class KanbanBoard extends StatefulWidget {
   final void Function(int? listIndex)? onListTap;
   final void Function(int? listIndex)? onListLongPress;
   final void Function(String? title)? onListCreate;
+  final VoidCallback? onRequestCreateList;
   final void Function(int? oldCardIndex, int? newCardIndex, int? oldListIndex,
       int? newListIndex)? onItemReorder;
   final void Function(int? oldListIndex, int? newListIndex)? onListReorder;
@@ -73,10 +74,13 @@ class KanbanBoard extends StatefulWidget {
 class _KanbanBoardState extends State<KanbanBoard> {
   @override
   Widget build(BuildContext context) {
+    // Do NOT nest a MaterialApp here — a second WidgetsApp steals/forks the
+    // web text-input connection and breaks Create List typing in browsers.
     return ProviderScope(
-        child: MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: Board(widget.list,
+      child: Material(
+        type: MaterialType.transparency,
+        child: Board(
+          widget.list,
           displacementX: widget.displacementX,
           displacementY: widget.displacementY,
           backgroundColor: widget.backgroundColor,
@@ -95,12 +99,15 @@ class _KanbanBoardState extends State<KanbanBoard> {
           onListReorder: widget.onListReorder,
           onListRename: widget.onListRename,
           onListCreate: widget.onListCreate,
+          onRequestCreateList: widget.onRequestCreateList,
           onNewCardInsert: widget.onNewCardInsert,
           cardTransitionBuilder: widget.cardTransitionBuilder,
           listTransitionBuilder: widget.listTransitionBuilder,
           cardTransitionDuration: widget.cardTransitionDuration,
-          listTransitionDuration: widget.listTransitionDuration),
-    ));
+          listTransitionDuration: widget.listTransitionDuration,
+        ),
+      ),
+    );
   }
 }
 
@@ -130,6 +137,7 @@ class Board extends ConsumerStatefulWidget {
     this.onListTap,
     this.onListLongPress,
     this.onListCreate,
+    this.onRequestCreateList,
     super.key,
   });
 
@@ -147,6 +155,7 @@ class Board extends ConsumerStatefulWidget {
   final void Function(int? listIndex)? onListTap;
   final void Function(int? listIndex)? onListLongPress;
   final void Function(String? newName)? onListCreate;
+  final VoidCallback? onRequestCreateList;
   final void Function(int? oldCardIndex, int? newCardIndex, int? oldListIndex,
       int? newListIndex)? onItemReorder;
   final void Function(int? oldListIndex, int? newListIndex)? onListReorder;
@@ -317,96 +326,77 @@ class _BoardState extends ConsumerState<Board> {
                           ),
                           child: SingleChildScrollView(
                             controller: boardProv.board.controller,
-                            physics: const ClampingScrollPhysics(),
+                            // Stock planka: page-snap between full-width lists.
+                            physics: const PageScrollPhysics(),
                             scrollDirection: Axis.horizontal,
                             child: Transform(
                               alignment: Alignment.topLeft,
                               transform: Matrix4(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Render all lists if any exist
-                                  ...boardProv.board.lists.map((e) {
-                                    return Container(
-                                      margin: const EdgeInsets.only(left: 15),
-                                      child: BoardList(index: boardProv.board.lists.indexOf(e)),
+                              child: Builder(
+                                builder: (ctx) {
+                                  // One viewport-wide slot per page so PageScrollPhysics
+                                  // snaps every page (including Create List) the same way.
+                                  // Content inset matches stock list columns: left 15, width ×0.9.
+                                  final pageW = MediaQuery.of(ctx).size.width;
+                                  final colW = pageW * 0.9;
+                                  Widget pageSlot({required Widget child}) {
+                                    return SizedBox(
+                                      width: pageW,
+                                      child: Align(
+                                        alignment: Alignment.topLeft,
+                                        child: Padding(
+                                          padding: const EdgeInsets.only(left: 15),
+                                          child: child,
+                                        ),
+                                      ),
                                     );
-                                  }),
-
-                                  // Always show the "Add List" widget after the lists (or alone if there are no lists)
-                                  boardListProv.newList ?
-                                  Container(
-                                    margin: const EdgeInsets.only(top: 20, right: 30),
-                                    padding: const EdgeInsets.only(bottom: 20),
-                                    width: 280.0,
-                                    color: const Color.fromARGB(255, 247, 248, 252),
-                                    child: Wrap(
-                                      children: [
-                                        SizedBox(
-                                          height: 50,
-                                          width: 300,
-                                          child: Row(
-                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              IconButton(
-                                                onPressed: () {
-                                                  setState(() {
-                                                    boardListProv.newList = false;
-                                                    boardProv.board.newCardTextController.clear();
-                                                  });
-                                                },
-                                                icon: const Icon(Icons.close),
+                                  }
+                                  return Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      // Stock order: lists first, Create List after.
+                                      ...boardProv.board.lists.map((e) {
+                                        return pageSlot(
+                                          child: BoardList(
+                                            index: boardProv.board.lists.indexOf(e),
+                                          ),
+                                        );
+                                      }),
+                                      // Same margins as a list column; dialog for name (Enter fix).
+                                      pageSlot(
+                                        child: Semantics(
+                                          button: true,
+                                          label: 'Create List',
+                                          child: GestureDetector(
+                                            onTap: () {
+                                              if (boardProv.board.newCardFocused == true) {
+                                                ref.read(ProviderList.cardProvider).saveNewCard();
+                                              }
+                                              if (widget.onRequestCreateList != null) {
+                                                widget.onRequestCreateList!();
+                                              }
+                                            },
+                                            child: Container(
+                                              height: 50,
+                                              width: colW,
+                                              margin: const EdgeInsets.only(top: 20),
+                                              decoration: BoxDecoration(
+                                                color: const Color.fromARGB(255, 247, 248, 252),
+                                                borderRadius: BorderRadius.circular(6),
                                               ),
-                                              IconButton(
-                                                onPressed: () {
-                                                  setState(() {
-                                                    boardListProv.newList = false;
-                                                    // Create New List Here
-                                                    if (widget.onListCreate != null) {
-                                                      widget.onListCreate!(boardProv.board.newCardTextController.text);
-                                                    }
-                                                    boardProv.board.newCardTextController.clear();
-                                                  });
-                                                },
-                                                icon: const Icon(Icons.done),
+                                              child: Center(
+                                                child: Text(
+                                                  'create_list'.tr(),
+                                                  style: widget.textStyle,
+                                                ),
                                               ),
-                                            ],
+                                            ),
                                           ),
                                         ),
-                                        Container(
-                                          width: 300,
-                                          color: Colors.white,
-                                          margin: const EdgeInsets.only(top: 20, right: 10, left: 10),
-                                          child: const TField(), // Replace TField with your text field implementation
-                                        ),
-                                      ],
-                                    ),
-                                  )
-                                      : GestureDetector(
-                                    onTap: () {
-                                      if (boardProv.board.newCardFocused == true) {
-                                        ref.read(ProviderList.cardProvider).saveNewCard();
-                                      }
-                                      boardListProv.newList = true;
-                                      setState(() {});
-                                    },
-                                    child: Container(
-                                      height: 50,
-                                      width: 280.0,
-                                      margin: const EdgeInsets.only(top: 20, right: 20),
-                                      decoration: BoxDecoration(
-                                        color: const Color.fromARGB(255, 247, 248, 252),
-                                        borderRadius: BorderRadius.circular(6),
                                       ),
-                                      child: Center(
-                                        child: Text(
-                                          'create_list'.tr(),
-                                          style: widget.textStyle,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                                    ],
+                                  );
+                                },
                               ),
                             ),
                           ),

@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:planka_app/local/planka_store.dart';
 
-import '../../core/files/file_blobs.dart';
+import '../../core/account_sync/account_sync.dart';
 
 /// Legacy Smart Gen FileBlobs used on live main (9d86a02).
 const kLegacyBoardsBlob = 'smartgen/boards.json';
@@ -22,7 +22,7 @@ Future<bool> migrateLegacySmartGenIntoPlanka() async {
     } catch (_) {}
   });
   try {
-    final boardsRaw = await FileBlobs.get(kLegacyBoardsBlob);
+    final boardsRaw = await AccountSync.instance.getBlob(kLegacyBoardsBlob);
     if (boardsRaw != null && boardsRaw.isNotEmpty) {
       final j = jsonDecode(utf8.decode(boardsRaw));
       if (j is Map) {
@@ -37,7 +37,7 @@ Future<bool> migrateLegacySmartGenIntoPlanka() async {
 
   if (store.boards.isEmpty) {
     try {
-      final kanbanRaw = await FileBlobs.get(kLegacyKanbanBlob);
+      final kanbanRaw = await AccountSync.instance.getBlob(kLegacyKanbanBlob);
       if (kanbanRaw != null && kanbanRaw.isNotEmpty) {
         final j = jsonDecode(utf8.decode(kanbanRaw));
         if (j is Map) {
@@ -54,7 +54,7 @@ Future<bool> migrateLegacySmartGenIntoPlanka() async {
   if (imported) {
     await store.persist();
     try {
-      await FileBlobs.put(
+      await AccountSync.instance.putBlob(
         kPlankaBlob,
         Uint8List.fromList(utf8.encode(jsonEncode(store.toJson()))),
       );

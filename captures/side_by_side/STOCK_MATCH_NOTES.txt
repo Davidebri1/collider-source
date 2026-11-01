@@ -1,0 +1,26 @@
+Stock match (David steer 2026-10-31): no Trello restyle; stock planka_app presentation inside SettingsGlassPane.
+
+SBS (stock | ours glass pane):
+  captures/side_by_side/sbs_00_projects.png
+  captures/side_by_side/sbs_01_boards.png
+  captures/side_by_side/sbs_02_board.png
+  captures/side_by_side/sbs_03_card_detail.png
+  captures/side_by_side/sbs_04_board_menu.png
+  captures/side_by_side/sbs_04_settings.png
+Ours pane crops: captures/side_by_side/ours/*.png
+Stock refs: /workspace/sgrev/dropin/planka_stock/*.png
+
+Allowed kept:
+- Collider PlankaStore + account sync data layer
+- SettingsGlassPane host (not full screen)
+- Seed To Do/Doing/Done on createBoard; Escape/Back pops nested routes
+- Removed Members/Invite (and Logout) — need Planka server
+- appBarTheme light ink so host dark theme cannot bleach text
+
+Imperfect:
+- Stock 04_board_menu.png is Projects FAB (Settings/Logout), not a Board menu; ours Board menu is offline actions (About, background, Labels, Views, Archive, Undo, Genie)
+- Board AppBar adds … for Board menu (functional); stock has refresh only
+- Glass pane vs stock full-bleed phone frame (required by steer)
+- Create List / Add Card tap-through via Flutter web semantics is flaky (large hit targets); Board menu + card open verified
+- List header hamburger / attach-image footer sometimes clipped by pane height
+- Comment timestamps differ (live clock vs stock fixture date)

@@ -1,9 +1,32 @@
+
 import 'package:flutter/material.dart';
 import 'package:planka_app/local/planka_store.dart';
+import 'package:planka_app/features/views/views_screen.dart';
 
-/// Trello iOS "Board menu" (lowercase m in title).
-class BoardMenuScreen extends StatelessWidget {
+/// Board menu — stock planka indigo chrome; only offline-capable actions.
+class BoardMenuScreen extends StatefulWidget {
   const BoardMenuScreen({super.key});
+
+  @override
+  State<BoardMenuScreen> createState() => _BoardMenuScreenState();
+}
+
+class _BoardMenuScreenState extends State<BoardMenuScreen> {
+  String? get _boardId {
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is String && args.isNotEmpty) return args;
+    final boards = PlankaStore.instance.boards;
+    return boards.isEmpty ? null : boards.first['id'] as String;
+  }
+
+  String get _boardName {
+    final id = _boardId;
+    if (id == null) return 'Board';
+    for (final b in PlankaStore.instance.boards) {
+      if (b['id'] == id) return '${b['name'] ?? 'Board'}';
+    }
+    return 'Board';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -15,18 +38,93 @@ class BoardMenuScreen extends StatelessWidget {
           icon: const Icon(Icons.close),
         ),
         title: const Text('Board menu'),
-        centerTitle: true,
       ),
       body: ListView(
         children: [
           ListTile(
-            leading: const Icon(Icons.auto_awesome),
-            title: const SizedBox.shrink(),
-            onTap: () => Navigator.pushNamed(context, '/genie'),
+            leading: const Icon(Icons.info_outline),
+            title: const Text('About this board'),
+            onTap: () async {
+              await showDialog<void>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: Text(_boardName),
+                  content: const Text('Kanban board in Smart Gen.'),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
+                  ],
+                ),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.image_outlined),
+            title: const Text('Change background'),
+            onTap: () async {
+              const swatches = <Color>[
+                Color(0xFF0079BF),
+                Color(0xFF519839),
+                Color(0xFFB04632),
+                Color(0xFF89609E),
+                Color(0xFFCD5A91),
+                Color(0xFF4BBF6B),
+                Color(0xFF00AECC),
+                Color(0xFF0E1016),
+              ];
+              final picked = await showModalBottomSheet<Color>(
+                context: context,
+                builder: (ctx) => Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+                  child: Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      for (final c in swatches)
+                        GestureDetector(
+                          onTap: () => Navigator.pop(ctx, c),
+                          child: Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: c,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+              final id = _boardId;
+              if (picked != null && id != null) {
+                store.setBoardColor(id, picked.toARGB32());
+                if (mounted) setState(() {});
+              }
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.label_outline),
+            title: const Text('Labels'),
+            onTap: () => Navigator.pushNamed(context, '/labels', arguments: _boardId),
+          ),
+          ListTile(
+            leading: const Icon(Icons.view_column_outlined),
+            title: const Text('Views'),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ViewsScreen()),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.archive_outlined),
+            title: const Text('Archived items'),
+            onTap: () => Navigator.pushNamed(context, '/archive', arguments: _boardId),
           ),
           ListTile(
             leading: const Icon(Icons.undo),
-            title: const SizedBox.shrink(),
+            title: const Text('Undo'),
             enabled: store.canUndo,
             onTap: store.canUndo
                 ? () {
@@ -36,131 +134,9 @@ class BoardMenuScreen extends StatelessWidget {
                 : null,
           ),
           ListTile(
-            leading: const Icon(Icons.redo),
-            title: const SizedBox.shrink(),
-            enabled: store.canRedo,
-            onTap: store.canRedo
-                ? () {
-                    store.redo();
-                    Navigator.pop(context);
-                  }
-                : null,
-          ),
-          ListTile(
-            leading: const Icon(Icons.people_outline),
-            title: const Text('Members'),
-            onTap: () {},
-          ),
-          ListTile(
-            leading: const Icon(Icons.person_add_alt),
-            title: const Text('Invite to workspace'),
-            onTap: () {},
-          ),
-          ListTile(
-            leading: const Icon(Icons.info_outline),
-            title: const Text('About this board'),
-            onTap: () {},
-          ),
-          ListTile(
-            leading: const Icon(Icons.visibility_outlined),
-            title: const Text('Change visibility'),
-            onTap: () {},
-          ),
-          ListTile(
-            leading: const Icon(Icons.image_outlined),
-            title: const Text('Change background'),
-            onTap: () {},
-          ),
-          ListTile(
-            leading: const Icon(Icons.settings_outlined),
-            title: const Text('Settings'),
-            onTap: () {},
-          ),
-          ListTile(
-            leading: const Icon(Icons.label_outline),
-            title: const Text('Labels'),
-            onTap: () {},
-          ),
-          ListTile(
-            leading: const Icon(Icons.emoji_emotions_outlined),
-            title: const Text('Stickers'),
-            onTap: () {},
-          ),
-          ListTile(
-            leading: const Icon(Icons.tune),
-            title: const Text('Custom Fields'),
-            onTap: () => Navigator.pushNamed(context, '/customfields'),
-          ),
-          ListTile(
-            leading: const Icon(Icons.extension_outlined),
-            title: const Text('Power-Ups'),
-            onTap: () {},
-          ),
-          ListTile(
-            leading: const Icon(Icons.bolt_outlined),
-            title: const Text('Automation'),
-            onTap: () {},
-          ),
-          ListTile(
-            leading: const Icon(Icons.table_chart_outlined),
-            title: const Text('Table'),
-            subtitle: const Text('Calendar and Timeline'),
-            onTap: () => Navigator.pushNamed(context, '/views'),
-          ),
-          ListTile(
-            leading: const Icon(Icons.search),
-            title: const Text('Search'),
-            onTap: () => Navigator.pushNamed(context, '/search'),
-          ),
-          ListTile(
-            leading: const Icon(Icons.archive_outlined),
-            title: const Text('Archived items'),
-            onTap: () => Navigator.pushNamed(context, '/archive'),
-          ),
-          ListTile(
-            leading: const Icon(Icons.filter_list),
-            title: const Text('Filter cards'),
-            onTap: () {},
-          ),
-          ListTile(
-            leading: const Icon(Icons.copy_outlined),
-            title: const Text('Copy board'),
-            onTap: () {},
-          ),
-          ListTile(
-            leading: const Icon(Icons.email_outlined),
-            title: const Text('Email-to-board settings'),
-            onTap: () {},
-          ),
-          ListTile(
-            leading: const Icon(Icons.print_outlined),
-            title: const Text('Print, export, and share'),
-            onTap: () {},
-          ),
-          ListTile(
-            leading: const Icon(Icons.history),
-            title: const Text('Activity'),
-            onTap: () {},
-          ),
-          SwitchListTile(
-            secondary: Icon(store.snapAlign ? Icons.dashboard_outlined : Icons.open_with),
-            title: Text(store.snapAlign ? 'Align to grid' : 'Free place'),
-            value: store.snapAlign,
-            onChanged: (v) {
-              store.snapAlign = v;
-              store.persist();
-              (context as Element).markNeedsBuild();
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.exit_to_app),
-            title: const Text('Leave board'),
-            onTap: () {},
-          ),
-          ListTile(
-            leading: const Icon(Icons.archive),
-            title: const Text('Close board'),
-            onTap: () {},
+            leading: const Icon(Icons.auto_awesome),
+            title: const Text('Genie'),
+            onTap: () => Navigator.pushNamed(context, '/genie'),
           ),
         ],
       ),

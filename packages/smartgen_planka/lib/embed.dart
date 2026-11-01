@@ -1,5 +1,6 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 
 import 'hooks.dart';
@@ -15,6 +16,9 @@ export 'hooks.dart';
 export 'local/planka_store.dart' show PlankaStore, PlankaPersistSave, PlankaPersistLoad;
 
 bool _ready = false;
+
+/// Nested Smart Gen navigator — host Escape/Back pops here first.
+final GlobalKey<NavigatorState> plankaNavigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> ensurePlankaReady({
   PlankaGenieChat? genie,
@@ -69,7 +73,7 @@ class PlankaNavigator extends StatelessWidget {
       fallbackLocale: const Locale('en', 'US'),
       saveLocale: false,
       startLocale: const Locale('en', 'US'),
-      errorWidget: (_) => const ColoredBox(color: Color(0xFF0079BF), child: SizedBox.expand()),
+      errorWidget: (_) => const ColoredBox(color: Color(0xFFF4F5F7), child: SizedBox.expand()),
       child: Builder(
         builder: (ctx) {
           return MultiProvider(
@@ -78,12 +82,28 @@ class PlankaNavigator extends StatelessWidget {
               data: pl.plankaTheme(ctx),
               child: Localizations(
                 locale: ctx.locale,
-                delegates: ctx.localizationDelegates,
+                delegates: [
+                  ...ctx.localizationDelegates,
+                  GlobalMaterialLocalizations.delegate,
+                  GlobalWidgetsLocalizations.delegate,
+                  GlobalCupertinoLocalizations.delegate,
+                ],
                 child: ScrollConfiguration(
                   behavior: const _NoScrollbarBehavior(),
-                  child: Material(
-                    color: const Color(0xFF0E1016),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final parentMq = MediaQuery.of(context);
+                      return MediaQuery(
+                        data: parentMq.copyWith(
+                          size: Size(
+                            constraints.maxWidth,
+                            constraints.maxHeight,
+                          ),
+                        ),
+                        child: Material(
+                    color: Colors.white,
                     child: Navigator(
+                      key: plankaNavigatorKey,
                       // Honour host hash routes (#/boards, #/projects, #/search, …).
                       initialRoute: () {
                         final frag = Uri.base.fragment.trim();
@@ -115,6 +135,9 @@ class PlankaNavigator extends StatelessWidget {
                         );
                       },
                     ),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),
@@ -152,10 +175,11 @@ class _PlankaHomeState extends State<_PlankaHome> {
   @override
   Widget build(BuildContext context) {
     final store = PlankaStore.instance;
-    final capture = Uri.base.queryParameters['sgcap'] == '1' ||
-        Uri.base.queryParameters['sgcap'] == 'true';
-    // Capture host: open first board lists so Collider pane shows the board.
-    if (capture && store.boards.isNotEmpty && store.lists.isNotEmpty) {
+    final qp = Uri.base.queryParameters;
+    final capture = qp['sgcap'] == '1' || qp['sgcap'] == 'true';
+    final screen = qp['screen'] ?? '';
+    // Capture host: open first board unless screen=home (boards hub).
+    if (capture && screen != 'home' && store.boards.isNotEmpty && store.lists.isNotEmpty) {
       final b = store.boards.first;
       final detail = store.boardDetailPayload(b['id'] as String);
       final board = PlankaBoard.fromJson(

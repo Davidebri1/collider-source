@@ -44,7 +44,8 @@ class PlankaFullCard {
 
   factory PlankaFullCard.fromJson(Map<String, dynamic> json) {
     // Extract item data
-    final itemData = json['item'];
+    final rawItem = json['item'];
+    final itemData = rawItem is Map ? Map<String, dynamic>.from(rawItem as Map) : <String, dynamic>{};
 
     // Extract included data if available
     final included = json['included'];
@@ -87,9 +88,9 @@ class PlankaFullCard {
     }
 
     return PlankaFullCard(
-      id: itemData['id'] as String,
-      name: itemData['name'] as String,
-      listId: itemData['listId'] as String,
+      id: '${itemData['id'] ?? ''}',
+      name: '${itemData['name'] ?? ''}',
+      listId: '${itemData['listId'] ?? ''}',
       description: itemData['description'] as String?,
       boardId: itemData['boardId'] as String?,
       creatorUserId: itemData['creatorUserId'] as String?,

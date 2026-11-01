@@ -42,10 +42,16 @@ class _ViewsScreenState extends State<ViewsScreen> with SingleTickerProviderStat
     final store = PlankaStore.instance;
     final cards = store.cards.where((c) => !store.archivedCardIds.contains(c['id'])).toList();
     return Scaffold(
+      
       appBar: AppBar(
+        
+        
         title: TabBar(
           controller: _tabs,
           isScrollable: true,
+          labelColor: Colors.white,
+          unselectedLabelColor: Color(0xFF5E6C84),
+          indicatorColor: const Color(0xFF5C6BC0),
           tabs: const [
             Tab(text: 'Board'),
             Tab(text: 'Table'),
@@ -161,7 +167,7 @@ class _CalendarViewState extends State<_CalendarView> {
           child: ListView(
             children: [
               for (final c in _eventsFor(_selected ?? _focused))
-                ListTile(title: Text('${c['name']}')),
+                ListTile(title: Text('${c['name']}', style: const TextStyle(color: Colors.black87))),
             ],
           ),
         ),
@@ -179,7 +185,7 @@ class _TimelineView extends StatelessWidget {
     final sorted = [...cards]..sort((a, b) => '${a['dueDate'] ?? '9999'}'.compareTo('${b['dueDate'] ?? '9999'}'));
     if (sorted.isEmpty) return const Center(child: Icon(Icons.inbox_outlined));
     return ListView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
       itemCount: sorted.length,
       itemBuilder: (_, i) {
         final c = sorted[i];
@@ -192,10 +198,10 @@ class _TimelineView extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: Colors.indigo.shade50,
+                    color: const Color(0x28FFFFFF),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text('${c['name']}'),
+                  child: Text('${c['name']}', style: const TextStyle(color: Colors.black87)),
                 ),
               ),
             ],

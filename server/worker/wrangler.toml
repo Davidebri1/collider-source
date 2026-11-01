@@ -1,0 +1,34 @@
+name = "collider"
+main = "src/index.js"
+compatibility_date = "2026-10-30"
+
+# Flutter web build lands in ./dist (Workers Builds: scripts/fetch_web_dist.sh).
+# Same Worker serves static assets AND /auth/* /v1/* on one origin.
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*", "/auth/*", "/health", "/v1/*"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "collider-account"
+database_id = "REPLACE_WITH_D1_ID"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "BLOBS"
+bucket_name = "collider-account-blobs"
+
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "REPLACE_WITH_KV_ID"
+
+# Runtime secrets — set in Cloudflare dashboard → Worker → Settings → Variables and Secrets.
+# Never commit values. Never create API tokens for deploy (Workers Builds uses Cloudflare's own).
+#   SESSION_SECRET     — long random string (paste; Cloudflare does not auto-generate this)
+#   GOOGLE_CLIENT_ID   — Google Cloud OAuth Web client ID
+#   APPLE_CLIENT_ID    — Apple Services ID (optional until iOS Sign in)
+#   DEV_AUTH           — leave unset in production
+# Optional:
+#   KEYS_UPSTREAM = "https://collider-keys.ebridavid.workers.dev"

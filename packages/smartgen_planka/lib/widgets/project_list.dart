@@ -38,16 +38,8 @@ class ProjectListState extends State<ProjectList> {
 
   @override
   Widget build(BuildContext context) {
-    /// Check if projects are null or empty
-    if (widget.projects.isEmpty) {
-      return const ColoredBox(
-        color: Color(0xFF0E1016),
-        child: Center(
-          child: Text('No boards yet', style: TextStyle(fontSize: 15, color: Colors.white70)),
-        ),
-      );
-    }
-
+    // Empty store is a real empty state (offline Collider): show Create Project
+    // only — never spinner forever, never sample projects/cards.
     return Padding(
       padding: const EdgeInsets.only(top: 10, bottom: 0),
       child: ListView.builder(
@@ -165,7 +157,7 @@ class ProjectListState extends State<ProjectList> {
                 builder: (context, setState) {
                   final allUsers = Provider.of<UserProvider>(ctx, listen: true).users;
                   return AlertDialog(
-                    title: Text('edit_board'.tr(), textAlign: TextAlign.center),
+                    title: Text('edit_board'.tr()),
                     content: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -199,9 +191,7 @@ class ProjectListState extends State<ProjectList> {
                         ),
                         const SizedBox(height: 20),
 
-                        /// Member Selection
-                        Text('members'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 10),
+                        // Members removed (needs Planka server).
 
                         // SizedBox(
                         //   width: double.maxFinite,
@@ -302,7 +292,7 @@ class ProjectListState extends State<ProjectList> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('delete_project_confirmation.0'.tr(), textAlign: TextAlign.center),
+        title: Text('delete_project_confirmation.0'.tr()),
         content: Text('delete_project_confirmation.1'.tr()),
         actions: [
           TextButton(
@@ -332,138 +322,50 @@ class ProjectListState extends State<ProjectList> {
   }
 
   void _showCreateProjectDialog(BuildContext context) {
-    final TextEditingController boardNameController = TextEditingController();
-    List<PlankaUser> selectedUsers = [];
-
-    // Fetch all users using UserProvider before showing the dialog
-    Provider.of<UserProvider>(context, listen: false).fetchUsers().then((_) {
-      showDialog(
-        context: context,
-        builder: (ctx) {
-          return StatefulBuilder(
-            builder: (context, setState) {
-              final allUsers = Provider.of<UserProvider>(ctx, listen: true).users; // Get users from UserProvider
-
-              return AlertDialog(
-                title: Text('create_project_dialog.create_new_project'.tr(), textAlign: TextAlign.center),
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    /// Board Name Input
-                    TextField(
-                      controller: boardNameController,
-                      decoration: InputDecoration(
-                        labelText: 'create_project_dialog.project_name'.tr(),
-                        hintText: 'create_project_dialog.enter_project_name'.tr(),
-                      ),
-                      onSubmitted: (value) {
-                        if (boardNameController.text.isEmpty) {
-                          showTopSnackBar(
-                            Overlay.of(context),
-                            CustomSnackBar.error(
-                              message: 'not_empty_name'.tr(),
-                            ),
-                          );
-                          return;
-                        }
-
-                        /// Create new board and add members logic
-                        Provider.of<ProjectProvider>(ctx, listen: false).createProject(value, context).then((_) {
-                          /// Call the onRefresh callback if it exists
-                          if (widget.onRefresh != null) {
-                            widget.onRefresh!();
-                          }
-
-                          Navigator.of(ctx).pop();
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Member Selection
-                    Text('members'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 10),
-
-                    // SizedBox(
-                    //   width: double.maxFinite,
-                    //   height: 200,
-                    //   child: ListView.builder(
-                    //     shrinkWrap: true,
-                    //     itemCount: allUsers.length,
-                    //     itemBuilder: (context, index) {
-                    //       final user = allUsers[index];
-                    //       final bool isSelected = selectedUsers.contains(user);
-                    //
-                    //       return CheckboxListTile(
-                    //         title: Text(user.name),
-                    //         value: isSelected,
-                    //         onChanged: (bool? value) {
-                    //           setState(() {
-                    //             if (value == true) {
-                    //               selectedUsers.add(user);
-                    //             } else {
-                    //               selectedUsers.remove(user);
-                    //             }
-                    //           });
-                    //         },
-                    //       );
-                    //     },
-                    //   ),
-                    // ),
-                  ],
-                ),
-                actions: [
-                  // Cancel Button
-                  TextButton(
-                    onPressed: () {
-                      Navigator.of(ctx).pop();
-                    },
-                    child: Text('cancel'.tr()),
-                  ),
-
-                  // Create Button
-                  TextButton(
-                    onPressed: () {
-                      if (boardNameController.text.isEmpty) {
-                        showTopSnackBar(
-                          Overlay.of(context),
-                          CustomSnackBar.error(
-                            message: 'not_empty_name'.tr(),
-                          ),
-                        );
-                        return;
-                      }
-
-                      // Create new board and add members logic
-                      Provider.of<ProjectProvider>(ctx, listen: false).createProject(boardNameController.text, context).then((boardId) {
-                        /// Für jeden Benutzer in der Liste `selectedUserIds` die Funktion `addBoardMember` aufrufen
-                        final selectedUserIds = selectedUsers.map((user) => user.id).toList();
-
-                        ///Add members
-                        // for (var userId in selectedUserIds) {
-                        //   Provider.of<ProjectProvider>(ctx, listen: false).addBoardMember(
-                        //     boardId: boardId,  // Hier verwenden wir die zurückgegebene 'boardId'
-                        //     userId: userId,
-                        //     context: context,
-                        //   );
-                        // }
-                      }).then((_) {
-                        /// Call the onRefresh callback if it exists
-                        if (widget.onRefresh != null) {
-                          widget.onRefresh!();
-                        }
-
-                        Navigator.of(ctx).pop();
-                      });
-                    },
-                    child: Text('create'.tr()),
-                  ),
-                ],
-              );
+    final TextEditingController nameController = TextEditingController();
+    // Stay inside PlankaNavigator (providers). Root navigator is outside MultiProvider.
+    showDialog<void>(
+      context: context,
+      useRootNavigator: false,
+      builder: (ctx) {
+        return AlertDialog(
+          title: Text('create_project_dialog.create_new_project'.tr()),
+          content: TextField(
+            controller: nameController,
+            autofocus: true,
+            decoration: InputDecoration(
+              labelText: 'create_project_dialog.project_name'.tr(),
+              hintText: 'create_project_dialog.enter_project_name'.tr(),
+            ),
+            onSubmitted: (value) {
+              final name = value.trim().isEmpty ? nameController.text.trim() : value.trim();
+              if (name.isEmpty) return;
+              Provider.of<ProjectProvider>(ctx, listen: false).createProject(name, ctx).then((_) {
+                widget.onRefresh?.call();
+                Navigator.of(ctx).pop();
+              });
             },
-          );
-        },
-      );
-    });
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text('cancel'.tr()),
+            ),
+            TextButton(
+              onPressed: () {
+                final name = nameController.text.trim();
+                if (name.isEmpty) return;
+                Provider.of<ProjectProvider>(ctx, listen: false).createProject(name, ctx).then((_) {
+                  widget.onRefresh?.call();
+                  Navigator.of(ctx).pop();
+                });
+              },
+              child: Text('create'.tr()),
+            ),
+          ],
+        );
+      },
+    );
   }
+
 }

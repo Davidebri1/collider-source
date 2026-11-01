@@ -1,6 +1,6 @@
 import '../../models/theme_def.dart';
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../../core/account_sync/synced_prefs.dart';
 
 /// Market switches, all off (David put the 2026-09-29 asks on hold, v8.3).
 ///
@@ -24,7 +24,7 @@ const bool kSubscriptionGate = false;
 const bool kOwnedBrighterState = false;
 
 /// Theme pack IAP scaffold — productId per Designer premium slug.
-/// Web/sandbox: mock buy unlocks locally via SharedPreferences.
+/// Web/sandbox: mock buy unlocks via AccountSync.
 class ThemePackStore extends ChangeNotifier {
   ThemePackStore._();
   static final ThemePackStore instance = ThemePackStore._();
@@ -86,12 +86,11 @@ class ThemePackStore extends ChangeNotifier {
 
   Future<void> init() async {
     if (_ready) return;
-    final prefs = await SharedPreferences.getInstance();
-    final list = prefs.getStringList(_prefsKey) ?? const <String>[];
+    final list = await SyncedPrefs.getStringList(_prefsKey) ?? const <String>[];
     _unlocked
       ..clear()
       ..addAll(list);
-    _subscribed = prefs.getBool(_subKey) ?? false;
+    _subscribed = (await SyncedPrefs.getBool(_subKey)) ?? false;
     _ready = true;
     notifyListeners();
   }
@@ -124,8 +123,7 @@ class ThemePackStore extends ChangeNotifier {
   Future<bool> subscribe() async {
     await init();
     _subscribed = true;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_subKey, true);
+    await SyncedPrefs.setBool(_subKey, true);
     notifyListeners();
     return true;
   }
@@ -135,26 +133,23 @@ class ThemePackStore extends ChangeNotifier {
     await init();
     _subscribed = false;
     _unlocked.clear();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_subKey);
-    await prefs.remove(_prefsKey);
+    await SyncedPrefs.remove(_subKey);
+    await SyncedPrefs.remove(_prefsKey);
     notifyListeners();
   }
 
   Future<void> restorePurchases() async {
     await init();
-    final prefs = await SharedPreferences.getInstance();
-    final list = prefs.getStringList(_prefsKey) ?? const <String>[];
+    final list = await SyncedPrefs.getStringList(_prefsKey) ?? const <String>[];
     _unlocked
       ..clear()
       ..addAll(list);
-    _subscribed = prefs.getBool(_subKey) ?? false;
+    _subscribed = (await SyncedPrefs.getBool(_subKey)) ?? false;
     notifyListeners();
   }
 
   Future<void> _persist() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(_prefsKey, _unlocked.toList()..sort());
+    await SyncedPrefs.setStringList(_prefsKey, _unlocked.toList()..sort());
   }
 }
 

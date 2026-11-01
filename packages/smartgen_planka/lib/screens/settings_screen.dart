@@ -19,7 +19,7 @@ class SettingsScreen extends StatelessWidget {
         future: userProvider.fetchUsers(),
         builder: (ctx, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const ColoredBox(color: Colors.white, child: SizedBox.expand());
+            return const Center(child: CircularProgressIndicator());
           } else if (snapshot.hasError) {
             return Center(child: Text('${'error'.tr()}: ${snapshot.error}'));
           } else {

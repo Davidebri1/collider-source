@@ -261,38 +261,43 @@ class _BoardListState extends ConsumerState<BoardList> {
                                 child: prov.draggedItemState!.child)
                         : null,
                   )
-                : Column(
-                    key: ValueKey("LIST ${widget.index}"),
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
+                : Column(key: ValueKey("LIST ${widget.index}"), children: [
                     ///HEADER
+
                     GestureDetector(
                       onLongPress: () {
                         listProv.onListLongpress(
-                        listIndex: widget.index,
-                        context: context,
-                        setstate: () => setState(() {}));
+                          listIndex: widget.index,
+                          context: context,
+                          setstate: () => setState(() {}),
+                        );
                       },
                       child: prov.board.lists[widget.index].header ?? const SizedBox.shrink(),
                     ),
-                    MediaQuery.removePadding(
-                      context: context,
-                      removeTop: true,
-                      child: ListView.builder(
-                        physics: const NeverScrollableScrollPhysics(),
-                        controller:
-                            prov.board.lists[widget.index].scrollController,
-                        itemCount:
-                            prov.board.lists[widget.index].items.length,
-                        shrinkWrap: true,
-                        itemBuilder: (ctx, index) {
-                          return Item(
-                            itemIndex: index,
-                            listIndex: widget.index,
-                          );
-                        },
+
+
+
+                    Expanded(
+                      child: MediaQuery.removePadding(
+                        context: context,
+                        removeTop: true,
+                        child: ListView.builder(
+                          physics: const ClampingScrollPhysics(),
+                          controller:
+                              prov.board.lists[widget.index].scrollController,
+                          itemCount:
+                              prov.board.lists[widget.index].items.length,
+                          shrinkWrap: true,
+                          itemBuilder: (ctx, index) {
+                            return Item(
+                              itemIndex: index,
+                              listIndex: widget.index,
+                            );
+                          },
+                        ),
                       ),
                     ),
+
                     ///FOOTER
                     prov.board.lists[widget.index].footer ?? const SizedBox.shrink(),
                   ]),

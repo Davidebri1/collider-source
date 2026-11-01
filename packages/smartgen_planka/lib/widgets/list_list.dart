@@ -167,31 +167,7 @@ class _ListListState extends State<ListList> {
 
           onListCreate: (newName) {
             if (newName != null && newName.isNotEmpty) {
-              if(widget.lists.isNotEmpty){
-                Provider.of<ListProvider>(context, listen: false).createList(
-                  newListName: newName,
-                  boardId: widget.currentBoard.id,
-                  context: context,
-                  newPos: (widget.lists.last.position + 1000).toString(),
-                ).then((_) {
-                  // Call the onRefresh callback if it exists
-                  if (widget.onRefresh != null) {
-                    widget.onRefresh!();
-                  }
-                });
-              } else {
-                Provider.of<ListProvider>(context, listen: false).createList(
-                  newListName: newName,
-                  boardId: widget.currentBoard.id,
-                  context: context,
-                  newPos: "1000",
-                ).then((_) {
-                  // Call the onRefresh callback if it exists
-                  if (widget.onRefresh != null) {
-                    widget.onRefresh!();
-                  }
-                });
-              }
+              _createListFromDialog(newName);
             } else {
               showTopSnackBar(
                 Overlay.of(context),
@@ -201,11 +177,90 @@ class _ListListState extends State<ListList> {
               );
             }
           },
+          onRequestCreateList: _showCreateListDialog,
 
           backgroundColor: Colors.transparent,
         );
       },
     );
+  }
+
+  void _showCreateListDialog() {
+    // Clear board focus first so the dialog field owns Flutter's text input
+    // (otherwise Enter activates Cancel while the browser input holds the typed name).
+    FocusManager.instance.primaryFocus?.unfocus();
+    final listNameController = TextEditingController();
+    // Stock: append after the last list (Create List tile sits at the end).
+    final newPos = widget.lists.isEmpty
+        ? '1000'
+        : (widget.lists.last.position + 1000).toString();
+
+    void submit(BuildContext ctx, String value) {
+      final name = value.trim().isEmpty ? listNameController.text.trim() : value.trim();
+      if (name.isEmpty) return;
+      // Mirror Create Board: create then pop.
+      Provider.of<ListProvider>(ctx, listen: false).createList(
+        newListName: name,
+        boardId: widget.currentBoard.id,
+        context: ctx,
+        newPos: newPos,
+      ).then((_) {
+        widget.onRefresh?.call();
+        if (ctx.mounted) Navigator.of(ctx).pop();
+      });
+    }
+
+    showDialog<void>(
+      context: context,
+      useRootNavigator: false,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return AlertDialog(
+          title: Text('create_list'.tr()),
+          content: TextField(
+            controller: listNameController,
+            autofocus: true,
+            textInputAction: TextInputAction.done,
+            decoration: const InputDecoration(
+              hintText: 'List name',
+            ),
+            onSubmitted: (value) => submit(ctx, value),
+          ),
+          actions: [
+            // ExcludeFocus so Enter never lands on Cancel (matches Create Board + David's rule).
+            ExcludeFocus(
+              child: TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: Text('cancel'.tr()),
+              ),
+            ),
+            ExcludeFocus(
+              child: Semantics(
+                button: true,
+                label: 'Confirm Create List',
+                child: TextButton(
+                  onPressed: () => submit(ctx, listNameController.text),
+                  child: Text('create'.tr()),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _createListFromDialog(String newName) {
+    if (newName.trim().isEmpty) return;
+    final newPos = widget.lists.isEmpty
+        ? '1000'
+        : (widget.lists.last.position + 1000).toString();
+    Provider.of<ListProvider>(context, listen: false).createList(
+      newListName: newName.trim(),
+      boardId: widget.currentBoard.id,
+      context: context,
+      newPos: newPos,
+    ).then((_) => widget.onRefresh?.call());
   }
 
   // Method to convert PlankaLists to BoardListsData for KanbanBoard
@@ -222,7 +277,7 @@ class _ListListState extends State<ListList> {
       }
 
       return BoardListsData(
-        width: 280.0,
+        width: MediaQuery.of(context).size.width * 0.9,
         backgroundColor: listBg ?? const Color.fromARGB(255, 247, 248, 252),
         headerBackgroundColor: listBg ?? const Color.fromARGB(255, 247, 248, 252),
 
@@ -241,7 +296,7 @@ class _ListListState extends State<ListList> {
                   ? Padding(
                     padding: const EdgeInsets.only(bottom: 10),
                     child: SizedBox(
-                      width: 280.0,
+                      width: MediaQuery.of(context).size.width * 0.9,
                       child: TextField(
                     controller: _listNameControllers[list.id],
                     focusNode: _focusNodesListTitle[list.id], // Use the focus node
@@ -269,21 +324,25 @@ class _ListListState extends State<ListList> {
                   ),
                   )
                   : Container(
-                width: 280.0,
+                width: MediaQuery.of(context).size.width * 0.9,
                 color: Colors.grey[200],
                 padding: const EdgeInsets.only(left: 5, bottom: 5, top: 5, right: 0),
-                alignment: Alignment.center,
+                alignment: Alignment.centerLeft,
                 child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Expanded(
                       child: Text(
-                        list.name,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 17, color: Colors.black, fontWeight: FontWeight.w500),
-                      ),
+                      list.name,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 17, color: Colors.black, fontWeight: FontWeight.w500),
+                    ),
                     ),
                     SizedBox(
+                      width: 40,
                       child: PopupMenuButton<int>(
+                        padding: EdgeInsets.zero,
+                        iconSize: 22,
                         icon: const Icon(Icons.menu_rounded),
                         onSelected: (value) async {
                           if (value == 2) {
@@ -372,7 +431,11 @@ class _ListListState extends State<ListList> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                GestureDetector(
+                Flexible(
+                child: Semantics(
+                  button: true,
+                  label: 'Add Card',
+                  child: GestureDetector(
                   onTap: () {
                     /// When tapping, switch to editing mode
                     setState(() {
@@ -430,8 +493,12 @@ class _ListListState extends State<ListList> {
                         color: Colors.indigo),
                   ),
                 ),
+                ),
+                ),
                 if(isEditingNewCardName == false)
                   IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                     onPressed: () {
                       _showFileSelectionOptions(list);
                     },
@@ -529,7 +596,7 @@ class _ListListState extends State<ListList> {
                         return Wrap(
                           spacing: 1.0,
                           runSpacing: 1.0,
-                          children: _buildLabelWidgets(card.labels, card2.cardLabels!, labelColors),
+                          children: _buildLabelWidgets(card.labels, (card2.cardLabels ?? const []), labelColors),
                         );
                       }
                     },
@@ -557,13 +624,15 @@ class _ListListState extends State<ListList> {
                     children: [
                       if (card.dueDate != null && card.dueDate!.isNotEmpty)
                         IntrinsicWidth(
-                          child: buildDueDateWidgetPreview(card.dueDate!, card.id),
+                          child: IgnorePointer(
+                            child: buildDueDateWidgetPreview(card.dueDate!, card.id),
+                          ),
                         ),
                       if (card.stopwatchTotal != null || card.stopwatchStartedAt != null)
                         IntrinsicWidth(
                           child: StopwatchDisplay(
                             cardId: card.id,
-                            initialTotalSeconds: card.stopwatchTotal!,
+                            initialTotalSeconds: card.stopwatchTotal ?? 0,
                             startedAt: card.stopwatchStartedAt,
                           ),
                         ),

@@ -5,10 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:planka_app/embed.dart';
 
 import '../../../core/api/media_gen.dart';
-import '../../../core/files/file_blobs.dart';
 import '../planka_migrate.dart';
 import '../sg_model.dart';
 import '../sg_pane.dart';
+import '../../../core/account_sync/account_sync.dart';
 
 ({String need, String serve, List<(String title, String note)> cards}) parseSmartGen(String out) {
   final need = RegExp(r'NEED:\s*(.+)').firstMatch(out)?.group(1)?.trim() ?? '';
@@ -32,9 +32,10 @@ import '../sg_pane.dart';
 const kPlankaSurfaces = {'kanban'};
 
 bool smartGenSectionIsLive(String section) {
-  if (section == 'tasks' || section == 'live') return true;
-  if (section == 'planka' || section.isEmpty) return false;
-  // Named surface e.g. album / notebook / vision → live screen.
+  // Cards/Boards stay on stock planka; only explicit live surfaces use SgPane.
+  if (section == 'tasks' || section == 'live' || section == 'genie') return true;
+  if (section == 'planka' || section == 'boards' || section == 'cards' || section.isEmpty) return false;
+  // Named surface e.g. album / notebook / vision / canvas → live screen.
   if (kPlankaSurfaces.contains(section)) return false;
   return SgSurface.values.asNameMap().containsKey(section);
 }
@@ -61,16 +62,24 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
   }
 
   @override
+  void didUpdateWidget(covariant SmartGenScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.section != widget.section) {
+      setState(() => _live = smartGenSectionIsLive(widget.section));
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     _ready ??= () async {
       await ensurePlankaReady(
         genie: (messages) => MediaGen.instance.genie(messages),
         save: (json) async {
-          await FileBlobs.put(_blobId, Uint8List.fromList(utf8.encode(json)));
+          await AccountSync.instance.putBlob(_blobId, Uint8List.fromList(utf8.encode(json)));
         },
         load: () async {
           try {
-            final raw = await FileBlobs.get(_blobId).timeout(const Duration(seconds: 2));
+            final raw = await AccountSync.instance.getBlob(_blobId).timeout(const Duration(seconds: 2));
             if (raw == null || raw.isEmpty) return null;
             return utf8.decode(raw);
           } catch (_) {
@@ -78,9 +87,9 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
           }
         },
         attachmentPut: (id, bytes) async {
-          await FileBlobs.put(id, bytes);
+          await AccountSync.instance.putBlob(id, bytes);
         },
-        attachmentGet: (id) => FileBlobs.get(id),
+        attachmentGet: (id) => AccountSync.instance.getBlob(id),
       );
       await migrateLegacySmartGenIntoPlanka();
       await SgStore.instance.init();
@@ -91,17 +100,23 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
       future: _ready,
       builder: (context, snap) {
         if (snap.connectionState != ConnectionState.done) {
-          return const ColoredBox(color: Color(0xFF0079BF), child: SizedBox.expand());
+          return const ColoredBox(color: Color(0xFFF4F5F7), child: SizedBox.expand());
         }
         if (snap.hasError) {
           return SgPane(onClose: widget.onClose, section: 'tasks');
         }
         if (_live) {
-          final liveSection = widget.section == 'planka' ? 'tasks' : widget.section;
+          final liveSection = switch (widget.section) {
+            'planka' || 'boards' || 'cards' => 'tasks',
+            'genie' => 'genie',
+            'canvas' => 'canvas',
+            _ => widget.section,
+          };
           return SgPane(
+            key: const ValueKey('sg-live-pane'),
             onClose: () {
               // From the planka hub, back returns to kanban UI; otherwise close Smart Gen.
-              if (widget.section == 'planka') {
+              if (widget.section == 'planka' || widget.section == 'boards') {
                 setState(() => _live = false);
               } else {
                 widget.onClose();

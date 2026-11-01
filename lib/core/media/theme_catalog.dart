@@ -6,9 +6,9 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/theme_def.dart';
+import '../account_sync/account_sync.dart';
 
 /// A track in the music drawer / floating player (not tied to one pack).
 class CatalogAmbientTrack {
@@ -143,8 +143,7 @@ class ThemeCatalog extends ChangeNotifier {
 
   Future<void> _loadCached() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final s = prefs.getString(_prefsKey);
+      final s = await AccountSync.instance.getString(_prefsKey);
       if (s != null && s.isNotEmpty) {
         final l = jsonDecode(s);
         if (l is List) _applyR2(l, 'cache');
@@ -377,8 +376,7 @@ class ThemeCatalog extends ChangeNotifier {
       final list = jsonDecode(body);
       if (list is! List || list.isEmpty) return;
       _applyR2(list, 'r2');
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_prefsKey, body);
+      await AccountSync.instance.setString(_prefsKey, body, sync: false);
     } catch (e) {
       debugPrint('ThemeCatalog: theme list unavailable, keeping $_source: $e');
     }

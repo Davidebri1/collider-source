@@ -7,9 +7,11 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_font.dart';
 import '../../core/vision/cpane.dart';
+import '../../core/vision/vision_kit.dart';
 import '../../core/vision/vision_tokens.dart';
 import 'sg_harness_imgs.dart';
 import 'sg_model.dart';
+import 'sg_free_drag.dart';
 import 'sg_views.dart';
 
 class SgPane extends StatefulWidget {
@@ -37,6 +39,10 @@ class _SgPaneState extends State<SgPane> {
   Timer? _toastTimer;
   bool _forceFlip = false;
   String _overlay = '';
+  final Map<SgSurface, GlobalKey> _viewChipKeys = {};
+  SgSurface? _viewChipEnsured;
+
+  bool _genieMinimized = false;
   double _kanbanPage = 0;
   final GlobalKey _listKey = GlobalKey();
   final GlobalKey _labelsKey = GlobalKey();
@@ -64,6 +70,7 @@ class _SgPaneState extends State<SgPane> {
   Future<void> _boot() async {
     await store.init();
     if (!mounted) return;
+    _applySection(widget.section);
     final q = Uri.base.queryParameters;
     // Capture-only harness: names come from the capture URL, never hard-coded seed.
     if (q['cap'] == '1') {
@@ -453,17 +460,23 @@ class _SgPaneState extends State<SgPane> {
       }
       if (q['scatter'] == '1') {
         b.snapAlign = false;
+        if (b.cards.isEmpty) {
+          for (final title in ['Alpha', 'Beta', 'Gamma', 'Delta']) {
+            final c = store.addCard(SgType.task);
+            if (c != null) c.title = title;
+          }
+        }
         // Distinct free positions so the capture shows open-ended placement,
         // not a stacked pile (R23 default free-drag).
         const offsets = <List<double>>[
-          [18, 36],
+          [24, 36],
           [220, 48],
           [48, 220],
           [200, 250],
           [28, 420],
           [210, 450],
-          [60, 620],
-          [190, 660],
+          [60, 520],
+          [190, 560],
         ];
         for (var i = 0; i < b.cards.length; i++) {
           final o = offsets[i % offsets.length];
@@ -471,9 +484,109 @@ class _SgPaneState extends State<SgPane> {
           b.cards[i].dy = o[1];
         }
       }
+      if (q['boardtiles'] == '1') {
+        final hostId = b.id;
+        if (b.canvases.isEmpty) {
+          store.addCanvas('Canvas 1', 'Glass');
+        }
+        final host = store.boards.firstWhere((x) => x.id == hostId);
+        final canvasId = host.canvases[host.canvasIndex.clamp(0, host.canvases.length - 1)].id;
+        // Park any seeded cards well below the board-tile band so tiles stay clean.
+        store.touch(() {
+          host.snapAlign = false;
+          for (var i = 0; i < host.cards.length; i++) {
+            host.cards[i].dx = 24.0 + (i % 2) * 160.0;
+            host.cards[i].dy = 520.0 + (i ~/ 2) * 120.0;
+          }
+        });
+        final kinds = <(String, SgSurface)>[
+          ('Shot list', SgSurface.notebook),
+          ('Lookbook', SgSurface.album),
+          ('Mood', SgSurface.vision),
+        ];
+        for (var i = 0; i < kinds.length; i++) {
+          SgBoard? existing;
+          for (final x in store.boards) {
+            if (x.name == kinds[i].$1) {
+              existing = x;
+              break;
+            }
+          }
+          final nb = existing ?? store.createBoard(kinds[i].$1, goHome: false);
+          store.openBoard(hostId);
+          // Free slots: 2-col band under the canvas title, no overlap with cards.
+          final slot = Offset(24.0 + (i % 2) * 168.0, 56.0 + (i ~/ 2) * 128.0);
+          store.placeBoardOnCanvas(nb.id, canvasId, dx: slot.dx, dy: slot.dy);
+          store.touch(() => nb.surface = kinds[i].$2);
+        }
+        store.openBoard(hostId);
+        store.touch(() {
+          store.board!.surface = SgSurface.canvas;
+          store.board!.snapAlign = false;
+        });
+      }
+      if (q['bg'] != null && b.canvases.isNotEmpty) {
+        final id = q['bg']!;
+        final canvas = b.canvases[b.canvasIndex.clamp(0, b.canvases.length - 1)];
+        store.setCanvasBackground(canvas.id, id);
+      }
+      if (q['genie'] == '1') {
+        _overlay = 'genie';
+        _genieMinimized = false;
+      }
+      if (q['geniemin'] == '1') {
+        _overlay = 'genie';
+        _genieMinimized = true;
+      }
       if (q.containsKey('dx0') && b.cards.isNotEmpty) {
-        b.cards.first.dx = double.tryParse(q['dx0']!) ?? b.cards.first.dx;
-        b.cards.first.dy = double.tryParse(q['dy0'] ?? '') ?? b.cards.first.dy;
+        final named = q['c1'];
+        SgCard card = b.cards.first;
+        if (named != null && named.isNotEmpty) {
+          for (final c in b.cards) {
+            if (c.title == named) { card = c; break; }
+          }
+        }
+        card.dx = double.tryParse(q['dx0']!) ?? card.dx;
+        card.dy = double.tryParse(q['dy0'] ?? '') ?? card.dy;
+        // Park other cards low so the throw path stays clear.
+        for (final c in b.cards) {
+          if (identical(c, card)) continue;
+          if (c.dy < 360) c.dy = 420 + (c.dy % 80);
+        }
+      }
+      if (q['throw'] == '1') {
+        b.snapAlign = false;
+        if (b.cards.isEmpty) {
+          final c = store.addCard(SgType.task);
+          if (c != null) c.title = 'Thrown';
+        }
+        if (b.canvases.isEmpty) {
+          store.addCanvas('Canvas 1', 'Glass');
+        }
+        b.surface = SgSurface.canvas;
+        final card = b.cards.first;
+        card.title = card.title.isEmpty ? 'Thrown' : card.title;
+        const start = Offset(36, 120);
+        const velocity = Offset(1800, -600);
+        final frame = int.tryParse(q['throwframe'] ?? '3') ?? 3;
+        if (frame <= 1) {
+          card.dx = start.dx;
+          card.dy = start.dy;
+        } else if (frame == 2) {
+          // Mid-friction sample (~120ms into glide).
+          final mid = SgFreeLayouts.simulateThrow(start: start, velocity: velocity, maxSteps: 8);
+          card.dx = mid.dx;
+          card.dy = mid.dy;
+        } else {
+          final end = SgFreeLayouts.simulateThrow(start: start, velocity: velocity);
+          card.dx = end.dx;
+          card.dy = end.dy;
+        }
+        // Park siblings so the thrown card is obvious.
+        for (var i = 1; i < b.cards.length; i++) {
+          b.cards[i].dx = 24.0 + (i % 2) * 160;
+          b.cards[i].dy = 420.0 + (i ~/ 2) * 100;
+        }
       }
       final kp = q['kpage'];
       if (kp == 'last') {
@@ -554,6 +667,40 @@ class _SgPaneState extends State<SgPane> {
     if (mounted) setState(() {});
   }
 
+  void _applySection(String section) {
+    if (section == 'genie') {
+      setState(() {
+        _overlay = 'genie';
+        _genieMinimized = false;
+      });
+      return;
+    }
+    final surface = SgSurface.values.asNameMap()[section];
+    if (surface == null) return;
+    if (store.boards.isEmpty) {
+      store.createBoard('Board', goHome: false);
+    }
+    final b = store.board;
+    if (b == null) return;
+    store.touch(() {
+      b.surface = surface;
+      if (surface == SgSurface.canvas && b.canvases.isEmpty) {
+        b.canvases.add(SgCanvas(id: 'v${DateTime.now().millisecondsSinceEpoch}', name: 'Canvas 1', kind: 'Glass'));
+        b.canvasIndex = 0;
+      }
+    });
+    store.atHome = false;
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void didUpdateWidget(covariant SgPane oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.section != widget.section) {
+      _applySection(widget.section);
+    }
+  }
+
   void _open(SgCard c) => setState(() {
         _openId = c.id;
         _overlay = '';
@@ -565,41 +712,90 @@ class _SgPaneState extends State<SgPane> {
   Widget build(BuildContext context) {
     final b = store.board;
     final showHome = store.atHome || b == null;
-    return CPane(
-      span: CPaneSpan.phoneBoard,
-      fit: CPaneFit.fill,
-      child: ScrollConfiguration(
-        behavior: const SgScroll(),
-        child: showHome
-            ? _boardsHome()
-            : Stack(children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _header(b!),
-                    _viewChips(b),
-                    if (b.canvases.isNotEmpty) _canvasChips(b),
-                    Expanded(child: _body(b)),
-                    if (_multi) _bulkBar(b),
-                  ],
-                ),
-                // Float over the list body, never over the board header / view tabs.
-                Positioned(
-                  left: 8,
-                  right: 8,
-                  bottom: 12,
-                  child: AnimatedSlide(
-                    duration: const Duration(milliseconds: 220),
-                    offset: _toast.isEmpty ? const Offset(0, 0.4) : Offset.zero,
-                    child: AnimatedOpacity(
-                      duration: const Duration(milliseconds: 220),
-                      opacity: _toast.isEmpty ? 0 : 1,
-                      child: _toast.isEmpty ? const SizedBox.shrink() : _toastBar(),
+    // Fill the shared SettingsGlassPane host (main.dart). No nested CPane
+    // phoneBoard — that added bottomInset:78 over Settings glass and left a
+    // frost band under the canvas. SettingsGlassPane is the single window.
+    return ScrollConfiguration(
+      behavior: const SgScroll(),
+      child: showHome
+          ? _boardsHome()
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _header(b),
+                _viewChips(b),
+                if (b.canvases.isNotEmpty) _canvasChips(b),
+                // Body + Genie share the remaining pane height so Genie stays
+                // below the number chips and the canvas paints to the pane floor.
+                Expanded(
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        _body(b),
+                        Positioned(
+                          left: 8,
+                          right: 8,
+                          bottom: 12,
+                          child: AnimatedSlide(
+                            duration: const Duration(milliseconds: 220),
+                            offset: _toast.isEmpty ? const Offset(0, 0.4) : Offset.zero,
+                            child: AnimatedOpacity(
+                              duration: const Duration(milliseconds: 220),
+                              opacity: _toast.isEmpty ? 0 : 1,
+                              child: _toast.isEmpty ? const SizedBox.shrink() : _toastBar(),
+                            ),
+                          ),
+                        ),
+                        if (_overlay == 'genie' && !_genieMinimized)
+                          Positioned(
+                            left: 8,
+                            right: 8,
+                            top: 8,
+                            bottom: 8,
+                            child: Material(
+                              key: const ValueKey('sg-genie-panel'),
+                              color: const Color(0xFF12141A),
+                              elevation: 12,
+                              shadowColor: const Color(0xCC000000),
+                              surfaceTintColor: Colors.transparent,
+                              borderRadius: BorderRadius.circular(16),
+                              clipBehavior: Clip.antiAlias,
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF12141A),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: const Color(0x55FFFFFF)),
+                                ),
+                                child: _geniePanel(compact: true),
+                              ),
+                            ),
+                          ),
+                        if (_overlay == 'genie' && _genieMinimized)
+                          Positioned(
+                            right: 12,
+                            bottom: 16,
+                            child: Material(
+                              key: const ValueKey('sg-genie-fab'),
+                              color: const Color(0xFF2F6FED),
+                              shape: const CircleBorder(),
+                              elevation: 4,
+                              child: InkWell(
+                                customBorder: const CircleBorder(),
+                                onTap: () => setState(() => _genieMinimized = false),
+                                child: const SizedBox(
+                                  width: 48,
+                                  height: 48,
+                                  child: Icon(Icons.assistant_rounded, color: Colors.white),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
-                ),
-              ]),
-      ),
+                  if (_multi) _bulkBar(b),
+              ],
+            ),
     );
   }
 
@@ -797,33 +993,45 @@ class _SgPaneState extends State<SgPane> {
     );
   }
 
-  /// Trello's board bar: the name, one star, Align (always on-screen at phone
-  /// width), and a "…" that holds the rest.
+  /// Settings-style header: title sits on the pane centre line; leading icon
+  /// pins to the left edge; trailing icons pin to the right. Icon counts do
+  /// not shove the title (same pattern as Account `_paneHeader`).
   Widget _header(SgBoard b) {
     final snap = b.snapAlign;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 4, 0),
-      child: Row(children: [
-        Expanded(
-          child: TextField(
-            controller: TextEditingController(text: b.name),
-            style: appFont(fontSize: 22, fontWeight: FontWeight.w700, color: Colors.white),
-            decoration: const InputDecoration(isCollapsed: true, border: InputBorder.none),
-            onSubmitted: (v) => store.touch(() => b.name = v.trim().isEmpty ? b.name : v.trim()),
+    return SizedBox(
+      height: 48,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Stack(alignment: Alignment.center, children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 48),
+            child: TextField(
+              controller: TextEditingController(text: b.name),
+              textAlign: TextAlign.center,
+              style: appFont(fontSize: 22, fontWeight: FontWeight.w700, color: Colors.white),
+              decoration: const InputDecoration(isCollapsed: true, border: InputBorder.none),
+              onSubmitted: (v) => store.touch(() => b.name = v.trim().isEmpty ? b.name : v.trim()),
+            ),
           ),
-        ),
-        _icon('Boards', Icons.grid_view_rounded, () { store.goHome(); setState(() {}); }),
-        _icon(b.starred ? 'Unstar board' : 'Star board', b.starred ? Icons.star_rounded : Icons.star_outline_rounded, () => store.touch(() => b.starred = !b.starred), color: const Color(0xFFFFD56A)),
-        // Phone 440: view chips used to push Vision (and its free-drag Align)
-        // off-screen. Keep Align pinned in the board chrome on every view.
-        _icon(
-          snap ? 'Free place' : 'Align to grid',
-          snap ? Icons.grid_off_rounded : Icons.dashboard_customize_rounded,
-          () => store.touch(() => b.snapAlign = !b.snapAlign),
-          color: snap ? const Color(0xFFFFD56A) : Colors.white70,
-        ),
-        _icon('Board menu', Icons.more_horiz, () => setState(() => _menu = !_menu)),
-      ]),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: _icon('Boards', Icons.grid_view_rounded, () { store.goHome(); setState(() {}); }),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              _icon(b.starred ? 'Unstar board' : 'Star board', b.starred ? Icons.star_rounded : Icons.star_outline_rounded, () => store.touch(() => b.starred = !b.starred), color: const Color(0xFFFFD56A)),
+              _icon(
+                snap ? 'Free place' : 'Align to grid',
+                snap ? Icons.grid_off_rounded : Icons.dashboard_customize_rounded,
+                () => store.touch(() => b.snapAlign = !b.snapAlign),
+                color: snap ? const Color(0xFFFFD56A) : Colors.white70,
+              ),
+              _icon('Board menu', Icons.more_horiz, () => setState(() => _menu = !_menu)),
+            ]),
+          ),
+        ]),
+      ),
     );
   }
 
@@ -839,36 +1047,58 @@ class _SgPaneState extends State<SgPane> {
   }
 
   Widget _viewChips(SgBoard b) {
-    // One horizontal swipe row (no scrollbar): the approved phone layout.
-    // Align stays pinned in [_header], so chips never push it off-screen.
+    // Single horizontal row with VFadeScroll edge fade (Theme Gallery mask).
+    // Selected chip stays scrolled into view via ensureVisible.
+    final surfaces = SgSurface.values;
+    final selected = b.surface;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _ensureViewChipVisible(selected));
     return SizedBox(
       height: 40,
-      child: ScrollConfiguration(
-        behavior: const SgScroll(),
-        child: ListView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: VFadeScroll(
+        axis: Axis.horizontal,
+        fade: 28,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Row(
           children: [
-            for (final s in SgSurface.values)
-              Padding(
-                padding: const EdgeInsets.only(right: 4),
+            for (var i = 0; i < surfaces.length; i++) ...[
+              if (i > 0) const SizedBox(width: 4),
+              KeyedSubtree(
+                key: _viewChipKeys.putIfAbsent(surfaces[i], GlobalKey.new),
                 child: _glassChoice(
-                  label: s.label,
-                  selected: b.surface == s,
+                  label: surfaces[i].label,
+                  selected: selected == surfaces[i],
                   size: 11,
                   onSelected: (_) {
+                    final s = surfaces[i];
+                    _viewChipEnsured = null;
                     store.touch(() => b.surface = s);
                     if (s == SgSurface.kanban && widget.onOpenKanbanInPlanka != null) {
                       widget.onOpenKanbanInPlanka!();
                     } else {
                       setState(() {});
                     }
+                    WidgetsBinding.instance.addPostFrameCallback((_) => _ensureViewChipVisible(s));
                   },
                 ),
               ),
+            ],
           ],
         ),
       ),
+    );
+  }
+
+  void _ensureViewChipVisible(SgSurface s) {
+    if (!mounted) return;
+    if (_viewChipEnsured == s) return;
+    final ctx = _viewChipKeys[s]?.currentContext;
+    if (ctx == null) return;
+    _viewChipEnsured = s;
+    Scrollable.ensureVisible(
+      ctx,
+      duration: const Duration(milliseconds: 220),
+      alignment: 0.5,
+      curve: Curves.easeOutCubic,
     );
   }
 
@@ -880,32 +1110,45 @@ class _SgPaneState extends State<SgPane> {
     // The chip's own material is an opaque dark slab on this theme. A
     // transparent canvas lets the pane's glass show through the outline.
     return Theme(
-      data: Theme.of(context).copyWith(canvasColor: Colors.transparent),
-      child: ChoiceChip(
-        label: Text(label, style: style),
-        labelStyle: style,
-        selected: selected,
-        showCheckmark: false,
-        onSelected: onSelected,
-        visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
-        labelPadding: const EdgeInsets.symmetric(horizontal: 6),
-        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        elevation: 0,
-        pressElevation: 0,
-        surfaceTintColor: Colors.transparent,
-        shadowColor: Colors.transparent,
-        selectedShadowColor: Colors.transparent,
-        side: BorderSide(color: selected ? const Color(0xFFFFFFFF) : const Color(0xE6FFFFFF), width: 1),
-        color: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) return const Color(0xFFF2F4F7);
-          return const Color(0x14FFFFFF);
-        }),
+      data: Theme.of(context).copyWith(
+        canvasColor: Colors.transparent,
+        focusColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+        splashColor: Colors.transparent,
+        hoverColor: Colors.transparent,
+      ),
+      child: Focus(
+        canRequestFocus: false,
+        descendantsAreFocusable: false,
+        descendantsAreTraversable: false,
+        child: ChoiceChip(
+          label: Text(label, style: style),
+          labelStyle: style,
+          selected: selected,
+          showCheckmark: false,
+          onSelected: onSelected,
+          visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
+          labelPadding: const EdgeInsets.symmetric(horizontal: 5),
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          elevation: 0,
+          pressElevation: 0,
+          surfaceTintColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          selectedShadowColor: Colors.transparent,
+          selectedColor: const Color(0xFFF2F4F7),
+          backgroundColor: const Color(0x14FFFFFF),
+          side: BorderSide(color: selected ? const Color(0xFFFFFFFF) : const Color(0xE6FFFFFF), width: 1),
+          color: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) return const Color(0xFFF2F4F7);
+            return const Color(0x14FFFFFF);
+          }),
+        ),
       ),
     );
   }
 
   Widget _canvasChips(SgBoard b) {
-    // No floating '+' here — Add a canvas lives in the board menu (Trello-like).
+    // Same _glassChoice style as surface chips — no coloured ring / focus halo.
     return SizedBox(
       height: 40,
       child: ScrollConfiguration(
@@ -917,17 +1160,11 @@ class _SgPaneState extends State<SgPane> {
             for (var i = 0; i < b.canvases.length; i++)
               Padding(
                 padding: const EdgeInsets.only(right: 4),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Color(b.canvases[i].color), width: 2),
-                  ),
-                  child: _glassChoice(
-                    label: '${i + 1} ${b.canvases[i].name}',
-                    selected: b.canvasIndex == i,
-                    size: 11,
-                    onSelected: (_) => store.touch(() => b.canvasIndex = i),
-                  ),
+                child: _glassChoice(
+                  label: '${i + 1}',
+                  selected: b.canvasIndex == i,
+                  size: 11,
+                  onSelected: (_) => store.touch(() => b.canvasIndex = i),
                 ),
               ),
           ],
@@ -964,7 +1201,20 @@ class _SgPaneState extends State<SgPane> {
               }
             });
           }),
-          _menuAction(Icons.auto_awesome_rounded, 'Genie', () => setState(() { _menu = false; _overlay = 'genie'; })),
+                    _menuAction(Icons.dashboard_outlined, 'Place board', () {
+            final hostId = b.id;
+            if (b.canvases.isEmpty) {
+              store.addCanvas('Canvas 1', 'Glass');
+            }
+            final host = store.boards.firstWhere((x) => x.id == hostId);
+            final canvasId = host.canvases[host.canvasIndex.clamp(0, host.canvases.length - 1)].id;
+            final nb = store.createBoard('Board', goHome: false);
+            store.openBoard(hostId);
+            store.placeBoardOnCanvas(nb.id, canvasId);
+            store.touch(() => store.board!.surface = SgSurface.canvas);
+            setState(() { _menu = false; });
+          }),
+          _menuAction(Icons.auto_awesome_rounded, 'Genie', () => setState(() { _menu = false; _overlay = 'genie'; _genieMinimized = false; })),
           const SizedBox(height: 8),
           Text('Members', textAlign: TextAlign.center, style: appFont(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
           Text(b.guests.join(', '), style: appFont(fontSize: 13, color: Colors.white)),
@@ -1037,7 +1287,7 @@ class _SgPaneState extends State<SgPane> {
     if (_menu) return _menuBody(b);
     if (_overlay == 'search') return _search(b);
     if (_overlay == 'stats') return _stats(b);
-    if (_overlay == 'genie') return _genie();
+    // Genie floats over the surface (see build Stack) — do not replace the body.
     if (_overlay == 'editor-bulk') return _bulkEdit(b);
     if (open != null) return _editor(b, open);
     return SgSurfaceView(store: store, onOpen: _open, multi: _multi, selected: _selected, forceFlip: _forceFlip, kanbanPage: _kanbanPage, forceHotListId: _forceHotListId, liftCardId: _liftCardId, onSelect: (c) => setState(() => _selected.contains(c.id) ? _selected.remove(c.id) : _selected.add(c.id)));
@@ -1154,39 +1404,41 @@ class _SgPaneState extends State<SgPane> {
     }
   }
 
-  Widget _genie() {
-    // Dense Collider glass on the shared centred CPane (same _paper / padding
-    // as the inline editor). User bubbles right, Genie left; full-strength text.
+  Widget _geniePanel({bool compact = false}) {
+    // Dense Collider glass. Floats over the canvas when compact; full when not.
     // No progress bar (David: none except video/browser).
     const youFill = Color(0xFF2F6F5E);
     const botFill = Color(0xFF2A2D35);
     final maxBubble = MediaQuery.sizeOf(context).width * 0.72;
     return ColoredBox(
       key: const ValueKey('sg-genie'),
-      color: _paper,
+      color: const Color(0xFF12141A),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             SizedBox(
               height: 44,
               child: Stack(alignment: Alignment.center, children: [
+                // Title centred independently of the trailing icon cluster.
                 Text('Genie', textAlign: TextAlign.center, style: appFont(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    if (_genieBusy)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: Text('…', style: appFont(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white70)),
-                      ),
-                    _icon('New conversation', Icons.add_comment_outlined, () {
-                      if (!_genieBusy) store.newConversation();
-                    }),
-                    _icon('Close Genie', Icons.close_rounded, () => setState(() { _overlay = ''; _openId = null; _cover = false; })),
-                  ]),
-                ),
+                Row(children: [
+                  // Balance the three trailing action icons so the title stays centred.
+                  const SizedBox(width: 132, height: 44),
+                  const Spacer(),
+                  if (_genieBusy)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: Text('…', style: appFont(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white70)),
+                    ),
+                  // Conventional: new chat, minimise, close.
+                  _icon('New conversation', Icons.add_comment_outlined, () {
+                    if (!_genieBusy) store.newConversation();
+                  }),
+                  _icon('Minimize Genie', Icons.keyboard_arrow_down_rounded, () => setState(() { _genieMinimized = true; })),
+                  _icon('Close Genie', Icons.close_rounded, () => setState(() { _overlay = ''; _genieMinimized = false; _openId = null; _cover = false; })),
+                ]),
               ]),
             ),
             const SizedBox(height: 8),
@@ -2036,3 +2288,4 @@ String _statusKindLabel(SgStatusKind kind) => switch (kind) {
       SgStatusKind.input => 'Text',
       SgStatusKind.color => 'Color',
     };
+

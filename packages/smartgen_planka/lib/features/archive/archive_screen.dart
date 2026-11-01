@@ -10,8 +10,10 @@ class ArchiveScreen extends StatelessWidget {
     final archivedCards = store.cards.where((c) => store.archivedCardIds.contains(c['id'])).toList();
     final archivedLists = store.lists.where((l) => store.archivedListIds.contains(l['id'])).toList();
     return Scaffold(
+      
       appBar: AppBar(title: const Icon(Icons.archive_outlined)),
       body: ListView(
+        padding: const EdgeInsets.only(bottom: 120),
         children: [
           for (final l in archivedLists)
             ListTile(

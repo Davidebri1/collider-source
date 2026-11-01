@@ -42,7 +42,10 @@ class BoardListState extends State<BoardList> {
           itemCount: widget.boards.length + 1,
           itemBuilder: (ctx, index) {
             if (index == widget.boards.length) {
-              return GestureDetector(
+              return Semantics(
+                button: true,
+                label: 'Create Board',
+                child: GestureDetector(
                 onTap: () {
                   _showCreateBoardDialog(context);
                 },
@@ -59,6 +62,7 @@ class BoardListState extends State<BoardList> {
                     ),
                   ),
                 ),
+              ),
               );
             } else {
               final board = widget.boards[index];
@@ -136,7 +140,37 @@ class BoardListState extends State<BoardList> {
       );
     }
 
-    return Center(child: Text('no_boards'.tr()));
+    // Empty project: show Create Board tile (same control as the grid + tile).
+    return Padding(
+      padding: const EdgeInsets.only(left: 10, right: 10, top: 10),
+      child: GridView.builder(
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 10.0,
+          mainAxisSpacing: 10.0,
+          childAspectRatio: 2,
+        ),
+        itemCount: 1,
+        itemBuilder: (ctx, index) {
+          return Semantics(
+            button: true,
+            label: 'Create Board',
+            child: GestureDetector(
+              onTap: () => _showCreateBoardDialog(context),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(8.0),
+                ),
+                child: const Center(
+                  child: Icon(Icons.add, size: 50, color: Colors.black),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   void _showEditBoardDialog(BuildContext context, PlankaBoard board) {
@@ -156,7 +190,7 @@ class BoardListState extends State<BoardList> {
                 builder: (context, setState) {
                   final allUsers = Provider.of<UserProvider>(ctx, listen: true).users;
                   return AlertDialog(
-                    title: Text('edit_board'.tr(), textAlign: TextAlign.center),
+                    title: Text('edit_board'.tr()),
                     content: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -192,9 +226,7 @@ class BoardListState extends State<BoardList> {
                         ),
                         const SizedBox(height: 20),
 
-                        // Member Selection
-                        Text('members'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 10),
+                        // Members removed (needs Planka server).
 
                     SizedBox(
                       width: double.maxFinite,
@@ -295,7 +327,7 @@ class BoardListState extends State<BoardList> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('delete_board_confirmation.0'.tr(), textAlign: TextAlign.center),
+        title: Text('delete_board_confirmation.0'.tr()),
         content: Text('delete_board_confirmation.1'.tr()),
         actions: [
           TextButton(
@@ -319,146 +351,60 @@ class BoardListState extends State<BoardList> {
 
   void _showCreateBoardDialog(BuildContext context) {
     final TextEditingController boardNameController = TextEditingController();
-    List<PlankaUser> selectedUsers = [];
-
-    // Fetch all users using UserProvider before showing the dialog
-    Provider.of<UserProvider>(context, listen: false).fetchUsers().then((_) {
-      showDialog(
-        context: context,
-        builder: (ctx) {
-          return StatefulBuilder(
-            builder: (context, setState) {
-              final allUsers = Provider.of<UserProvider>(ctx, listen: true).users; // Get users from UserProvider
-
-              return AlertDialog(
-                title: Text('create_board.create_new_board'.tr(), textAlign: TextAlign.center),
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Board Name Input
-                    TextField(
-                      controller: boardNameController,
-                      decoration: InputDecoration(
-                        labelText: 'create_board.board_name'.tr(),
-                        hintText: 'create_board.enter_board_name'.tr(),
-                      ),
-                      onSubmitted: (value) {
-                        if (boardNameController.text.isEmpty) {
-                          showTopSnackBar(
-                            Overlay.of(context),
-                            CustomSnackBar.error(
-                              message: 'not_empty_name'.tr(),
-                            ),
-                          );
-                          return;
-                        }
-
-                        // Create new board and add members logic
-                        Provider.of<BoardProvider>(ctx, listen: false).createBoard(
-                          newBoardName: boardNameController.text,
-                          projectId: widget.currentProject.id,
-                          context: context,
-                          newPos: (widget.boards.last.position + 1000).toString(),
-                        ).then((_) {
-                          // Call the onRefresh callback if it exists
-                          if (widget.onRefresh != null) {
-                            widget.onRefresh!();
-                          }
-
-                          Navigator.of(ctx).pop();
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Member Selection
-                    Text('members'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 10),
-
-                    SizedBox(
-                      width: double.maxFinite,
-                      height: 200,
-                      child: ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: allUsers.length,
-                        itemBuilder: (context, index) {
-                          final user = allUsers[index];
-                          final bool isSelected = selectedUsers.contains(user);
-
-                          return CheckboxListTile(
-                            title: Text(user.name),
-                            value: isSelected,
-                            onChanged: (bool? value) {
-                              setState(() {
-                                if (value == true) {
-                                  selectedUsers.add(user);
-                                } else {
-                                  selectedUsers.remove(user);
-                                }
-                              });
-                            },
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-                actions: [
-                  // Cancel Button
-                  TextButton(
-                    onPressed: () {
-                      Navigator.of(ctx).pop();
-                    },
-                    child: Text('cancel'.tr()),
-                  ),
-
-                  // Create Button
-                  TextButton(
-                    onPressed: () {
-                      if (boardNameController.text.isEmpty) {
-                        showTopSnackBar(
-                          Overlay.of(context),
-                          CustomSnackBar.error(
-                            message: 'not_empty_name'.tr(),
-                          ),
-                        );
-                        return;
-                      }
-
-                      // Create new board and add members logic
-                      Provider.of<BoardProvider>(ctx, listen: false).createBoard(
-                        newBoardName: boardNameController.text,
-                        projectId: widget.currentProject.id,
-                        context: context,
-                        newPos: (widget.boards.last.position + 1000).toString(),
-                      ).then((boardId) {  // 'boardId' aus der Antwort der Funktion
-                        /// Für jeden Benutzer in der Liste `selectedUserIds` die Funktion `addBoardMember` aufrufen
-                        final selectedUserIds = selectedUsers.map((user) => user.id).toList();
-
-                        for (var userId in selectedUserIds) {
-                          Provider.of<BoardProvider>(ctx, listen: false).addBoardMember(
-                            boardId: boardId,  // Hier verwenden wir die zurückgegebene 'boardId'
-                            userId: userId,
-                            context: context,
-                          );
-                        }
-                      }).then((_) {
-                        // Call the onRefresh callback if it exists
-                        if (widget.onRefresh != null) {
-                          widget.onRefresh!();
-                        }
-
-                        Navigator.of(ctx).pop();
-                      });
-                    },
-                    child: Text('create'.tr()),
-                  ),
-                ],
-              );
+    final newPos = widget.boards.isEmpty
+        ? '65535'
+        : (widget.boards.last.position + 1000).toString();
+    showDialog<void>(
+      context: context,
+      useRootNavigator: false,
+      builder: (ctx) {
+        return AlertDialog(
+          title: Text('create_board.create_new_board'.tr()),
+          content: TextField(
+            controller: boardNameController,
+            autofocus: true,
+            decoration: InputDecoration(
+              labelText: 'create_board.board_name'.tr(),
+              hintText: 'create_board.enter_board_name'.tr(),
+            ),
+            onSubmitted: (value) {
+              final name = value.trim().isEmpty ? boardNameController.text.trim() : value.trim();
+              if (name.isEmpty) return;
+              Provider.of<BoardProvider>(ctx, listen: false).createBoard(
+                newBoardName: name,
+                projectId: widget.currentProject.id,
+                context: ctx,
+                newPos: newPos,
+              ).then((_) {
+                widget.onRefresh?.call();
+                Navigator.of(ctx).pop();
+              });
             },
-          );
-        },
-      );
-    });
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text('cancel'.tr()),
+            ),
+            TextButton(
+              onPressed: () {
+                final name = boardNameController.text.trim();
+                if (name.isEmpty) return;
+                Provider.of<BoardProvider>(ctx, listen: false).createBoard(
+                  newBoardName: name,
+                  projectId: widget.currentProject.id,
+                  context: ctx,
+                  newPos: newPos,
+                ).then((_) {
+                  widget.onRefresh?.call();
+                  Navigator.of(ctx).pop();
+                });
+              },
+              child: Text('create'.tr()),
+            ),
+          ],
+        );
+      },
+    );
   }
 }

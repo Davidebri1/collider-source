@@ -1,9 +1,10 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'dart:ui' show Offset;
 
-import '../../core/files/file_blobs.dart';
 import '../../core/api/media_gen.dart';
+import '../../core/account_sync/account_sync.dart';
 
 /// Smart Gen data, ported from the trello-clone schema (Board, List, Card,
 /// Label, guests, stars, background) plus the binding ledger (card types,
@@ -420,19 +421,36 @@ class SgCard {
 }
 
 class SgCanvas {
-  SgCanvas({required this.id, required this.name, this.kind = 'Glass', this.color = 0xFF2F6FED, this.hold = SgHoldKind.tray});
+  SgCanvas({
+    required this.id,
+    required this.name,
+    this.kind = 'Glass',
+    this.color = 0xFF1A2838,
+    this.hold = SgHoldKind.tray,
+    this.backgroundThemeId = '',
+  });
   final String id;
   String name;
   String kind;
   int color;
   SgHoldKind hold;
-  Map<String, Object?> toJson() => {'id': id, 'name': name, 'kind': kind, 'color': color, 'hold': hold.name};
+  /// WallpaperTheme.id from ThemeCatalog — empty keeps the tint only.
+  String backgroundThemeId;
+  Map<String, Object?> toJson() => {
+        'id': id,
+        'name': name,
+        'kind': kind,
+        'color': color,
+        'hold': hold.name,
+        'backgroundThemeId': backgroundThemeId,
+      };
   static SgCanvas fromJson(Map<String, Object?> j) => SgCanvas(
         id: j['id']! as String,
         name: j['name'] as String? ?? 'Canvas',
         kind: j['kind'] as String? ?? 'Glass',
-        color: (j['color'] as num?)?.toInt() ?? 0xFF2F6FED,
+        color: (j['color'] as num?)?.toInt() ?? 0xFF1A2838,
         hold: SgHoldKind.values.asNameMap()[j['hold']] ?? SgHoldKind.tray,
+        backgroundThemeId: j['backgroundThemeId'] as String? ?? '',
       );
 }
 
@@ -461,6 +479,9 @@ class SgBoard {
     List<String>? statuses,
     List<String>? typeNames,
     this.canvasIndex = 0,
+    this.hostCanvasId = '',
+    this.dx = 24,
+    this.dy = 24,
   })  : guests = guests ?? [],
         lists = lists ?? [],
         labels = labels ?? [],
@@ -494,6 +515,10 @@ class SgBoard {
   final List<String> statuses;
   final List<String> typeNames;
   int canvasIndex;
+  /// When non-empty, this board appears as a free-drag tile on that canvas.
+  String hostCanvasId;
+  double dx;
+  double dy;
 
   List<SgList> get orderedLists {
     final copy = [...lists]..sort((a, b) => a.position.compareTo(b.position));
@@ -542,6 +567,9 @@ class SgBoard {
         'statuses': statuses,
         'typeNames': typeNames,
         'canvasIndex': canvasIndex,
+        'hostCanvasId': hostCanvasId,
+        'dx': dx,
+        'dy': dy,
       };
 
   static SgBoard fromJson(Map<String, Object?> j) => SgBoard(
@@ -568,6 +596,9 @@ class SgBoard {
         statuses: [for (final s in (j['statuses'] as List?) ?? const []) s.toString()],
         typeNames: [for (final s in (j['typeNames'] as List?) ?? const []) s.toString()],
         canvasIndex: (j['canvasIndex'] as num?)?.toInt() ?? 0,
+        hostCanvasId: j['hostCanvasId'] as String? ?? '',
+        dx: (j['dx'] as num?)?.toDouble() ?? 24,
+        dy: (j['dy'] as num?)?.toDouble() ?? 24,
       );
 }
 
@@ -666,13 +697,13 @@ class SgStore extends ChangeNotifier {
     loaded = false;
     atHome = true;
     // Wipe persisted blob so a fresh capture/session cannot revive seed or prior boards.
-    FileBlobs.put(_blobId, Uint8List(0));
+    AccountSync.instance.putBlob(_blobId, Uint8List(0));
   }
 
   Future<void> init() async {
     if (loaded) return;
     try {
-      final raw = await FileBlobs.get(_blobId);
+      final raw = await AccountSync.instance.getBlob(_blobId);
       if (raw != null && raw.isNotEmpty) {
         final j = jsonDecode(utf8.decode(raw));
         if (j is Map) {
@@ -794,7 +825,7 @@ class SgStore extends ChangeNotifier {
     notifyListeners();
     try {
       final doc = utf8.encode(_snap());
-      await FileBlobs.put(_blobId, Uint8List.fromList(doc));
+      await AccountSync.instance.putBlob(_blobId, Uint8List.fromList(doc));
     } catch (_) {
       // Tests and platforms without a path_provider channel still keep state in memory.
     }
@@ -937,6 +968,76 @@ class SgStore extends ChangeNotifier {
     notice = '';
     _commit();
     return true;
+  }
+
+  /// Place [boardId] as a free-drag tile on [canvasId] (AccountSync via _commit).
+  /// When [dx]/[dy] are omitted, picks the first free slot that does not cover
+  /// another card or board tile on that canvas.
+  void placeBoardOnCanvas(String boardId, String canvasId, {double? dx, double? dy}) {
+    SgBoard? target;
+    for (final b in boards) {
+      if (b.id == boardId) {
+        target = b;
+        break;
+      }
+    }
+    if (target == null || canvasId.isEmpty) return;
+    _checkpoint();
+    target.hostCanvasId = canvasId;
+    if (dx != null && dy != null) {
+      target.dx = dx;
+      target.dy = dy;
+    } else {
+      final slot = freeCanvasSlot(canvasId, excludeBoardId: boardId);
+      target.dx = slot.dx;
+      target.dy = slot.dy;
+    }
+    _commit();
+  }
+
+  /// First open slot on [canvasId] that does not overlap cards or other tiles.
+  Offset freeCanvasSlot(String canvasId, {String? excludeBoardId, double tileW = 132, double tileH = 110, double gap = 16, double pad = 24}) {
+    final host = board;
+    final occupied = <({double l, double t, double r, double b})>[];
+    if (host != null) {
+      for (final c in host.cards) {
+        if (c.canvasId.isNotEmpty && c.canvasId != canvasId) continue;
+        occupied.add((l: c.dx, t: c.dy, r: c.dx + 128, b: c.dy + 96));
+      }
+    }
+    for (final ob in boards) {
+      if (ob.id == excludeBoardId) continue;
+      if (ob.hostCanvasId != canvasId) continue;
+      occupied.add((l: ob.dx, t: ob.dy, r: ob.dx + tileW, b: ob.dy + tileH));
+    }
+    bool hits(double x, double y) {
+      final r = x + tileW, b = y + tileH;
+      for (final o in occupied) {
+        if (x < o.r && r > o.l && y < o.b && b > o.t) return true;
+      }
+      return false;
+    }
+    for (var row = 0; row < 12; row++) {
+      for (var col = 0; col < 3; col++) {
+        final x = pad + col * (tileW + gap);
+        final y = pad + row * (tileH + gap);
+        if (!hits(x, y)) return Offset(x, y);
+      }
+    }
+    return Offset(pad, pad + occupied.length * (tileH + gap));
+  }
+
+  void setCanvasBackground(String canvasId, String themeId) {
+    final b = board;
+    if (b == null) return;
+    for (final c in b.canvases) {
+      if (c.id == canvasId) {
+        _checkpoint();
+        c.backgroundThemeId = themeId;
+        _commit();
+        return;
+      }
+    }
   }
 
   void addList(String title) {

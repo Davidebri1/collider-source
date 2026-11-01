@@ -1,18 +1,14 @@
-// Map row 18 (Settings → Account), Figma Vision OS Design System 417:8552:
-// a grey sheet with a close circle and a centred title, the profile row,
-// a single row with a trailing value and chevron, a grouped list, and a
-// standalone row. Filled from the source's Account tab
-// (components/SettingsPane.tsx: Plan / Credits / Pool, Upgrade, Sign in)
-// and screens/UpgradeScreen.tsx (Free / Pro / Elite with the source prices
-// and perks, Continue, Restore). Payments and sign-in need the native
-// stores and an auth backend that this link does not have: those actions
-// answer inline that they are not available here (H10, D60).
+import 'dart:async';
+// Account content for Settings drill-down (preferred) and standalone host.
+// Provider buttons use official Google G + Apple logo assets (branding guidelines).
 import 'package:flutter/material.dart';
-import '../drawers/settings_drawer.dart';
 
+import '../../core/account_sync/account_sync.dart';
 import '../../core/vision/vision_kit.dart';
 import '../../models/model_def.dart';
+import 'settings_glass.dart';
 
+/// Standalone Account host (Settings closed). Same pane size/glass as Settings.
 class AccountSheet extends StatefulWidget {
   final ModelTier tier;
   final VoidCallback onClose;
@@ -27,30 +23,35 @@ class _AccountSheetState extends State<AccountSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final w = (MediaQuery.sizeOf(context).width - 2 * VSpace.md).clamp(0.0, 480.0);
+    final phone = MediaQuery.sizeOf(context).width < 700;
+    final paneW = phone
+        ? (MediaQuery.sizeOf(context).width * 0.82).clamp(280.0, 360.0)
+        : 1179 * 0.30;
+
     return Stack(
       fit: StackFit.expand,
       children: [
-        // v8.7: no scrim; Settings stays visible, stepped back behind.
         GestureDetector(behavior: HitTestBehavior.opaque, onTap: widget.onClose),
+        // Vertically centred like Settings (no bottom nudge).
         Center(
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 70),
-            // v8.7: a pane opened from Settings never exceeds Settings
-            // (the largest overlay): scaled as one unit to fit inside it.
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: SettingsDrawer.panel.width * 0.92, maxHeight: SettingsDrawer.panel.height * 0.92),
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: SizedBox(
-                  width: w,
-                  child: AnimatedSwitcher(
-                    duration: VMotion.base,
-                    child: _plans
-                        ? UpgradePlans(key: const ValueKey('plans'), tier: widget.tier, onBack: () => setState(() => _plans = false))
-                        : _account(),
-                  ),
-                ),
+          child: SizedBox(
+            width: paneW,
+            child: SettingsGlassPane(
+              child: AnimatedSwitcher(
+                duration: VMotion.base,
+                child: _plans
+                    ? UpgradePlansBody(
+                        key: const ValueKey('plans'),
+                        tier: widget.tier,
+                        onBack: () => setState(() => _plans = false),
+                      )
+                    : AccountPaneBody(
+                        key: const ValueKey('account'),
+                        tier: widget.tier,
+                        onBack: widget.onClose,
+                        onOpenPlans: () => setState(() => _plans = true),
+                        backIsClose: true,
+                      ),
               ),
             ),
           ),
@@ -58,46 +59,123 @@ class _AccountSheetState extends State<AccountSheet> {
       ],
     );
   }
+}
 
-  Widget _account() {
+/// Shared Account list — used inside Settings drill-down and standalone sheet.
+class AccountPaneBody extends StatefulWidget {
+  final ModelTier tier;
+  final VoidCallback onBack;
+  final VoidCallback onOpenPlans;
+  /// When true, leading control is × (standalone); else chevron Back (drill-down).
+  final bool backIsClose;
+
+  const AccountPaneBody({
+    super.key,
+    required this.tier,
+    required this.onBack,
+    required this.onOpenPlans,
+    this.backIsClose = false,
+  });
+
+  @override
+  State<AccountPaneBody> createState() => _AccountPaneBodyState();
+}
+
+class _AccountPaneBodyState extends State<AccountPaneBody> {
+  @override
+  void initState() {
+    super.initState();
+    // Refresh /health when Account opens — silent if unreachable.
+    unawaited(AccountSync.instance.refreshApiAvailability());
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final info = TierInfo.all[widget.tier]!;
-    return _GreySheet(
-      key: const ValueKey('account'),
-      title: 'Account',
-      leading: VCircleButton(icon: Icons.close_rounded, size: 44, tooltip: 'Close', onTap: widget.onClose),
-      children: [
-        _Group(rows: [
-          _Row(
-            leading: const CircleAvatar(radius: 20, backgroundColor: Color(0x33FFFFFF), child: Icon(Icons.person_rounded, color: Colors.white70)),
-            title: 'Sign in',
-            onTap: () => showVAlert(context, icon: Icons.person_outline_rounded, title: 'Sign in with Apple is unavailable', actions: const [VAlertChoice('OK')]),
-          ),
-        ]),
-        const SizedBox(height: VSpace.sm),
-        _Group(rows: [
-          _Row(title: 'Plan', value: info.label, onTap: () => setState(() => _plans = true)),
-        ]),
-        const SizedBox(height: VSpace.sm),
-        _Group(rows: [
-          _Row(title: 'Manage Subscription', onTap: () => setState(() => _plans = true)),
-          _Row(title: 'Credits', value: '${info.pool}'),
-          _Row(title: 'Monthly pool', value: '${info.pool}'),
-        ]),
-      ],
+    final sync = AccountSync.instance;
+    return ListenableBuilder(
+      listenable: sync,
+      builder: (context, _) {
+        final signedIn = sync.isSignedIn;
+        final session = sync.session;
+        final apiUp = sync.apiAvailable;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _paneHeader(
+              title: 'Account',
+              onLeading: widget.onBack,
+              leadingIcon: widget.backIsClose ? Icons.close_rounded : Icons.chevron_left_rounded,
+              leadingTooltip: widget.backIsClose ? 'Close' : 'Back',
+            ),
+            const SizedBox(height: 14),
+            if (signedIn) ...[
+              _avatar(
+                label: (session?.displayName.isNotEmpty == true)
+                    ? session!.displayName
+                    : (session?.email ?? 'Account'),
+                sub: session?.email,
+              ),
+              const SizedBox(height: 16),
+              _group([
+                _tile(
+                  title: 'Sign out',
+                  onTap: () async {
+                    await AccountSync.instance.signOut();
+                    if (mounted) setState(() {});
+                  },
+                ),
+              ]),
+            ] else if (apiUp) ...[
+              const ContinueWithGoogleButton(),
+              const SizedBox(height: 10),
+              const ContinueWithAppleButton(),
+            ] else ...[
+              // Same as main today when no account API: Sign in → Apple unavailable.
+              _group([
+                _tile(
+                  leading: const CircleAvatar(
+                    radius: 20,
+                    backgroundColor: Color(0x33FFFFFF),
+                    child: Icon(Icons.person_rounded, color: Colors.white70),
+                  ),
+                  title: 'Sign in',
+                  onTap: () => showVAlert(
+                    context,
+                    icon: Icons.person_outline_rounded,
+                    title: 'Sign in with Apple is unavailable',
+                    actions: const [VAlertChoice('OK')],
+                  ),
+                ),
+              ]),
+            ],
+            const SizedBox(height: 16),
+            _group([
+              _tile(title: 'Plan', value: info.label, onTap: widget.onOpenPlans),
+            ]),
+            const SizedBox(height: 12),
+            _group([
+              _tile(title: 'Manage Subscription', onTap: widget.onOpenPlans),
+              _tile(title: 'Credits', value: '${info.pool}'),
+              _tile(title: 'Monthly pool', value: '${info.pool}'),
+            ]),
+          ],
+        );
+      },
     );
   }
 }
 
-/// UpgradeScreen.tsx: the three plans with the source's prices and perks.
-class UpgradePlans extends StatefulWidget {
+class UpgradePlansBody extends StatefulWidget {
   final ModelTier tier;
   final VoidCallback onBack;
-  const UpgradePlans({super.key, required this.tier, required this.onBack});
+  const UpgradePlansBody({super.key, required this.tier, required this.onBack});
   @override
-  State<UpgradePlans> createState() => _UpgradePlansState();
+  State<UpgradePlansBody> createState() => _UpgradePlansBodyState();
 }
 
-class _UpgradePlansState extends State<UpgradePlans> {
+class _UpgradePlansBodyState extends State<UpgradePlansBody> {
   static const _perks = {
     ModelTier.free: ['Unlimited general chat', '3 models on the board', 'No media generation'],
     ModelTier.pro: ['Unlimited general', 'Image, video, audio', '3,000 media credits / mo'],
@@ -108,12 +186,19 @@ class _UpgradePlansState extends State<UpgradePlans> {
 
   @override
   Widget build(BuildContext context) {
-    return _GreySheet(
-      title: 'Manage Subscription',
-      leading: VCircleButton(icon: Icons.chevron_left_rounded, size: 44, tooltip: 'Back', onTap: widget.onBack),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        _paneHeader(
+          title: 'Manage Subscription',
+          onLeading: widget.onBack,
+          leadingIcon: Icons.chevron_left_rounded,
+          leadingTooltip: 'Back',
+        ),
+        const SizedBox(height: 14),
         for (final t in ModelTier.values) ...[
-          VPress(
+          GestureDetector(
             onTap: () => setState(() {
               _picked = t;
               _note = null;
@@ -122,119 +207,239 @@ class _UpgradePlansState extends State<UpgradePlans> {
               duration: VMotion.fast,
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
               decoration: BoxDecoration(
-                color: _picked == t ? VColors.fillActive : VColors.fillCell,
-                borderRadius: BorderRadius.circular(VRadius.md),
-                border: Border.all(color: _picked == t ? Colors.white70 : Colors.transparent, width: 1),
+                color: _picked == t ? const Color(0x44FFFFFF) : const Color(0x33000000),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: _picked == t ? Colors.white70 : Colors.transparent),
               ),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(children: [
-                  Text(TierInfo.all[t]!.label, style: VType.headline()),
+                  Text(TierInfo.all[t]!.label, style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w700)),
                   if (widget.tier == t) ...[
                     const SizedBox(width: 8),
-                    Container(width: 7, height: 7, decoration: const BoxDecoration(color: VColors.accentGreen, shape: BoxShape.circle)),
+                    Container(width: 7, height: 7, decoration: const BoxDecoration(color: Color(0xFF34C759), shape: BoxShape.circle)),
                   ],
                   const Spacer(),
-                  Text(TierInfo.all[t]!.price, style: VType.callout(weight: FontWeight.w600)),
+                  Text(TierInfo.all[t]!.price, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
                 ]),
                 const SizedBox(height: 4),
-                for (final p in _perks[t]!) Text(p, style: VType.footnote()),
+                for (final p in _perks[t]!)
+                  Text(p, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
               ]),
             ),
           ),
-          const SizedBox(height: VSpace.xs),
+          const SizedBox(height: 8),
         ],
-        const SizedBox(height: VSpace.xs),
         if (_picked != ModelTier.free)
-          VButton(
-            label: 'Continue with ${TierInfo.all[_picked]!.label}',
-            variant: VButtonVariant.primary,
-            expand: true,
+          GestureDetector(
             onTap: () => setState(() => _note = "Purchases aren't available on this link"),
+            child: Container(
+              height: 50,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(color: const Color(0xFF0A84FF), borderRadius: BorderRadius.circular(16)),
+              child: Text(
+                'Continue with ${TierInfo.all[_picked]!.label}',
+                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+            ),
           ),
         Center(
           child: TextButton(
             onPressed: () => setState(() => _note = "Purchases aren't available on this link"),
-            child: Text('Restore Purchases', style: VType.callout(color: VColors.textSecondary)),
+            child: const Text('Restore Purchases', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
           ),
         ),
-        if (_note != null) Center(child: Text(_note!, textAlign: TextAlign.center, style: VType.footnote(color: VColors.textPrimary))),
+        if (_note != null)
+          Center(child: Text(_note!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600))),
       ],
     );
   }
 }
 
-class _GreySheet extends StatelessWidget {
-  final String title;
-  final Widget leading;
-  final List<Widget> children;
-  const _GreySheet({super.key, required this.title, required this.leading, required this.children});
+/// Google Identity branding: white button, official multicolour G, "Continue with Google".
+class ContinueWithGoogleButton extends StatelessWidget {
+  const ContinueWithGoogleButton({super.key});
+
   @override
-  Widget build(BuildContext context) => VGlass(
-        material: VMaterial.modal,
-        radius: VRadius.sheet,
-        fill: const Color(0xB3505050),
-        padding: const EdgeInsets.fromLTRB(VSpace.md, VSpace.md, VSpace.md, VSpace.lg),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.72),
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SizedBox(
-                  height: 48,
-                  child: Stack(alignment: Alignment.center, children: [
-                    Align(alignment: Alignment.centerLeft, child: leading),
-                    Text(title, style: VType.headline().copyWith(fontSize: 19, fontWeight: FontWeight.w700)),
-                  ]),
-                ),
-                const SizedBox(height: VSpace.md),
-                ...children,
-              ],
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _continueWithGoogle(context),
+      child: Container(
+        height: 44,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(4), // Google guideline corner for standard button
+          border: Border.all(color: const Color(0xFF747775), width: 1),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Image.asset('assets/branding/google_g.png', width: 20, height: 20, filterQuality: FilterQuality.high),
+            const SizedBox(width: 12),
+            const Text(
+              'Continue with Google',
+              style: TextStyle(
+                color: Color(0xFF1F1F1F),
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.1,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Apple Sign in with Apple: black button, official Apple logo, "Continue with Apple".
+class ContinueWithAppleButton extends StatelessWidget {
+  const ContinueWithAppleButton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _continueWithApple(context),
+      child: Container(
+        height: 44,
+        decoration: BoxDecoration(
+          color: Colors.black,
+          borderRadius: BorderRadius.circular(8), // Apple pill-ish minimum
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Image.asset('assets/branding/apple_logo_white.png', width: 18, height: 18, filterQuality: FilterQuality.high),
+            const SizedBox(width: 10),
+            const Text(
+              'Continue with Apple',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                letterSpacing: -0.2,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+Future<void> _continueWithGoogle(BuildContext context) async {
+  final base = AccountSync.instance.baseUrl;
+  final local = base.contains('localhost') || base.contains('127.0.0.1');
+  if (local) {
+    final ok = await AccountSync.instance.signInDev(email: 'user@collider.app', name: 'Collider');
+    if (!ok && context.mounted) {
+      await showVAlert(
+        context,
+        icon: Icons.person_outline_rounded,
+        title: 'Sign in is unavailable',
+        actions: const [VAlertChoice('OK')],
+      );
+    }
+  } else if (context.mounted) {
+    await showVAlert(
+      context,
+      icon: Icons.person_outline_rounded,
+      title: 'Continue with Google',
+      actions: const [VAlertChoice('OK')],
+    );
+  }
+}
+
+Future<void> _continueWithApple(BuildContext context) async {
+  await showVAlert(
+    context,
+    icon: Icons.person_outline_rounded,
+    title: 'Continue with Apple',
+    actions: const [VAlertChoice('OK')],
+  );
+}
+
+Widget _paneHeader({
+  required String title,
+  required VoidCallback onLeading,
+  required IconData leadingIcon,
+  required String leadingTooltip,
+}) {
+  return SizedBox(
+    height: 44,
+    child: Stack(
+      alignment: Alignment.center,
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: GestureDetector(
+            onTap: onLeading,
+            child: Tooltip(
+              message: leadingTooltip,
+              child: Container(
+                width: 36,
+                height: 36,
+                decoration: const BoxDecoration(color: Color(0x55000000), shape: BoxShape.circle),
+                child: Icon(leadingIcon, color: Colors.white, size: 22),
+              ),
             ),
           ),
         ),
-      );
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700),
+        ),
+      ],
+    ),
+  );
 }
 
-class _Group extends StatelessWidget {
-  final List<_Row> rows;
-  const _Group({required this.rows});
-  @override
-  Widget build(BuildContext context) => ClipRRect(
-        borderRadius: BorderRadius.circular(VRadius.md),
-        child: Column(children: [
-          for (var i = 0; i < rows.length; i++) ...[
-            if (i > 0) const Divider(height: 0.5, thickness: 0.5, indent: 16, color: Color(0x33FFFFFF)),
-            rows[i],
-          ],
-        ]),
-      );
+Widget _avatar({required String label, String? sub}) {
+  return Column(children: [
+    Container(
+      width: 64,
+      height: 64,
+      decoration: const BoxDecoration(color: Color(0xFF3A3A3C), shape: BoxShape.circle),
+      child: const Icon(Icons.person_rounded, color: Colors.white, size: 36),
+    ),
+    const SizedBox(height: 8),
+    Text(label, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)),
+    if (sub != null && sub.isNotEmpty && sub != label)
+      Text(sub, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500)),
+  ]);
 }
 
-class _Row extends StatelessWidget {
-  final Widget? leading;
-  final String title;
-  final String? value;
-  final VoidCallback? onTap;
-  const _Row({this.leading, required this.title, this.value, this.onTap});
-  @override
-  Widget build(BuildContext context) {
-    final body = Container(
-      color: VColors.fillCell,
-      constraints: const BoxConstraints(minHeight: 52),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: Row(children: [
-        if (leading != null) ...[leading!, const SizedBox(width: 12)],
-        Expanded(child: Text(title, style: VType.body(weight: FontWeight.w500))),
-        if (value != null) Text(value!, style: VType.body(color: VColors.textSecondary)),
-        if (onTap != null) ...[
-          const SizedBox(width: 6),
-          const Icon(Icons.chevron_right_rounded, color: VColors.textSecondary, size: 22),
+Widget _group(List<Widget> tiles) => Container(
+      decoration: BoxDecoration(color: const Color(0x66000000), borderRadius: BorderRadius.circular(16)),
+      child: Column(children: [
+        for (var i = 0; i < tiles.length; i++) ...[
+          if (i > 0) const Divider(height: 1, color: Color(0x33FFFFFF), indent: 16),
+          tiles[i],
         ],
       ]),
     );
-    return onTap == null ? body : VPress(onTap: onTap, child: body);
-  }
+
+Widget _tile({Widget? leading, required String title, String? value, VoidCallback? onTap}) {
+  const style = TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600);
+  final row = SizedBox(
+    height: 50,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(children: [
+        if (leading != null) ...[leading, const SizedBox(width: 12)],
+        Expanded(child: Text(title, style: style)),
+        if (value != null) Text(value, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w500)),
+        if (onTap != null) ...[
+          const SizedBox(width: 4),
+          const Icon(Icons.chevron_right_rounded, color: Colors.white70, size: 24),
+        ],
+      ]),
+    ),
+  );
+  if (onTap == null) return row;
+  return GestureDetector(behavior: HitTestBehavior.opaque, onTap: onTap, child: row);
 }

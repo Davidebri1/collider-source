@@ -149,6 +149,7 @@ class _CustomFieldsScreenState extends State<CustomFieldsScreen> {
       body: _boardId == null
           ? const Center(child: Icon(Icons.inbox_outlined))
           : ListView(
+              padding: const EdgeInsets.only(bottom: 120),
               children: [
                 for (final g in groups) ...[
                   ListTile(

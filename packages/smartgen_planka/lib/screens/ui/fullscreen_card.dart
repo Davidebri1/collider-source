@@ -98,21 +98,10 @@ class _FCardScreenState extends State<FCardScreen> with SingleTickerProviderStat
       },
       child: Scaffold(
         appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () {
-              if (Navigator.canPop(context)) {
-                Navigator.pop(context, 'refresh');
-              }
-            },
-          ),
-          automaticallyImplyLeading: false,
-          // Display title centres; edit TextField stays left (data input).
-          centerTitle: !_isEditingTitle,
           title: _isEditingTitle ? Container(
             color: Colors.transparent,
             height: kToolbarHeight,
-            alignment: Alignment.centerLeft,
+            alignment: Alignment.center,
             child: TextField(
               controller: _titleController,
               autofocus: true,
@@ -120,7 +109,13 @@ class _FCardScreenState extends State<FCardScreen> with SingleTickerProviderStat
             ),
           ) : GestureDetector(
             onTap: () => _toggleEditTitle(widget.card!.name),
-            child: Text(widget.card!.name, textAlign: TextAlign.center),
+            child: Container(
+              color: Colors.transparent,
+              height: kToolbarHeight,
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Text(widget.card!.name),
+            ),
           ),
         ),
 
@@ -131,7 +126,7 @@ class _FCardScreenState extends State<FCardScreen> with SingleTickerProviderStat
           ]),
           builder: (ctx, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const ColoredBox(color: Color(0xFF0E1016), child: SizedBox.expand());
+              return const Center(child: CircularProgressIndicator());
             } else if (snapshot.hasError) {
               return Center(child: Text('${'error'.tr()}: ${snapshot.error}'));
             } else {

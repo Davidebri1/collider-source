@@ -62,8 +62,8 @@ class _CardListState extends State<CardList> with SingleTickerProviderStateMixin
   Map<String, String> dueDateCache = {};
 
   Map<String, Color> labelColors = {};
-  late Color selectedColor; ///for color picker when updating label color
-  late String selectedColorName; ///for color picker when updating label color
+  Color selectedColor = const Color(0xFFB04632);
+  String selectedColorName = 'berry-red';
   final TextEditingController _labelTitleController = TextEditingController();
   
   @override
@@ -535,6 +535,9 @@ class _CardListState extends State<CardList> with SingleTickerProviderStateMixin
   }
 
   void _showCardMembersBottomSheet(BuildContext context, List<PlankaUser> allMembers, List<PlankaCardMembership>? cardMembers, String cardId,) {
+    // Members require Planka server user directory — removed for Collider offline store.
+    return;
+    // ignore: dead_code
     // Create cardMemberIds from cardMembers, or use an empty set if cardMembers is null
     final Set<String> cardMemberIds = cardMembers != null
         ? cardMembers.map((member) => member.userId).toSet()
@@ -969,7 +972,7 @@ class _CardListState extends State<CardList> with SingleTickerProviderStateMixin
                       if(widget.card.stopwatchTotal != null || widget.card.stopwatchStartedAt != null)
                         StopwatchDisplay(
                           cardId: widget.card.id,
-                          initialTotalSeconds: widget.card.stopwatchTotal!,
+                          initialTotalSeconds: widget.card.stopwatchTotal ?? 0,
                           startedAt: widget.card.stopwatchStartedAt,
                         ),
                     ],
@@ -1007,11 +1010,10 @@ class _CardListState extends State<CardList> with SingleTickerProviderStateMixin
               ),
 
               Row(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const Icon(Icons.menu_rounded),
                   const SizedBox(width: 10,),
-                  Text('description'.tr(), textAlign: TextAlign.center, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text('description'.tr(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 ],
               ),
 
@@ -1024,11 +1026,10 @@ class _CardListState extends State<CardList> with SingleTickerProviderStateMixin
 
               const SizedBox(height: 20),
               Row(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const Icon(Icons.check_box_outlined),
                   const SizedBox(width: 10,),
-                  Text('tasks'.tr(), textAlign: TextAlign.center, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text('tasks'.tr(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 ],
               ),
               (widget.card.tasks == null || widget.card.tasks!.isEmpty)
@@ -1120,22 +1121,21 @@ class _CardListState extends State<CardList> with SingleTickerProviderStateMixin
               ),
               const SizedBox(height: 5),
 
-              SizedBox(
-                height: 44,
-                child: Stack(alignment: Alignment.center, children: [
-                  Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.attachment),
-                    const SizedBox(width: 10),
-                    Text('attachments'.tr(), textAlign: TextAlign.center, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  ]),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: IconButton(
-                      onPressed: _showFileSelectionOptions,
-                      icon: const Icon(Icons.add, size: 30, color: Colors.indigo,),
-                    ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.attachment),
+                      const SizedBox(width: 10),
+                      Text('attachments'.tr(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    ],
                   ),
-                ]),
+                  IconButton(
+                    onPressed: _showFileSelectionOptions,
+                    icon: const Icon(Icons.add, size: 30, color: Colors.indigo,),
+                  ),
+                ],
               ),
 
               if (widget.card.attachments != null && widget.card.attachments!.isNotEmpty)
@@ -1143,7 +1143,7 @@ class _CardListState extends State<CardList> with SingleTickerProviderStateMixin
               ListView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                itemCount: widget.card.attachments!.length,
+                itemCount: (widget.card.attachments ?? const []).length,
                 itemBuilder: (context, index) {
                   final attachment = widget.card.attachments![index];
                   bool isEditing = false; // Track if a field is being edited
@@ -1282,11 +1282,10 @@ class _CardListState extends State<CardList> with SingleTickerProviderStateMixin
 
               const SizedBox(height: 20),
               Row(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const Icon(Icons.comment_outlined),
                   const SizedBox(width: 10,),
-                  Text('comments'.tr(), textAlign: TextAlign.center, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text('comments'.tr(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 ],
               ),
               TextField(

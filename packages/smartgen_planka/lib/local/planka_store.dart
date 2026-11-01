@@ -33,14 +33,17 @@ class PlankaStore extends ChangeNotifier {
   final List<Map<String, dynamic>> customFields = [];
   final List<Map<String, dynamic>> cardCustomFieldValues = [];
 
-  /// Free place by default (Align off).
-  bool snapAlign = false;
+  /// Kanban columns by default (Align on). Free place is opt-in via Board menu.
+  bool snapAlign = true;
 
   /// listId -> color name from labelColors.json palette.
   final Map<String, String> listColors = {};
 
   /// cardId -> ARGB int for full-card cover tint.
   final Map<String, int> cardCoverColors = {};
+
+  /// boardId -> ARGB int background override (Change background).
+  final Map<String, int> boardColors = {};
 
   /// cardId -> free-drag {dx, dy} on the canvas (Align off).
   final Map<String, Map<String, double>> cardFreePos = {};
@@ -184,6 +187,7 @@ class PlankaStore extends ChangeNotifier {
         'cardCustomFieldValues': cardCustomFieldValues,
         'listColors': listColors,
         'cardCoverColors': cardCoverColors.map((k, v) => MapEntry(k, v)),
+        'boardColors': boardColors.map((k, v) => MapEntry(k, v)),
         'cardFreePos': {
           for (final e in cardFreePos.entries)
             e.key: {'dx': e.value['dx'] ?? 0, 'dy': e.value['dy'] ?? 0},
@@ -216,7 +220,8 @@ class PlankaStore extends ChangeNotifier {
     loadList('customFieldGroups', customFieldGroups);
     loadList('customFields', customFields);
     loadList('cardCustomFieldValues', cardCustomFieldValues);
-    snapAlign = j['snapAlign'] == true;
+    // Default Align on (kanban). Only Free place when explicitly false.
+    snapAlign = j['snapAlign'] != false;
     listColors
       ..clear()
       ..addAll(Map<String, String>.from(
@@ -224,6 +229,10 @@ class PlankaStore extends ChangeNotifier {
     cardCoverColors
       ..clear()
       ..addAll(Map<String, int>.from(((j['cardCoverColors'] as Map?) ?? const {})
+          .map((k, v) => MapEntry('$k', (v as num).toInt()))));
+    boardColors
+      ..clear()
+      ..addAll(Map<String, int>.from(((j['boardColors'] as Map?) ?? const {})
           .map((k, v) => MapEntry('$k', (v as num).toInt()))));
     cardFreePos
       ..clear()
@@ -289,6 +298,7 @@ class PlankaStore extends ChangeNotifier {
     required String projectId,
     required String name,
     required num position,
+    bool seedLists = true,
   }) {
     final b = {
       'id': _id('board'),
@@ -304,8 +314,25 @@ class PlankaStore extends ChangeNotifier {
       'role': 'editor',
       'canComment': true,
     });
-    _touch();
+    // Same defaults as the old Sg kanban: To Do / Doing / Done.
+    if (seedLists) {
+      final bid = b['id'] as String;
+      createList(boardId: bid, name: 'To Do', position: 65535);
+      createList(boardId: bid, name: 'Doing', position: 131070);
+      createList(boardId: bid, name: 'Done', position: 196605);
+    } else {
+      _touch();
+    }
     return b;
+  }
+
+  void setBoardColor(String boardId, int? argb) {
+    if (argb == null) {
+      boardColors.remove(boardId);
+    } else {
+      boardColors[boardId] = argb;
+    }
+    _touch();
   }
 
   void deleteBoard(String id) {
@@ -810,25 +837,31 @@ class PlankaStore extends ChangeNotifier {
     cardCustomFieldValues.clear();
     listColors.clear();
     cardCoverColors.clear();
+    boardColors.clear();
     archivedCardIds.clear();
     archivedListIds.clear();
     filterQuery = null;
     sortBy = null;
     snapAlign = true;
     cardFreePos.clear();
-    localUserId;
+    final uid = localUserId;
+    if (users.isNotEmpty) {
+      users[0]['name'] = 'Preview User';
+      users[0]['username'] = 'preview';
+    }
 
+    // Stock-planka naming for side-by-side captures against planka_stock/*.png
     final proj = createProject('Project 1');
     final board = createBoard(projectId: proj['id'] as String, name: 'Board 1', position: 65535);
     final bid = board['id'] as String;
-    final todo = createList(boardId: bid, name: 'To Do', position: 65535, color: 'lagoon-blue');
-    final doing = createList(boardId: bid, name: 'Doing', position: 131070, color: 'pumpkin-orange');
-    final done = createList(boardId: bid, name: 'Done', position: 196605, color: 'bright-moss');
+    final todo = lists.firstWhere((l) => l['boardId'] == bid && l['name'] == 'To Do');
+    final doing = lists.firstWhere((l) => l['boardId'] == bid && l['name'] == 'Doing');
+    final done = lists.firstWhere((l) => l['boardId'] == bid && l['name'] == 'Done');
 
-    final c1 = createCard(listId: todo['id'] as String, boardId: bid, name: 'Draft brief', position: 65535);
-    final c2 = createCard(listId: todo['id'] as String, boardId: bid, name: 'Gather refs', position: 131070);
-    final c3 = createCard(listId: doing['id'] as String, boardId: bid, name: 'Design pass', position: 65535);
-    final c4 = createCard(listId: done['id'] as String, boardId: bid, name: 'Kickoff notes', position: 65535);
+    final c1 = createCard(listId: todo['id'] as String, boardId: bid, name: 'Card 1', position: 65535);
+    final c2 = createCard(listId: todo['id'] as String, boardId: bid, name: 'Card 2', position: 131070);
+    final c3 = createCard(listId: doing['id'] as String, boardId: bid, name: 'Card 3', position: 65535);
+    final c4 = createCard(listId: done['id'] as String, boardId: bid, name: 'Card 4', position: 65535);
 
     void setCard(String id, {String? description, String? dueDate}) {
       final i = cards.indexWhere((c) => c['id'] == id);
@@ -837,19 +870,13 @@ class PlankaStore extends ChangeNotifier {
       if (dueDate != null) cards[i]['dueDate'] = dueDate;
     }
 
-    setCard(c1['id'] as String, description: 'Outline the first pass.', dueDate: '2026-11-05');
-    setCard(c2['id'] as String, dueDate: '2026-11-08');
-    setCard(c3['id'] as String, description: 'In progress.', dueDate: '2026-11-03');
-    setCard(c4['id'] as String, dueDate: '2026-10-28');
+    setCard(c1['id'] as String, description: 'Preview description');
+    addTask(cardId: c1['id'] as String, name: 'Task 1', position: 65535);
+    createComment(c1['id'] as String, 'Comment 1');
 
-    final labDesign = createLabel(boardId: bid, name: 'Design', color: 'berry-red', position: 1);
-    final labRush = createLabel(boardId: bid, name: 'Rush', color: 'orange-peel', position: 2);
-    final labShip = createLabel(boardId: bid, name: 'Ship', color: 'lagune-blue', position: 3);
-    addCardLabel(c1['id'] as String, labDesign['id'] as String);
-    addCardLabel(c3['id'] as String, labRush['id'] as String);
-    addCardLabel(c3['id'] as String, labShip['id'] as String);
-
-    setCardCoverColor(c3['id'] as String, 0xFF72B3C6);
+    final lab1 = createLabel(boardId: bid, name: 'Label 1', color: 'berry-red', position: 1);
+    addCardLabel(c1['id'] as String, lab1['id'] as String);
+    addCardMember(c1['id'] as String, uid);
 
     final grp = createCustomFieldGroup(boardId: bid, name: 'Details');
     final fStatus = createCustomField(

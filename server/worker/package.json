@@ -1,0 +1,15 @@
+{
+  "name": "collider-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --port 9100 --local",
+    "build": "bash ./scripts/fetch_web_dist.sh",
+    "deploy": "wrangler d1 migrations apply DB --remote && wrangler deploy",
+    "deploy:local-check": "wrangler d1 migrations apply DB --local && wrangler deploy --dry-run",
+    "test:api": "node ./scripts/two_device_sim.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4.42.0"
+  }
+}

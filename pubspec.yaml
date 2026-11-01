@@ -48,6 +48,7 @@ flutter:
   # Bundled: fallback catalog JSON + the Instrument Sans family.
   assets:
     - assets/html/
+    - assets/branding/
 
   # v9: the type family is bundled, not fetched (one family, on disk, always).
   fonts:

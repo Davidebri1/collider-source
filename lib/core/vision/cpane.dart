@@ -98,12 +98,19 @@ class CPane extends StatelessWidget {
     final topInset = MediaQuery.paddingOf(context).top + (phoneWork ? 8 : CPaneTokens.topGap);
     final bottomInset = phoneWork ? 78.0 : CShell.reserveOf(context);
     if (phoneWork) {
+      // Finite height. `height: infinity` under Align left the glass without a
+      // tight max on web (Column+Expanded hugged). Prefer the Padding's max
+      // height so a bounded host cannot be overflowed; fall back to screen.
       return Padding(
         padding: EdgeInsets.only(top: topInset, bottom: bottomInset),
-        child: Align(
-          alignment: Alignment.center,
-          child: SizedBox(key: bodyKey, width: w, height: double.infinity, child: glass),
-        ),
+        child: LayoutBuilder(builder: (context, box) {
+          final fallback = (MediaQuery.sizeOf(context).height - topInset - bottomInset).clamp(160.0, 2000.0);
+          final phoneH = box.maxHeight.isFinite ? box.maxHeight.clamp(160.0, 2000.0) : fallback;
+          return Align(
+            alignment: Alignment.center,
+            child: SizedBox(key: bodyKey, width: w, height: phoneH, child: glass),
+          );
+        }),
       );
     }
     return Padding(

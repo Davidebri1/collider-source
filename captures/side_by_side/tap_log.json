@@ -1,0 +1,32 @@
+{
+  "tapLog": [
+    {
+      "pe": "Error"
+    },
+    {
+      "ce": "Access to XMLHttpRequest at 'https://collider.ebridavid.workers.dev/health' from origin 'http://127.0.0.1:9162' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on t"
+    },
+    {
+      "ce": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "pe": "Error"
+    },
+    {
+      "ce": "Access to XMLHttpRequest at 'https://collider.ebridavid.workers.dev/health' from origin 'http://127.0.0.1:9162' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on t"
+    },
+    {
+      "ce": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "pe": "Error"
+    },
+    {
+      "ce": "Access to XMLHttpRequest at 'https://collider.ebridavid.workers.dev/health' from origin 'http://127.0.0.1:9162' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on t"
+    },
+    {
+      "ce": "Failed to load resource: net::ERR_FAILED"
+    }
+  ],
+  "at": "2026-11-01T01:36:11.925Z"
+}

@@ -8,10 +8,10 @@
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
-import 'file_blobs.dart';
+import '../account_sync/account_sync.dart';
+import '../account_sync/synced_prefs.dart';
 
 class StoredFile {
   final String id;
@@ -93,7 +93,7 @@ class FileStore extends ChangeNotifier {
 
   Future<void> _load() async {
     try {
-      final s = (await SharedPreferences.getInstance()).getString(_prefsKey);
+      final s = await SyncedPrefs.getString(_prefsKey);
       if (s != null && s.isNotEmpty) {
         final list = jsonDecode(s);
         if (list is List) {
@@ -105,7 +105,7 @@ class FileStore extends ChangeNotifier {
       if (_files.isNotEmpty) {
         // Only files whose contents are really stored (records from the
         // metadata-only build, or cleared site data, cannot be opened).
-        final keys = await FileBlobs.keys();
+        final keys = await AccountSync.instance.blobKeys();
         final before = _files.length;
         _files.removeWhere((f) => !keys.contains(f.id));
         if (_files.length != before) await _save();
@@ -121,8 +121,7 @@ class FileStore extends ChangeNotifier {
 
   Future<void> _save() async {
     try {
-      await (await SharedPreferences.getInstance())
-          .setString(_prefsKey, jsonEncode([for (final f in _files) f.toJson()]));
+      await SyncedPrefs.setString(_prefsKey, jsonEncode([for (final f in _files) f.toJson()]));
     } catch (_) {}
   }
 
@@ -146,7 +145,7 @@ class FileStore extends ChangeNotifier {
         continue;
       }
       final Uint8List? bytes = f.bytes;
-      if (bytes == null || !await FileBlobs.put(id, bytes)) {
+      if (bytes == null || !await AccountSync.instance.putBlob(id, bytes)) {
         skipped.add(f.name);
         continue;
       }
@@ -171,7 +170,7 @@ class FileStore extends ChangeNotifier {
       addPicked([PlatformFile(name: name, size: bytes.length, bytes: bytes)], source);
 
   /// The stored contents, or null (not found).
-  Future<Uint8List?> bytesOf(String id) => FileBlobs.get(id);
+  Future<Uint8List?> bytesOf(String id) => AccountSync.instance.getBlob(id);
 
   /// v9.1 bulk delete.
   Future<void> removeMany(Iterable<String> ids) async {
@@ -180,7 +179,7 @@ class FileStore extends ChangeNotifier {
     notifyListeners();
     await _save();
     for (final id in set) {
-      await FileBlobs.delete(id);
+      await AccountSync.instance.deleteBlob(id);
     }
   }
 
@@ -206,7 +205,7 @@ class FileStore extends ChangeNotifier {
     _files.removeWhere((f) => f.id == id);
     notifyListeners();
     await _save();
-    await FileBlobs.delete(id);
+    await AccountSync.instance.deleteBlob(id);
   }
 
   static String mimeFor(String name) {

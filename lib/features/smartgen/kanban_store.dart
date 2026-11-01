@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
-import '../../core/files/file_blobs.dart';
+import '../../core/account_sync/account_sync.dart';
 
 /// One Smart Gen card.
 class KanbanCard {
@@ -73,7 +73,7 @@ class KanbanStore extends ChangeNotifier {
 
   Future<void> _load() async {
     try {
-      final b = await FileBlobs.get(_blobId);
+      final b = await AccountSync.instance.getBlob(_blobId);
       if (b != null && b.isNotEmpty) {
         final j = jsonDecode(utf8.decode(b));
         final list = j is Map ? j['cards'] : null;
@@ -92,7 +92,7 @@ class KanbanStore extends ChangeNotifier {
 
   Future<void> _save() async {
     final doc = jsonEncode({'v': 1, 'cards': [for (final c in _cards) c.toJson()]});
-    await FileBlobs.put(_blobId, Uint8List.fromList(utf8.encode(doc)));
+    await AccountSync.instance.putBlob(_blobId, Uint8List.fromList(utf8.encode(doc)));
   }
 
   KanbanCard add(int column) {

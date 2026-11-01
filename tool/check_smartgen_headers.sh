@@ -6,8 +6,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 fail=0
 
-# Theme must centre AppBar titles by default.
-if ! grep -q 'appBarTheme: const AppBarTheme(centerTitle: true)' packages/smartgen_planka/lib/main.dart; then
+# Theme must centre AppBar titles by default (multi-line AppBarTheme OK).
+if ! rg -U -q 'appBarTheme:\s*const AppBarTheme\([\s\S]*?centerTitle:\s*true' packages/smartgen_planka/lib/main.dart; then
   echo "FAIL: packages/smartgen_planka/lib/main.dart missing appBarTheme centerTitle: true"
   fail=1
 fi

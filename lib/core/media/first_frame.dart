@@ -3,8 +3,8 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
-import '../files/file_blobs.dart';
 import 'first_frame_capture.dart';
+import '../account_sync/account_sync.dart';
 
 /// v8.8: a live wallpaper's poster is its own first frame, captured in the
 /// app (no stored poster, no default). Cached in memory and app storage.
@@ -23,7 +23,7 @@ class FirstFrames {
   static Future<Uint8List?> _load(String url) async {
     final key = 'poster2:$url';
     try {
-      final hit = await FileBlobs.get(key);
+      final hit = await AccountSync.instance.getBlob(key);
       if (hit != null && hit.isNotEmpty) return hit;
     } catch (_) {}
     while (_active >= 3) {
@@ -34,7 +34,7 @@ class FirstFrames {
     _active++;
     try {
       final b = await captureFirstFrame(url);
-      if (b != null) unawaited(FileBlobs.put(key, b).then((_) {}, onError: (_) {}));
+      if (b != null) unawaited(AccountSync.instance.putBlob(key, b, sync: false).then((_) {}, onError: (_) {}));
       return b;
     } finally {
       _active--;

@@ -8,7 +8,6 @@
 // the app (own Stack layer), so nothing underneath moves, and its drag state
 // is local: dragging does not rebuild the app shell or the market.
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/audio/music_player.dart';
 import '../../core/media/theme_catalog.dart';
@@ -16,6 +15,7 @@ import '../theme/premium_market_ambient.dart' show AmbientGlass;
 import 'music_widget.dart';
 import '../../core/vision/materialize.dart';
 import 'music_zones.dart';
+import '../../core/account_sync/synced_prefs.dart';
 
 class FloatingMusic extends StatefulWidget {
   final VoidCallback onOpenCollection;
@@ -40,14 +40,14 @@ class FloatingMusic extends StatefulWidget {
 
   static Future<void> loadEnabled() => _loading ??= () async {
         try {
-          enabled.value = (await SharedPreferences.getInstance()).getBool(enabledKey) ?? false;
+          enabled.value = (await SyncedPrefs.getBool(enabledKey)) ?? false;
         } catch (_) {}
       }();
 
   static Future<void> setEnabled(bool on) async {
     enabled.value = on;
     try {
-      await (await SharedPreferences.getInstance()).setBool(enabledKey, on);
+      await SyncedPrefs.setBool(enabledKey, on);
     } catch (_) {}
   }
 
@@ -101,7 +101,7 @@ class _FloatingMusicState extends State<FloatingMusic> {
 
   Future<void> _load() async {
     try {
-      final s = (await SharedPreferences.getInstance()).getString(FloatingMusic.prefsKey);
+      final s = await SyncedPrefs.getString(FloatingMusic.prefsKey);
       final parts = s?.split(',');
       if (parts != null && parts.length == 2 && mounted) {
         final x = double.tryParse(parts[0]), y = double.tryParse(parts[1]);
@@ -113,8 +113,7 @@ class _FloatingMusicState extends State<FloatingMusic> {
 
   Future<void> _save(Offset o) async {
     try {
-      await (await SharedPreferences.getInstance())
-          .setString(FloatingMusic.prefsKey, '${o.dx.toStringAsFixed(1)},${o.dy.toStringAsFixed(1)}');
+      await SyncedPrefs.setString(FloatingMusic.prefsKey, '${o.dx.toStringAsFixed(1)},${o.dy.toStringAsFixed(1)}');
     } catch (_) {}
   }
 

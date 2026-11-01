@@ -20,6 +20,7 @@ map_define() {
 # Optional provider dart-defines are for non-web / emergency — omit on Pages builds.
 # OpenRouter / Groq / Vercel removed from the browser bundle.
 map_define COLLIDER_PROXY COLLIDER_PROXY
+map_define COLLIDER_API_BASE COLLIDER_API_BASE
 map_define COLLIDER_THEMES COLLIDER_THEMES
 # Emergency-only (empty in CI web builds):
 if [[ "${COLLIDER_ALLOW_EMBEDDED_KEYS:-}" == "1" ]]; then

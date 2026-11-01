@@ -9,7 +9,8 @@ import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'core/account_sync/account_sync.dart';
+import 'core/account_sync/synced_prefs.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -33,9 +34,11 @@ import 'features/wallpaper/widgets/windowless_theme_scroller.dart';
 import 'features/drawers/history_drawer.dart';
 import 'features/drawers/music_collection_drawer.dart';
 import 'features/drawers/settings_drawer.dart';
+import 'features/account/settings_glass.dart';
 import 'features/drawers/model_ladder_drawer.dart';
 import 'features/consensus/consensus_webview.dart';
 import 'features/smartgen/screens/smartgen_screen.dart';
+import 'package:planka_app/embed.dart' show plankaNavigatorKey;
 import 'features/market/screens/market_screen.dart';
 import 'features/files/screens/files_screen.dart';
 import 'features/mediagen/figma_media_stage.dart';
@@ -61,6 +64,14 @@ import 'features/account/account_sheet.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Absolute API on the Cloudflare Worker (primary host). GitHub Pages keeps
+  // working as a permanent second host and calls the same URL (CORS).
+  // When the app is served from the Worker itself, same-origin still works.
+  const apiBase = String.fromEnvironment(
+    'COLLIDER_API_BASE',
+    defaultValue: 'https://collider.ebridavid.workers.dev',
+  );
+  await AccountSync.instance.init(baseUrl: apiBase);
   // v9: Instrument Sans is bundled in pubspec. Without this the google_fonts
   // package would still try to pull it (and Inter, and Cormorant) off the
   // Google CDN on every cold start, which is what produced mixed faces and
@@ -344,8 +355,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
   Future<void> _loadWallpaperPref() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final id = prefs.getString(_kWallpaperPref);
+      final id = await SyncedPrefs.getString(_kWallpaperPref);
       if (id == null || id.isEmpty) return;
       _pendingWallpaperId = id;
       final pick = ThemeCatalog.instance.bySlug(id);
@@ -361,8 +371,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
   Future<void> _persistWallpaper(WallpaperTheme theme) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_kWallpaperPref, theme.id);
+      await SyncedPrefs.setString(_kWallpaperPref, theme.id);
     } catch (_) {}
   }
 
@@ -453,6 +462,11 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     final appLink = Uri.base.queryParameters['app'] ?? _hashQuery('app');
     if (appLink != null && openable.contains(appLink)) {
       _activeDrawer = appLink;
+    }
+    // Canvas-gaps deep links: ?sg=canvas|genie select the live Smart Gen view.
+    final sgLink = Uri.base.queryParameters['sg'] ?? _hashQuery('sg');
+    if (sgLink == 'canvas' || sgLink == 'genie') {
+      _smartGenView = sgLink!;
     } else if (_activeDrawer == null && Uri.base.queryParameters['drawer'] == null) {
       // Hash deep-links: #/boards, #/smartgen, #/projects → open Smart Gen.
       // Do not open Smart Gen by default — home is the Collider start screen.
@@ -565,6 +579,10 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       if (fragPath == 'boards' || fragPath == 'smartgen' || fragPath == 'projects') {
         setState(() => _activeDrawer = 'smartgen');
       }
+    }
+    final sgBoot = qp['sg'] ?? _hashQuery('sg');
+    if (sgBoot == 'canvas' || sgBoot == 'genie') {
+      setState(() => _smartGenView = sgBoot!);
     }
     if (_tickerItems.isNotEmpty) {
       setState(() {
@@ -717,7 +735,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   Future<void> _persistLocalHistory() async {
     if (_incognito || !_autosave) return;
     try {
-      final prefs = await SharedPreferences.getInstance();
       final payload = {
         'global': [for (final s in _globalHistorySessions) if (!s.id.startsWith('seed')) s.toJson()],
         'local': {
@@ -725,7 +742,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             e.key: [for (final s in e.value) if (!s.id.startsWith('seed')) s.toJson()],
         },
       };
-      await prefs.setString(_kLocalHistKey, jsonEncode(payload));
+      await SyncedPrefs.setString(_kLocalHistKey, jsonEncode(payload));
       final active = {
         'prompt': _currentPrompt,
         'promptTime': _promptTime?.toIso8601String(),
@@ -743,14 +760,13 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             },
         ],
       };
-      await prefs.setString(_kActiveChatKey, jsonEncode(active));
+      await SyncedPrefs.setString(_kActiveChatKey, jsonEncode(active));
     } catch (_) {}
   }
 
   Future<void> _loadLocalHistory({bool restoreLatest = false}) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_kLocalHistKey);
+      final raw = await SyncedPrefs.getString(_kLocalHistKey);
       if (raw != null && raw.isNotEmpty) {
         final j = jsonDecode(raw);
         if (j is Map) {
@@ -777,7 +793,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         }
       }
       if (!restoreLatest || _tickerItems.isNotEmpty) return;
-      final activeRaw = prefs.getString(_kActiveChatKey);
+      final activeRaw = await SyncedPrefs.getString(_kActiveChatKey);
       if (activeRaw == null || activeRaw.isEmpty) {
         // Fall back: restore latest History session onto Home.
         if (_globalHistorySessions.isNotEmpty) {
@@ -923,6 +939,15 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   bool get _anythingOpen => _browserOpen || _settingsOpen || _zoomedMessage != null || _localHistoryModel != null || _activeDrawer != null || _isMobileSideNavOpen || _genOptionsOpen;
   void _escape() {
     if (!mounted) return;
+    // Smart Gen nested routes (Board menu, views, card, …) pop first — never
+    // close the whole Smart Gen surface while an inner screen is open.
+    if (_activeDrawer == 'smartgen') {
+      final nav = plankaNavigatorKey.currentState;
+      if (nav != null && nav.canPop()) {
+        nav.pop();
+        return;
+      }
+    }
     setState(() {
       if (_browserOpen) {
         _browserOpen = false;
@@ -2266,7 +2291,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // Smart Gen embeds its own Flutter MaterialApp/CanvasKit surface. Keeping
           // ThemeLivingBackdrop's video/WebGL layer underneath exhausts SwiftShader and
           // paints the whole host #C0C0C0 (standalone planka web paints fine without it).
-          if (_activeDrawer != 'premium' && _activeDrawer != 'smartgen') ...[
+          // Smart Gen sits in the centred glass pane over the wallpaper (same as Settings),
+          // so keep ThemeLivingBackdrop while smartgen is open — never a full-screen blue fill.
+          if (_activeDrawer != 'premium') ...[
           Positioned.fill(
             child: ThemeLivingBackdrop(
               key: ValueKey('live-${_currentTheme.id}-${_currentTheme.videoPath ?? _currentTheme.assetPath}'),
@@ -2276,13 +2303,11 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               // The premium market renders its own ambient loop of the focused theme;
               // Plane 0 stays on the poster there so only one stream is open.
               // The Theme Gallery paints its own room and preview (row 6).
-              preferVideo: _activeDrawer != 'premium' && _activeDrawer != 'themes',
+              preferVideo: _activeDrawer != 'premium' && _activeDrawer != 'themes' && _activeDrawer != 'smartgen',
               builderAmbient: _activeDrawer == 'premium',
             ),
           ),
           ],
-          if (_activeDrawer == 'smartgen')
-            const Positioned.fill(child: ColoredBox(color: Color(0xFF0079BF))),
 
           // Base ambient dim. Overlays and work surfaces bring their own VScrim
           // (kit overlay 0.35 + medium blur) so the wallpaper stays visible;
@@ -2537,10 +2562,48 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // v9.1.6: no second scrim here: the shared depth scrim above already
           // blurs and dims; a second pass blurred the ticker out of sight.
 
+          // Smart Gen — ONE shared Settings-sized glass pane for every Smart Gen
+          // route (projects / boards / board / card / Board menu). Width matches
+          // SettingsDrawer exactly; MediaQuery is overridden inside the pane so
+          // list/column widths cannot spill to host size.
           if (_activeDrawer == 'smartgen')
             Positioned.fill(
-              child: SmartGenScreen(
-                onClose: () => _requestSwitchSurface(null),
+              child: Builder(
+                builder: (context) {
+                  final size = MediaQuery.sizeOf(context);
+                  final phone = size.width < 700;
+                  // Same width formula as SettingsDrawer (phone 0.82 / desktop panel).
+                  // Single SettingsGlassPane host — SgPane fills it without a nested
+                  // CPane phoneBoard (that double wrapper left a frost band under the canvas).
+                  final paneW = phone
+                      ? (size.width * 0.82).clamp(280.0, 360.0)
+                      : SettingsDrawer.panel.width;
+                  final paneH = phone
+                      ? (size.height * 0.78).clamp(480.0, 740.0)
+                      : (size.height * 0.78).clamp(SettingsDrawer.panel.height, 740.0);
+                  return Center(
+                    child: SizedBox(
+                      width: paneW,
+                      height: paneH,
+                      child: SettingsGlassPane(
+                        padding: EdgeInsets.zero,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(28),
+                          child: SmartGenScreen(
+                            onClose: () => _requestSwitchSurface(null),
+                            // Prefer stock planka for Cards/Boards (account-sync).
+                            // Canvas/Genie stay on live SgPane (canvas-gaps).
+                            section: switch (_smartGenView) {
+                              'canvas' => 'canvas',
+                              'genie' => 'genie',
+                              _ => 'planka',
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
 
@@ -2683,30 +2746,23 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // Hidden on phone widths while consensus is open: the scene has its own back control.
           // v8.3.1: Settings opens over the current screen (no reset), blurred behind.
           // v9.1: Settings materializes in and dissolves out (spring).
+          // Account is a drill-down inside Settings (same pane). No second overlay.
           Positioned.fill(
             child: MaterializeSwitch(
               show: _settingsOpen,
-              builder: (_) =>               // v8.7: a submenu opened from Settings sits on its own plane in
-              // front; Settings steps back (smaller, softer) behind it.
-AnimatedScale(
-                scale: _activeDrawer == 'account' ? 0.94 : 1,
-                duration: VMotion.base,
-                child: ImageFiltered(
-                  enabled: _activeDrawer == 'account',
-                  imageFilter: ui.ImageFilter.blur(sigmaX: 2, sigmaY: 2),
-                  child: SettingsDrawer(
-                onClose: () => setState(() => _settingsOpen = false),
+              builder: (_) => SettingsDrawer(
+                onClose: () => setState(() {
+                  _settingsOpen = false;
+                  if (_activeDrawer == 'account') _activeDrawer = null;
+                }),
                 incognito: _incognito,
                 autosave: _autosave,
                 onIncognito: (v) => setState(() => _incognito = v),
                 onAutosave: (v) => setState(() => _autosave = v),
-                onAccount: () => setState(() => _activeDrawer = 'account'),
-              ),
-                ),
+                tier: ModelTier.free,
               ),
             ),
           ),
-          Positioned.fill(child: MaterializeSwitch(show: _settingsOpen && _activeDrawer == 'account', builder: (_) => AccountSheet(tier: ModelTier.free, onClose: () => setState(() => _activeDrawer = null)))),
 
           // Home bottom bar restored (Settings / Apps); only the redundant
           // chat button was removed. The composer docks directly above it.

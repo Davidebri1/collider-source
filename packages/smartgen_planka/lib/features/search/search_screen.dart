@@ -24,9 +24,9 @@ class _SearchScreenState extends State<SearchScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      
       appBar: AppBar(
         // Data input field — left align (theme centres titles by default).
-        centerTitle: false,
         title: TextField(
           controller: _ctrl,
           autofocus: true,
@@ -39,6 +39,7 @@ class _SearchScreenState extends State<SearchScreen> {
         ),
       ),
       body: ListView.builder(
+        padding: const EdgeInsets.only(bottom: 120),
         itemCount: _hits.length,
         itemBuilder: (_, i) {
           final h = _hits[i];

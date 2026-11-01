@@ -78,7 +78,7 @@ class _GenieScreenState extends State<GenieScreen> {
         children: [
           Expanded(
             child: ListView.builder(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
               itemCount: _messages.length,
               itemBuilder: (_, i) {
                 final m = _messages[i];

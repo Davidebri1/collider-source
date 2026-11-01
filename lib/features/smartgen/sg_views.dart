@@ -6,7 +6,10 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
+import '../../core/media/theme_catalog.dart';
 import '../../core/theme/app_font.dart';
+import '../../models/theme_def.dart';
+import '../theme/theme_living_media.dart';
 import 'sg_model.dart';
 import 'sg_free_drag.dart';
 
@@ -1538,12 +1541,40 @@ class SgSlate extends StatelessWidget {
   }
 }
 
-class SgCanvasBoard extends StatelessWidget {
-  const SgCanvasBoard({super.key, required this.store, required this.onOpen});
+class SgCanvasBoard extends StatefulWidget {
+  const SgCanvasBoard({super.key, required this.store, required this.onOpen, this.onOpenBoard});
   final SgStore store;
   final void Function(SgCard) onOpen;
+  final void Function(SgBoard)? onOpenBoard;
+  @override
+  State<SgCanvasBoard> createState() => _SgCanvasBoardState();
+}
+
+class _SgCanvasBoardState extends State<SgCanvasBoard> {
+  bool _pickBg = false;
+
+  @override
+  void initState() {
+    super.initState();
+    ThemeCatalog.instance.addListener(_onThemes);
+    if (Uri.base.queryParameters['pickbg'] == '1') {
+      _pickBg = true;
+    }
+  }
+
+  void _onThemes() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    ThemeCatalog.instance.removeListener(_onThemes);
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final store = widget.store;
     final b = store.board!;
     if (b.canvases.isEmpty) {
       return ColoredBox(
@@ -1553,35 +1584,226 @@ class SgCanvasBoard extends StatelessWidget {
     }
     final canvas = b.canvases[b.canvasIndex.clamp(0, b.canvases.length - 1)];
     final cards = b.cards.where((c) => c.canvasId.isEmpty || c.canvasId == canvas.id).take(8).toList();
-    return GestureDetector(
-      onHorizontalDragEnd: (d) {
-        final v = d.primaryVelocity ?? 0;
-        if (v < -200 && b.canvasIndex < b.canvases.length - 1) {
-          store.touch(() => b.canvasIndex++);
-        } else if (v > 200 && b.canvasIndex > 0) {
-          store.touch(() => b.canvasIndex--);
-        }
-      },
+    final boardTiles = [
+      for (final ob in store.boards)
+        if (ob.id != b.id && ob.hostCanvasId == canvas.id) ob,
+    ];
+    WallpaperTheme? theme;
+    Color? tintBg;
+    final bgId = canvas.backgroundThemeId;
+    if (bgId.startsWith('tint:')) {
+      final hex = int.tryParse(bgId.substring(5), radix: 16);
+      if (hex != null) tintBg = Color(0xFF000000 | hex);
+    } else if (bgId.isNotEmpty) {
+      theme = ThemeCatalog.instance.bySlug(bgId);
+    }
+    // Drop empty/broken posters; prefer scene stills; de-dupe by asset URL so
+    // jpg+mp4 twins of the same scene do not repeat in the strip.
+    final themes = _canvasPickerThemes();
+    // Dense dark-navy base (default SgCanvas.color 0xFF1A2838) so the grid
+    // never reads as bright Trello blue. Low-alpha tint wash keeps navy dark.
+    final navy = const Color(0xFF1A2838);
+    final baseFill = tintBg ?? (theme != null ? navy : Color(canvas.color));
+    // No parent horizontal-drag arena: it steals card pans / throws.
+    // Canvas switching stays on the numbered chips (and optional swipe on chips).
+    return SizedBox.expand(
       child: Stack(fit: StackFit.expand, children: [
-        ColoredBox(color: Color(canvas.color).withValues(alpha: 0.28)),
-        CustomPaint(painter: _CanvasGridPainter()),
-        SgFreePlane(
+        // Opaque navy pedestal — Positioned.fill so the grid never leaves a
+        // frost strip at the pane floor.
+        Positioned.fill(
+          child: ColoredBox(color: Color.alphaBlend(baseFill.withValues(alpha: 0.96), const Color(0xFF0E141C))),
+        ),
+        Positioned.fill(
+          child: theme != null && theme.posterUrl.isNotEmpty && _canvasPosterUsable(theme)
+              ? Opacity(
+                  opacity: 0.55,
+                  child: ThemePosterImage(theme: theme, fullBleed: true, fit: BoxFit.cover),
+                )
+              : ColoredBox(
+                  // Soft wash only — 0.28 keeps default navy dark (not #2F6FED).
+                  color: (tintBg ?? Color(canvas.color)).withValues(alpha: tintBg != null ? 0.70 : 0.28),
+                ),
+        ),
+        const Positioned.fill(child: CustomPaint(painter: _CanvasGridPainter())),
+        Positioned.fill(
+          child: SgFreePlane(
           store: store,
           cards: cards,
+          boards: boardTiles,
           title: canvas.name,
           titleIcon: Icons.dashboard_customize_outlined,
-          onOpen: onOpen,
+          onOpen: widget.onOpen,
+          onOpenBoard: widget.onOpenBoard ?? (ob) {
+            store.openBoard(ob.id);
+          },
+          trailing: IconButton(
+            key: const ValueKey('sg-canvas-bg'),
+            tooltip: 'Background',
+            iconSize: 20,
+            color: Colors.white70,
+            onPressed: () => setState(() => _pickBg = !_pickBg),
+            icon: const Icon(Icons.wallpaper_rounded),
+          ),
           slotsFor: (plane, cs) => SgFreeLayouts.canvasGrid(plane, cs.length),
           tileBuilder: (context, c, i, tile) {
             return SizedBox(width: tile.width, child: SgFace(card: c, board: b, compact: true));
           },
+          showSnapToggle: false,
         ),
-      ]),
+        ),
+        if (_pickBg) ...[
+          // Conventional dismiss: tap outside the sheet.
+          Positioned.fill(
+            child: GestureDetector(
+              key: const ValueKey('sg-bg-picker-scrim'),
+              behavior: HitTestBehavior.opaque,
+              onTap: () => setState(() => _pickBg = false),
+              child: const ColoredBox(color: Color(0x33000000)),
+            ),
+          ),
+          Positioned(
+            left: 8,
+            right: 8,
+            bottom: 8,
+            child: GestureDetector(
+              // Absorb taps / drag-down so the scrim does not steal them.
+              onTap: () {},
+              onVerticalDragEnd: (d) {
+                if ((d.primaryVelocity ?? 0) > 240) setState(() => _pickBg = false);
+              },
+              child: Material(
+                key: const ValueKey('sg-bg-picker'),
+                color: const Color(0xEE1A1C22),
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('Background', textAlign: TextAlign.center, style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        height: 64,
+                        child: ScrollConfiguration(
+                          behavior: const SgScroll(),
+                          child: ListView(
+                            scrollDirection: Axis.horizontal,
+                            children: [
+                              for (final entry in [
+                                for (final t in themes.take(8)) (t.id, t),
+                                ('tint:1A2838', null),
+                                ('tint:3D7A6A', null),
+                                ('tint:8B5E3C', null),
+                                ('tint:2A1830', null),
+                                ('tint:12141A', null),
+                              ])
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      store.setCanvasBackground(canvas.id, entry.$1);
+                                      setState(() => _pickBg = false);
+                                    },
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: SizedBox(
+                                        width: 72,
+                                        height: 64,
+                                        child: Stack(fit: StackFit.expand, children: [
+                                          if (entry.$2 != null && _canvasPosterUsable(entry.$2!))
+                                            ThemePosterImage(theme: entry.$2!, fit: BoxFit.cover)
+                                          else if (entry.$1.startsWith('tint:'))
+                                            ColoredBox(color: Color(int.parse(entry.$1.substring(5), radix: 16) | 0xFF000000))
+                                          else
+                                            ColoredBox(color: Color(canvas.color)),
+                                          if (canvas.backgroundThemeId == entry.$1)
+                                            const Align(
+                                              alignment: Alignment.center,
+                                              child: Icon(Icons.check_circle, color: Color(0xFFFFD56A), size: 22),
+                                            ),
+                                        ]),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+    ]),
     );
   }
 }
 
+List<WallpaperTheme> _canvasPickerThemes() {
+  final out = <WallpaperTheme>[];
+  final seen = <String>{};
+  final ranked = [
+    for (final t in ThemeCatalog.instance.allThemes)
+      if (_canvasPosterUsable(t)) t,
+  ]..sort((a, b) {
+      int score(WallpaperTheme t) {
+        final n = t.name.toLowerCase();
+        const prefer = ['neon', 'alley', 'rain', 'city', 'street', 'boardwalk', 'ocean', 'lake', 'cabin'];
+        for (var i = 0; i < prefer.length; i++) {
+          if (n.contains(prefer[i])) return i;
+        }
+        // Prefer stills over live loops of the same scene.
+        return prefer.length + (t.isLive ? 1 : 0);
+      }
+      final c = score(a).compareTo(score(b));
+      return c != 0 ? c : a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    });
+  for (final t in ranked) {
+    final key = _canvasPosterDedupeKey(t);
+    if (!seen.add(key)) continue;
+    out.add(t);
+  }
+  return out;
+}
+
+/// Basename of the poster / source file without extension — jpg+mp4 twins collapse.
+String _canvasPosterDedupeKey(WallpaperTheme t) {
+  var s = t.posterUrl.trim();
+  if (s.isEmpty) s = t.id;
+  try {
+    s = Uri.decodeComponent(s.split('?').first);
+  } catch (_) {}
+  s = s.toLowerCase();
+  final slash = s.lastIndexOf('/');
+  if (slash >= 0) s = s.substring(slash + 1);
+  s = s.replaceAll(RegExp(r'\.(jpe?g|png|webp|mp4|webm)$'), '');
+  s = s.replaceAll(RegExp(r'_?\d{3,4}x\d{3,4}$'), '');
+  // id form r2-<path>
+  if (s.startsWith('r2-')) s = s.substring(3);
+  return s;
+}
+
+bool _canvasPosterUsable(WallpaperTheme t) {
+  final url = t.posterUrl.trim();
+  if (url.isEmpty) return false;
+  if (t.id == 'starbridge') return false;
+  final n = t.name.toLowerCase();
+  final id = t.id.toLowerCase();
+  final blob = '$n $id $url'.toLowerCase();
+  // Broken / near-white speck posters — never lead the Background strip.
+  if (blob.contains('white network') || blob.contains('white%20network')) return false;
+  if (blob.contains('white noise') || n == 'white' || id == 'white') return false;
+  if (n.contains('abstract background') || blob.contains('abstract_background')) return false;
+  if (n.contains('animation blurred')) return false;
+  return true;
+}
+
 class _CanvasGridPainter extends CustomPainter {
+  const _CanvasGridPainter();
   @override
   void paint(Canvas canvas, Size size) {
     final p = Paint()
@@ -1646,7 +1868,7 @@ class SgSurfaceView extends StatelessWidget {
         ]))),
         Padding(padding: const EdgeInsets.only(top: 28), child: SgKanban(store: store, onOpen: onOpen)),
       ]),
-      SgSurface.canvas => SgCanvasBoard(store: store, onOpen: onOpen),
+      SgSurface.canvas => SgCanvasBoard(store: store, onOpen: onOpen, onOpenBoard: (ob) { store.openBoard(ob.id); }),
     };
   }
 }

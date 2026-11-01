@@ -1,0 +1,23 @@
+PE Error
+wrote 01_board_tiles.png 117659 words 14
+  sample: ['Boards\nStar board\nAlign to grid\nBoard menu\nNotebook Shot list\nPhoto album Lookbook\nVision board Mood\nBackground\nSettings Settings\nApps Apps', 'Collider', 'flutter typography measurement', 'Boards', 'Star board', 'Align to grid', 'Board menu', 'Notebook Shot list', 'Photo album Lookbook', 'Vision board Mood', 'Background', 'Settings Settings\nApps Apps']
+PE Error
+wrote 02_background_picker.png 155763 words 10
+  sample: ['Boards\nStar board\nAlign to grid\nBoard menu\nBackground\nSettings Settings\nApps Apps', 'Collider', 'flutter typography measurement', 'Boards', 'Star board', 'Align to grid', 'Board menu', 'Background', 'Settings Settings', 'Apps Apps']
+PE Error
+Thrown card box {'x': 104, 'y': 296, 'w': 128, 'h': 96, 'area': 12288}
+wrote 03_throw_1_grab.png 114458 words 14
+  sample: ['Settings Settings\nApps Apps\nBoards\nStar board\nAlign to grid\nBoard menu\nBackground\nThrown\nGamma\nBeta', 'Collider', 'flutter typography measurement', 'Settings Settings', 'Apps Apps', 'Boards', 'Star board', 'Align to grid', 'Board menu', 'Background', 'Thrown\nGamma\nBeta', 'Thrown']
+wrote 03_throw_2_mid.png 114146 words 14
+  sample: ['Settings Settings\nApps Apps\nBoards\nStar board\nAlign to grid\nBoard menu\nBackground\nThrown\nGamma\nBeta', 'Collider', 'flutter typography measurement', 'Settings Settings', 'Apps Apps', 'Boards', 'Star board', 'Align to grid', 'Board menu', 'Background', 'Thrown\nGamma\nBeta', 'Thrown']
+wrote 03_throw_3_glide.png 114192 words 14
+  sample: ['Settings Settings\nApps Apps\nBoards\nStar board\nAlign to grid\nBoard menu\nBackground\nThrown\nGamma\nBeta', 'Collider', 'flutter typography measurement', 'Settings Settings', 'Apps Apps', 'Boards', 'Star board', 'Align to grid', 'Board menu', 'Background', 'Thrown\nGamma\nBeta', 'Thrown']
+Thrown after {'x': 379, 'y': 468, 'area': 9408} release (424, 486)
+dist from release 48.46648326421054 dist from start 324.3593686021725
+PE Error
+wrote 04_genie_open.png 113662 words 16
+  sample: ['Collider', 'flutter typography measurement', 'Boards', 'Star board', 'Align to grid', 'Board menu', 'New conversation', 'Minimize Genie', 'Close Genie', 'Notebook Shot list', 'Photo album Lookbook', 'Vision board Mood']
+PE Error
+wrote 05_genie_minimised.png 120381 words 14
+  sample: ['Boards\nStar board\nAlign to grid\nBoard menu\nNotebook Shot list\nPhoto album Lookbook\nVision board Mood\nBackground\nSettings Settings\nApps Apps', 'Collider', 'flutter typography measurement', 'Boards', 'Star board', 'Align to grid', 'Board menu', 'Notebook Shot list', 'Photo album Lookbook', 'Vision board Mood', 'Background', 'Settings Settings\nApps Apps']
+done /workspace/sgrev/v920/canvas/artifacts/canvas_gaps
