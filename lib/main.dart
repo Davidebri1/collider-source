@@ -161,6 +161,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
   // Active temporary pane / drawer: 'themes', 'settings', 'consensus', 'apps', 'history', 'market', 'smartgen', 'files', 'model_ladder'
   String? _activeDrawer;
+  // Sheets opened on top of [_activeDrawer]; the top one is _activeDrawer and
+  // these stay mounted behind it.
+  final List<String> _drawerStack = [];
 
   // Local Model History modal state
   ModelDef? _localHistoryModel;
@@ -458,11 +461,105 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
   void _closeAllPanes() {
     _activeDrawer = null;
+    _drawerStack.clear();
     _localHistoryModel = null;
     _zoomedMessage = null;
     _zoomedModelDef = null;
     _isMobileSideNavOpen = false;
   }
+
+  /// Opens [drawer] ON TOP of the sheet already open, keeping it mounted
+  /// behind. [_activeDrawer] used to hold one value, so Settings -> Account
+  /// replaced Settings outright: it vanished, and the only way back was to
+  /// reopen it from the rail. The panes beneath are kept here and re-rendered
+  /// behind the top one.
+  void _pushDrawer(String drawer) {
+    setState(() {
+      final cur = _activeDrawer;
+      if (cur != null && cur != drawer) _drawerStack.add(cur);
+      _activeDrawer = drawer;
+    });
+  }
+
+  /// Closes the top sheet and restores the one underneath.
+  void _popDrawer() {
+    setState(() {
+      _activeDrawer = _drawerStack.isEmpty ? null : _drawerStack.removeLast();
+      if (_activeDrawer == null) _isComposerSummoned = true;
+    });
+  }
+
+  /// The sheet-type panes: floating sheets that can sit on top of each other,
+  /// unlike the durable work surfaces (themes, files, smartgen, market) which
+  /// are switched rather than stacked.
+  static const _sheetPanes = {'apps', 'history', 'model_ladder', 'music', 'settings', 'account'};
+
+  /// Builds the sheet [drawer]. Kept in one place so the pane underneath the
+  /// top one is built exactly like the top one. Returns an empty box for a
+  /// pane that has nothing to show (Music with no songs), never null, so the
+  /// Stack children list stays [Widget]-typed.
+  Widget _sheetPane(String drawer) => switch (drawer) {
+        'apps' => Positioned.fill(
+            child: AppsPopupPane(
+              onClose: _popDrawer,
+              onOpenSmartGen: () => _requestSwitchSurface('smartgen'),
+              onOpenDiscoverMarket: () => _requestSwitchSurface('market'),
+              onOpenThemeGallery: () => _requestSwitchSurface('themes'),
+              onOpenPremiumMarketplace: () => _requestSwitchSurface('premium'),
+              onOpenFiles: () => _requestSwitchSurface('files'),
+              onOpenMusicPlayer: () => _pushDrawer('music'),
+              onOpenBrowser: () => _openBrowserForTab('user_default'),
+              onOpenSettings: () => _pushDrawer('settings'),
+              onOpenAccount: () => _pushDrawer('account'),
+            ),
+          ),
+        'history' => Positioned.fill(
+            child: HistoryDrawer(
+              sessions: _globalHistorySessions,
+              onSelectSession: (sess) => _loadAndExpandSession(sess),
+              onClose: _popDrawer,
+            ),
+          ),
+        'model_ladder' => Positioned.fill(
+            child: ModelLadderDrawer(
+              activeCategory: _activeCategory,
+              selectedModelIds: _selectedModelIds,
+              onSelectCategory: (cat) => setState(() => _activeCategory = cat),
+              onToggleModel: (modelId) => setState(() {
+                if (_selectedModelIds.contains(modelId)) {
+                  if (_selectedModelIds.length > 1) _selectedModelIds.remove(modelId);
+                } else if (_selectedModelIds.length < 9) {
+                  _selectedModelIds.add(modelId);
+                }
+              }),
+              onClose: _popDrawer,
+            ),
+          ),
+        'music' => MusicPlayer.library.isEmpty
+            ? const SizedBox.shrink()
+            : Positioned.fill(
+                child: MusicCollectionDrawer(
+                  onClose: _popDrawer,
+                  onOpenMarket: () => _pushDrawer('premium'),
+                  onOpenAccount: () => _pushDrawer('account'),
+                  onOpenSettings: () => _pushDrawer('settings'),
+                ),
+              ),
+        'settings' => Positioned.fill(
+            child: SettingsDrawer(
+              onClose: _popDrawer,
+              incognito: _incognito,
+              autosave: _autosave,
+              onIncognito: (v) => setState(() => _incognito = v),
+              onAutosave: (v) => setState(() => _autosave = v),
+              onAccount: () => _pushDrawer('account'),
+            ),
+          ),
+        'account' => Positioned.fill(
+            child: AccountSheet(tier: ModelTier.free, onClose: _popDrawer),
+          ),
+        _ => const SizedBox.shrink(),
+      };
 
   void _requestSwitchSurface(String? targetDrawer) {
     // No "Unsaved Changes" prompt (removed 2026-09-27): switching surfaces just proceeds.
@@ -1216,22 +1313,11 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             ),
 
           // ================= PLANE 2: APPS POPUP PANE =================
-          // Middle neutral area, no visible canvas, blurred background, clickaway + close icon
-          if (_activeDrawer == 'apps')
-            Positioned.fill(
-              child: AppsPopupPane(
-                onClose: () => setState(() => _activeDrawer = null),
-                onOpenSmartGen: () => _requestSwitchSurface('smartgen'),
-                onOpenDiscoverMarket: () => _requestSwitchSurface('market'),
-                onOpenThemeGallery: () => _requestSwitchSurface('themes'),
-                onOpenPremiumMarketplace: () => _requestSwitchSurface('premium'),
-                onOpenFiles: () => _requestSwitchSurface('files'),
-                onOpenMusicPlayer: () => _requestSwitchSurface('music'),
-                onOpenBrowser: () => _openBrowserForTab('user_default'),
-                onOpenSettings: () => _openDrawer('settings'),
-                onOpenAccount: () => setState(() => _activeDrawer = 'account'),
-              ),
-            ),
+          // Middle neutral area, no visible canvas, blurred background, clickaway + close icon.
+          // Sheets stack: anything pushed on top of another stays mounted behind.
+          for (final under in _drawerStack.reversed)
+            if (_sheetPanes.contains(under)) _sheetPane(under),
+          if (_activeDrawer != null && _sheetPanes.contains(_activeDrawer)) _sheetPane(_activeDrawer!),
 
           // ================= PLANE 3: LOCAL MODEL HISTORY PANE =================
           // Centered popup pane, searches body & title, relative timestamps
@@ -1262,41 +1348,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             ),
 
           // ================= PLANE 5: DRAWERS & DURABLE WORK SURFACES =================
-          if (_activeDrawer == 'history')
-            Positioned.fill(
-              child: HistoryDrawer(
-                sessions: _globalHistorySessions,
-                onSelectSession: (sess) => _loadAndExpandSession(sess),
-                onClose: () => setState(() => _activeDrawer = null),
-              ),
-            ),
-
-          if (_activeDrawer == 'model_ladder')
-            Positioned.fill(
-              child: ModelLadderDrawer(
-                activeCategory: _activeCategory,
-                selectedModelIds: _selectedModelIds,
-                onSelectCategory: (cat) {
-                  setState(() {
-                    _activeCategory = cat;
-                  });
-                },
-                onToggleModel: (modelId) {
-                  setState(() {
-                    if (_selectedModelIds.contains(modelId)) {
-                      if (_selectedModelIds.length > 1) {
-                        _selectedModelIds.remove(modelId);
-                      }
-                    } else {
-                      if (_selectedModelIds.length < 9) {
-                        _selectedModelIds.add(modelId);
-                      }
-                    }
-                  });
-                },
-                onClose: () => setState(() => _activeDrawer = null),
-              ),
-            ),
+          // history / model_ladder / music / settings / account render above, with the
+          // sheets stacked beneath them.
 
           if (_activeDrawer == 'themes')
             Positioned.fill(
@@ -1365,34 +1418,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             ),
 
           // No songs in the catalog: no Music drawer (v8.3, D46).
-          if (_activeDrawer == 'music' && MusicPlayer.library.isNotEmpty)
-            Positioned.fill(
-              child: MusicCollectionDrawer(
-                onClose: () => setState(() => _activeDrawer = null),
-                onOpenMarket: () => setState(() => _activeDrawer = 'premium'),
-                onOpenAccount: () => setState(() => _activeDrawer = 'account'),
-                onOpenSettings: () => setState(() => _activeDrawer = 'settings'),
-              ),
-            ),
-
-          if (_activeDrawer == 'settings')
-            Positioned.fill(
-              child: SettingsDrawer(
-                onClose: () => setState(() => _activeDrawer = null),
-                incognito: _incognito,
-                autosave: _autosave,
-                onIncognito: (v) => setState(() => _incognito = v),
-                onAutosave: (v) => setState(() => _autosave = v),
-                onAccount: () => setState(() => _activeDrawer = 'account'),
-              ),
-            ),
-
-          if (_activeDrawer == 'account')
-            Positioned.fill(
-              child: AccountSheet(tier: ModelTier.free, onClose: () => setState(() => _activeDrawer = null)),
-            ),
-
-          // Durable work surfaces sit over one shared scrim (kit overlay + medium blur).
+          // music / settings / account render above, with the sheets stacked beneath.
 
           if (_activeDrawer == 'smartgen')
             // v8.4: the Keynote frame (30:75) is a stage on the whole screen.

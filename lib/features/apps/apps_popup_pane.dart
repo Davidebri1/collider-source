@@ -99,12 +99,16 @@ class AppsPopupPane extends StatelessWidget {
                   _tab(Icons.apps_rounded, 'Apps', true, onClose),
                   const SizedBox(height: 8),
                   _tab(Icons.person_rounded, 'Account', false, () {
-                    onClose();
+                    // No onClose() first: closing emptied the stack, so the
+                    // Account sheet had nothing to stack on and this pane was
+                    // destroyed instead of sitting behind it. onOpenAccount
+                    // records the current pane and stacks on top of it.
                     onOpenAccount?.call();
                   }),
                   const SizedBox(height: 8),
                   _tab(Icons.landscape_rounded, 'Environments', false, () {
-                    onClose();
+                    // The gallery is a durable work surface: it replaces
+                    // whatever is open, so no stack entry is needed.
                     onOpenThemeGallery();
                   }),
                 ]),

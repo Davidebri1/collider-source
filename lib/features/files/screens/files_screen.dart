@@ -26,10 +26,17 @@ class FilesScreen extends StatefulWidget {
 
   const FilesScreen({super.key, required this.onClose, this.category = 'all'});
 
-  static const frame = Size(1336.4, 835.2);
-  // The group's own width (rail at 0 .. main panel right 1336.4), no margin.
-  static const cropWidth = 1336.4;
-  static const center = Offset(668.2, 417.6);
+  // v8.4: the Figma group is 1336.4 wide, but mapping that straight onto the
+  // device width puts the main panel's right edge exactly on the screen edge —
+  // a window that touches the frame reads as a fullscreen app. [cropWidth] is
+  // therefore wider than the group's own width, which shrinks the whole group
+  // ~6% and leaves equal air on both sides; nothing inside moves relative to
+  // anything else, the group still scales as one unit.
+  static const frame = Size(1336.4, 872.0);
+  // Group content spans x 95.4 (sidebar left) .. 1336.4 (panel right); its
+  // centre is 715.9, and that is what the crop is centred on.
+  static const double cropWidth = 1420.0;
+  static const center = Offset(715.8, 436.0);
 
   @override
   State<FilesScreen> createState() => _FilesScreenState();
@@ -114,12 +121,17 @@ class _FilesScreenState extends State<FilesScreen> {
             Positioned(left: 95.4, top: 0, width: 295, height: 740, child: _sidebar(all)),
             // Main panel 3004_frame at (390.4, 0), 946 x 740.
             Positioned(left: 390.4, top: 0, width: 946, height: 740, child: _main(title, files, cat)),
-            // Segmented ornament 3231_frame at (518.8, 721), 394.1 x 60.2.
-            Positioned(left: 518.8, top: 721, width: 394.1, height: 60.2, child: _segments()),
-            // Window controls 2686_frame at (625.4, 821.2): dot (close) + bar.
+            // Segmented ornament 3231_frame. Figma placed it at y 721, which is INSIDE
+            // the 740-tall panel and therefore painted straight across the last
+            // row of files. It is a detached control, so it now clears the
+            // panel (740) by 18 and is centred under the main panel
+            // (390.4 .. 1336.4, centre 863.4) rather than over the seam.
+            Positioned(left: 666.4, top: 758, width: 394.1, height: 60.2, child: _segments()),
+            // Window controls 2686_frame: dot (close) + drag bar, below the
+            // ornament as the window's bottom chrome.
             Positioned(
               left: 625.4,
-              top: 815,
+              top: 838,
               width: 181,
               height: 26,
               child: Row(children: [

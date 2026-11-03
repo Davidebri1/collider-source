@@ -98,12 +98,12 @@ class _AccountSheetState extends State<AccountSheet> {
         child: FText(_note ?? 'restore plans bought with this account', size: 13, height: 16, weight: FontWeight.w500, color: const Color(0x99EBEBF5), letterSpacing: -0.4),
       ),
       const SizedBox(height: 16),
-      // Frame 43: the next section's title (the panel clips; scroll for it).
-      const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-        child: FText('Plans', size: 22, height: 28, weight: FontWeight.w700),
-      ),
-      ..._planRows(),
+      // The plan CATALOGUE is deliberately not repeated here. "Plan" and
+      // "Manage Subscription" both open _plansList(), which shows all three
+      // tiers. Listing them again under a "Plans" heading pushed the sheet
+      // past its own bottom edge, so "Plans" was cut mid-word at the fold with
+      // no scroll affordance — a tab that looks complete but hides its own
+      // last section.
     ];
   }
 

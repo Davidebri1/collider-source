@@ -48,7 +48,15 @@ class MusicPlayer extends ChangeNotifier {
     final out = <MusicTrack>[];
     for (final s in t.tracks) {
       if (s.title.trim().isEmpty) continue;
-      final m = MusicTrack(s.title.trim(), t.posterUrl, s.audioUrl ?? '', subtitle: _clean(t.name), themeId: t.id);
+      final raw = s.title.trim();
+      final packName = _clean(t.name);
+      // Ingest stored the SOURCE FILENAME in tracks[].title for single-clip
+      // themes ("0319bbf2-a06b-4664-b094-0dfcd5ea0b51_1080_hd"). Rows led with
+      // an id the user never sees and pushed the real name into the small
+      // subtitle. When the title is only a filename, the theme's name is what
+      // the row is actually called, so it leads.
+      final lead = (packName.isNotEmpty && _looksLikeFilename(raw)) ? packName : raw;
+      final m = MusicTrack(lead, t.posterUrl, s.audioUrl ?? '', subtitle: lead == packName ? '' : packName, themeId: t.id);
       if (seen.add(m.key)) out.add(m);
     }
     return out;
@@ -78,6 +86,14 @@ class MusicPlayer extends ChangeNotifier {
   }
 
   static String _clean(String n) => n.replaceAll(RegExp(r'\s*4K$'), '').trim();
+
+  static final _uuid = RegExp(r'[0-9a-f]{8}-[0-9a-f]{4}', caseSensitive: false);
+  static final _mediaExt = RegExp(r'\.(mp4|mov|webm|m4a|mp3|wav)$', caseSensitive: false);
+
+  /// True when a track "title" is really an ingest artefact rather than a name:
+  /// it carries an extension, underscores or a uuid. "0_Gold_Glitter_Sparkles"
+  /// and "0319bbf2-..._1080_hd" are ids; "Waves at Sunset" is a title.
+  static bool _looksLikeFilename(String s) => s.contains('_') || _uuid.hasMatch(s) || _mediaExt.hasMatch(s);
 
   /// The current queue, or the whole library when nothing was queued.
   static List<MusicTrack> get tracks => instance._queue ?? library;
