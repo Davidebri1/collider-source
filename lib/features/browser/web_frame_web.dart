@@ -8,18 +8,29 @@
 //
 // The frame is sandboxed without allow-same-origin, so a page's scripts run on
 // an opaque origin: they can never reach Collider's storage, cookies or /api.
+import 'dart:js_interop';
 import 'dart:ui_web' as ui_web;
 
 import 'package:flutter/material.dart';
 import 'package:web/web.dart' as web;
 
 import '../../core/api/collider_api.dart';
+import 'page_markup.dart';
 
-final Set<String> _registered = {};
+// One view type per page load, for the whole app. The old counter lived on
+// each frame's State, and the browser builds a new frame (new key) for every
+// address, so every frame after the first asked for 'collider-frame-1' again.
+// That type was already registered with the first page's markup, so the
+// browser kept showing its opening page whatever address was typed (v9.1.1+).
+int _frameSeq = 0;
 
 class WebFrame extends StatefulWidget {
   final String url;
-  const WebFrame({super.key, required this.url});
+
+  /// A link or form inside the page asked for [url]. The browser opens it as
+  /// a new address, so the address bar and Back follow the page.
+  final ValueChanged<String>? onNavigate;
+  const WebFrame({super.key, required this.url, this.onNavigate});
 
   @override
   State<WebFrame> createState() => _WebFrameState();
@@ -29,13 +40,29 @@ class _WebFrameState extends State<WebFrame> {
   String? _html;
   String? _failed;
   String? _pending;
-  int _gen = 0;
+  String? _type;
+  web.HTMLIFrameElement? _frame;
+  JSFunction? _listener;
 
   @override
   void initState() {
     super.initState();
     _pending = widget.url;
+    _listener = ((web.MessageEvent ev) {
+      final f = _frame;
+      if (f == null || ev.source == null || !identical(ev.source, f.contentWindow)) return;
+      final url = pageNavTarget(ev.data?.dartify());
+      if (url != null) widget.onNavigate?.call(url);
+    }).toJS;
+    web.window.addEventListener('message', _listener);
     _load(widget.url);
+  }
+
+  @override
+  void dispose() {
+    final l = _listener;
+    if (l != null) web.window.removeEventListener('message', l);
+    super.dispose();
   }
 
   @override
@@ -52,26 +79,36 @@ class _WebFrameState extends State<WebFrame> {
     // A later navigation has already claimed the frame; drop this reply.
     if (!mounted || _pending != url) return;
     setState(() {
-      _gen++;
       if (html == null) {
         _failed = url;
+        _type = null;
       } else {
-        _html = _withBase(html, url);
+        _html = preparePageMarkup(html, url);
+        _type = _register(_html!);
       }
     });
   }
 
-  /// Relative links, images and stylesheets are written against the real site,
-  /// so the markup has to say which site it came from.
-  static String _withBase(String html, String target) {
-    final safe = target.replaceAll('"', '%22').replaceAll('<', '%3C');
-    final tag = '<base href="$safe">';
-    final stripped = html.replaceAll(RegExp(r'<base[^>]*>', caseSensitive: false), '');
-    final head = RegExp(r'<head[^>]*>', caseSensitive: false).firstMatch(stripped);
-    if (head != null) return stripped.replaceRange(head.end, head.end, tag);
-    final open = RegExp(r'<html[^>]*>', caseSensitive: false).firstMatch(stripped);
-    if (open != null) return stripped.replaceRange(open.end, open.end, tag);
-    return '$tag$stripped';
+  /// Registers a fresh view type for this page's markup and returns it.
+  String _register(String html) {
+    final type = 'collider-frame-${++_frameSeq}';
+    ui_web.platformViewRegistry.registerViewFactory(type, (int _) {
+      final f = web.HTMLIFrameElement()
+        ..style.border = '0'
+        ..style.width = '100%'
+        ..style.height = '100%'
+        ..style.background = 'white';
+      // allow-scripts without allow-same-origin: the page runs, on an origin
+      // of its own, and cannot read or call anything belonging to Collider.
+      f.setAttribute('sandbox', 'allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox');
+      f.setAttribute('referrerpolicy', 'no-referrer');
+      f.setAttribute('scrolling', 'auto');
+      f.setAttribute('data-collider-frame', type);
+      f.setAttribute('srcdoc', html);
+      _frame = f;
+      return f;
+    });
+    return type;
   }
 
   @override
@@ -79,23 +116,7 @@ class _WebFrameState extends State<WebFrame> {
     final html = _html;
     if (html == null) return _placeholder();
 
-    final type = 'collider-frame-$_gen';
-    if (_registered.add(type)) {
-      ui_web.platformViewRegistry.registerViewFactory(type, (int _) {
-        final f = web.HTMLIFrameElement()
-          ..style.border = '0'
-          ..style.width = '100%'
-          ..style.height = '100%'
-          ..style.background = 'white';
-        // allow-scripts without allow-same-origin: the page runs, on an origin
-        // of its own, and cannot read or call anything belonging to Collider.
-        f.setAttribute('sandbox', 'allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox');
-        f.setAttribute('referrerpolicy', 'no-referrer');
-        f.setAttribute('scrolling', 'auto');
-        f.setAttribute('srcdoc', html);
-        return f;
-      });
-    }
+    final type = _type!;
     return HtmlElementView(key: ValueKey(type), viewType: type);
   }
 

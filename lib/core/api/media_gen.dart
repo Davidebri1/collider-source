@@ -52,19 +52,34 @@ String _wireSlug(String wire, String remote) =>
 
 /// Each text model's ordered list of (wire, remote id) attempts.
 /// No OpenRouter / Groq / Vercel. Browser traffic uses COLLIDER_PROXY.
+///
+/// Nov 6, 2026 provider check (every attempt below sent through the Worker):
+/// - CrazyRouter does not carry laguna-s/xs, ling-3.1-flash or either
+///   Nemotron (404 model_not_found); those attempts are gone.
+/// - NVIDIA retired z-ai/glm-5.3 (Oct 28) and moonshotai/kimi-k3 (Oct 15),
+///   410 Gone; poolside/laguna-s-2.1 is not in NVIDIA's catalogue (404).
+/// - NVIDIA deepseek-v4.1-flash runs past the Worker's limit (524 after
+///   ~125 s), so CrazyRouter answers DeepSeek first.
+/// - MiniMax direct answers 402 insufficient_balance; MiniMax M3.1 Flash is
+///   also on NVIDIA (minimaxai/minimax-m3.1-flash), so it is asked there next.
+/// - Every attempt in a row is that row's model; no row answers with another.
+/// - Command Code answers 401 and OpenCode 503 (no key on the Worker); their
+///   attempts stay so a key added to the Worker starts working with no build.
 const Map<String, List<(String, String)>> _text = {
   'free/glm-5-3-flash': [('cr', 'glm-5.3-flash'), ('nv', 'z-ai/glm-5.3-flash')],
-  'free/laguna-s-2-1': [('cr', 'laguna-s-2.1'), ('nv', 'poolside/laguna-s-2.1'), ('cc', 'poolside/laguna-s-2.1-free')],
-  'free/laguna-xs-2-1': [('nv', 'poolside/laguna-xs-2.1'), ('cr', 'laguna-xs-2.1')],
-  'free/ling-3-1-flash': [('cr', 'ling-3.1-flash'), ('cc', 'inclusionai/ling-3.1-flash:free')],
-  'free/nemotron-3-5-lightning': [('nv', 'nvidia/nemotron-3.5-lightning-30b-a3b'), ('cr', 'nemotron-3.5-lightning')],
-  'pro/glm-5-3': [('cr', 'glm-5.3'), ('nv', 'z-ai/glm-5.3'), ('oc', 'glm-5.3'), ('cc', 'zai-org/GLM-5.3')],
-  'pro/deepseek-4-1-flash': [('nv', 'deepseek-ai/deepseek-v4.1-flash'), ('cr', 'deepseek-v4.1-flash'), ('oc', 'deepseek-v4.1-flash'), ('cc', 'deepseek/deepseek-v4.1-flash')],
-  // MiniMax M3.1 Flash via MiniMax direct (Genie + Consensus agent 1).
-  'pro/minimax-m3': [('mm', 'MiniMax-M3.1-Flash'), ('mm', 'MiniMax-M3'), ('cr', 'minimax-m2.5')],
+  'free/laguna-s-2-1': [('cc', 'poolside/laguna-s-2.1-free')],
+  'free/laguna-xs-2-1': [('nv', 'poolside/laguna-xs-2.1')],
+  'free/ling-3-1-flash': [('cc', 'inclusionai/ling-3.1-flash:free')],
+  'free/nemotron-3-5-lightning': [('nv', 'nvidia/nemotron-3.5-lightning-30b-a3b')],
+  'pro/glm-5-3': [('cr', 'glm-5.3'), ('oc', 'glm-5.3'), ('cc', 'zai-org/GLM-5.3')],
+  'pro/deepseek-4-1-flash': [('cr', 'deepseek-v4.1-flash'), ('nv', 'deepseek-ai/deepseek-v4.1-flash'), ('oc', 'deepseek-v4.1-flash'), ('cc', 'deepseek/deepseek-v4.1-flash')],
+  // MiniMax M3.1 Flash: MiniMax direct, then the same model on NVIDIA (Genie +
+  // Consensus agent 1). The old tail (MiniMax-M3, CrazyRouter minimax-m2.5)
+  // answered under this row's name with a different model; it is gone.
+  'pro/minimax-m3': [('mm', 'MiniMax-M3.1-Flash'), ('nv', 'minimaxai/minimax-m3.1-flash')],
   'pro/mimo-v2-6-flash': [('cr', 'mimo-v2.6-flash'), ('cc', 'xiaomi/mimo-v2.6-flash')],
-  'pro/nemotron-3-ultra': [('nv', 'nvidia/nemotron-3-ultra-550b-a55b'), ('cr', 'nemotron-3-ultra'), ('cc', 'nvidia/nemotron-3-ultra-550b-a55b')],
-  'elite/kimi-k3': [('cr', 'kimi-k3'), ('nv', 'moonshotai/kimi-k3'), ('oc', 'kimi-k3'), ('cc', 'moonshotai/Kimi-K3')],
+  'pro/nemotron-3-ultra': [('nv', 'nvidia/nemotron-3-ultra-550b-a55b'), ('cc', 'nvidia/nemotron-3-ultra-550b-a55b')],
+  'elite/kimi-k3': [('cr', 'kimi-k3'), ('oc', 'kimi-k3'), ('cc', 'moonshotai/Kimi-K3')],
 };
 
 /// Consensus agent 1 (headcount / essence / groups): MiniMax M3.1 Flash direct.
@@ -259,6 +274,9 @@ class MediaGen {
   }
 
   String _keyFor(String w) => _textWires[w]!.key;
+
+  /// The ordered (wire, remote id) attempts for a text model; tests read it.
+  List<(String, String)>? textAttempts(String modelId) => _text[modelId.replaceFirst('code-', '')];
 
   /// One OpenAI-compatible call on a text wire. Throws a raw error string.
   Future<String> _textCall(String w, String remote, List<Map<String, String>> messages, {int? maxTokens}) async {

@@ -6,7 +6,11 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 class WebFrame extends StatefulWidget {
   final String url;
-  const WebFrame({super.key, required this.url});
+
+  /// Same signature as the web frame. A WebView follows its own links, so the
+  /// native frame does not need to hand them back.
+  final ValueChanged<String>? onNavigate;
+  const WebFrame({super.key, required this.url, this.onNavigate});
 
   @override
   State<WebFrame> createState() => _WebFrameState();

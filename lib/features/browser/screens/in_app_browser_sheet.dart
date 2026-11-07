@@ -151,6 +151,14 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
                   decoration: BoxDecoration(color: VColors.fillRecessed, borderRadius: BorderRadius.circular(VRadius.full)),
                   child: Row(
                     children: [
+                      if ((_back[tab.id] ?? const []).isNotEmpty) ...[
+                        VPress(
+                          onTap: _goBack,
+                          tooltip: 'Back',
+                          child: const Icon(Icons.arrow_back_rounded, size: 15, color: VColors.textSecondary),
+                        ),
+                        const SizedBox(width: 6),
+                      ],
                       VPress(
                         onTap: _goHome,
                         tooltip: 'Home',
@@ -210,7 +218,11 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
     return ClipRRect(
       key: ValueKey('page-${tab.url}-$_reload'),
       borderRadius: BorderRadius.circular(VRadius.xl),
-      child: WebFrame(key: ValueKey('${tab.url}#$_reload'), url: _reload == 0 ? tab.url : '${tab.url}${tab.url.contains('?') ? '&' : '?'}_r=$_reload'),
+      child: WebFrame(
+        key: ValueKey('${tab.url}#$_reload'),
+        url: _reload == 0 ? tab.url : '${tab.url}${tab.url.contains('?') ? '&' : '?'}_r=$_reload',
+        onNavigate: (u) => _open(u, _host(u)),
+      ),
     );
   }
 
