@@ -135,6 +135,35 @@ extension SgSurfaceX on SgSurface {
       };
 }
 
+/// Smart Gen spec (summary.txt, "Smart Canvas"): canvases are objects added
+/// onto a board from its add menu (a visual library with labels and a
+/// search field). These are the canvas types the app draws, by their spec
+/// names; 'Glass' is the plain free canvas. They are not board views.
+const List<(String, SgSurface?)> kSgCanvasTypes = [
+  ('Glass', null),
+  ('Notebook', SgSurface.notebook),
+  ('Gallery', SgSurface.album),
+  ('Portfolio', SgSurface.portfolio),
+  ('Folder', SgSurface.files),
+  ('Swimlane', SgSurface.swimlane),
+  ('Storyboard', SgSurface.storyboard),
+  ('Vision board', SgSurface.vision),
+  ('US map', SgSurface.usMap),
+  ('World map', SgSurface.worldMap),
+];
+
+/// Board views (the row under the board title): the spec's board types the
+/// app draws, plus Canvas, the layer that holds the board's canvases.
+const Set<SgSurface> kSgBoardViews = {SgSurface.kanban, SgSurface.calendar, SgSurface.whiteboard, SgSurface.desk, SgSurface.canvas};
+
+/// The surface a canvas of [kind] draws, or null for a plain Glass canvas.
+SgSurface? sgCanvasTypeSurface(String kind) {
+  for (final t in kSgCanvasTypes) {
+    if (t.$1 == kind) return t.$2;
+  }
+  return null;
+}
+
 extension SgFieldKindX on SgFieldKind {
   String get label => name;
 }

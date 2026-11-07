@@ -1583,6 +1583,12 @@ class _SgCanvasBoardState extends State<SgCanvasBoard> {
       );
     }
     final canvas = b.canvases[b.canvasIndex.clamp(0, b.canvases.length - 1)];
+    // A canvas added from the add menu as a type (Notebook, Gallery...)
+    // draws as that object; Glass is the free canvas below.
+    final typed = sgCanvasTypeSurface(canvas.kind);
+    if (typed != null) {
+      return SgSurfaceView.typeView(typed, store, widget.onOpen) ?? const SizedBox.shrink();
+    }
     final cards = b.cards.where((c) => c.canvasId.isEmpty || c.canvasId == canvas.id).take(8).toList();
     final boardTiles = [
       for (final ob in store.boards)
@@ -1831,6 +1837,20 @@ class SgSurfaceView extends StatelessWidget {
   final double kanbanPage;
   final String? forceHotListId;
   final String? liftCardId;
+
+  /// The view a canvas of type [s] draws on the board.
+  static Widget? typeView(SgSurface s, SgStore store, void Function(SgCard) onOpen) => switch (s) {
+        SgSurface.notebook => SgNotebook(store: store, onOpen: onOpen),
+        SgSurface.album => SgAlbum(store: store, onOpen: onOpen),
+        SgSurface.storyboard => SgStory(store: store, onOpen: onOpen),
+        SgSurface.vision => SgVision(store: store, onOpen: onOpen),
+        SgSurface.swimlane => SgSwim(store: store, onOpen: onOpen),
+        SgSurface.portfolio => SgDesk(store: store, onOpen: onOpen, wood: const Color(0xFF8B5E3C)),
+        SgSurface.usMap => SgPlaces(store: store, onOpen: onOpen, world: false),
+        SgSurface.worldMap => SgPlaces(store: store, onOpen: onOpen, world: true),
+        SgSurface.files => SgFiles(store: store, onOpen: onOpen),
+        _ => null,
+      };
 
   @override
   Widget build(BuildContext context) {

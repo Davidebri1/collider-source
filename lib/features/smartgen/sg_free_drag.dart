@@ -261,17 +261,8 @@ class SgBoardTileFace extends StatelessWidget {
   final SgBoard board;
   final bool dragging;
 
-  @override
-  Widget build(BuildContext context) {
-    final surface = board.surface == SgSurface.kanban
-        ? switch (board.kind) {
-            SgBoardKind.kanban => SgSurface.kanban,
-            SgBoardKind.calendar => SgSurface.calendar,
-            SgBoardKind.whiteboard => SgSurface.whiteboard,
-            _ => SgSurface.desk,
-          }
-        : board.surface;
-    final (Color fill, IconData icon, Color ink) = switch (surface) {
+  /// Fill, icon and ink that make a tile look like its surface.
+  static (Color, IconData, Color) lookOf(SgSurface surface, Color fallback) => switch (surface) {
       SgSurface.notebook => (const Color(0xFFE8DCC8), Icons.menu_book_rounded, const Color(0xFF3A2A18)),
       SgSurface.album => (const Color(0xFF1A1A1E), Icons.photo_library_rounded, Colors.white),
       SgSurface.vision => (const Color(0xFF2A1830), Icons.auto_awesome_mosaic_rounded, const Color(0xFFFFD56A)),
@@ -284,8 +275,22 @@ class SgBoardTileFace extends StatelessWidget {
       SgSurface.storyboard => (const Color(0xFF1E2430), Icons.view_carousel_rounded, Colors.white),
       SgSurface.calendar => (const Color(0xFF1E2A3A), Icons.calendar_month_rounded, Colors.white),
       SgSurface.swimlane => (const Color(0xFF1A2830), Icons.view_week_rounded, Colors.white),
-      _ => (Color(board.background | 0xFF000000), Icons.dashboard_rounded, Colors.white),
-    };
+      SgSurface.files => (const Color(0xFFC9A66B), Icons.folder_rounded, const Color(0xFF3A2A10)),
+      SgSurface.usMap || SgSurface.worldMap => (const Color(0xFF1E3A4A), Icons.public_rounded, Colors.white),
+      _ => (fallback, Icons.dashboard_rounded, Colors.white),
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final surface = board.surface == SgSurface.kanban
+        ? switch (board.kind) {
+            SgBoardKind.kanban => SgSurface.kanban,
+            SgBoardKind.calendar => SgSurface.calendar,
+            SgBoardKind.whiteboard => SgSurface.whiteboard,
+            _ => SgSurface.desk,
+          }
+        : board.surface;
+    final (Color fill, IconData icon, Color ink) = lookOf(surface, Color(board.background | 0xFF000000));
     return Material(
       elevation: dragging ? 8 : 3,
       borderRadius: BorderRadius.circular(10),
@@ -813,6 +818,24 @@ class _SgFreePlaneState extends State<SgFreePlane> with TickerProviderStateMixin
           }),
         ),
       ]),
+    );
+  }
+}
+
+
+/// Library thumbnail for a canvas type: the same look as a board tile of
+/// that surface; null is the plain Glass canvas.
+class SgCanvasThumb extends StatelessWidget {
+  const SgCanvasThumb({super.key, required this.surface});
+  final SgSurface? surface;
+  @override
+  Widget build(BuildContext context) {
+    final (Color fill, IconData icon, Color ink) = surface == null
+        ? (const Color(0x33FFFFFF), Icons.crop_square_rounded, Colors.white)
+        : SgBoardTileFace.lookOf(surface!, const Color(0xFF1A2838));
+    return DecoratedBox(
+      decoration: BoxDecoration(color: fill, borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0x33FFFFFF))),
+      child: Center(child: Icon(icon, size: 30, color: ink.withValues(alpha: 0.9))),
     );
   }
 }

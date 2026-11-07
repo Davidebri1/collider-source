@@ -1052,8 +1052,11 @@ class _SgPaneState extends State<SgPane> {
     // Selected chip stays scrolled into view via ensureVisible.
     // Corkboard, Clipboard, Ledger, Binder and Slate are names from the old clone, not in the Smart Gen
     // spec's board or canvas types, so they are not offered (a board already set to one keeps it).
-    const oldClone = {SgSurface.corkboard, SgSurface.clipboard, SgSurface.ledger, SgSurface.binder, SgSurface.slate};
-    final surfaces = [for (final s in SgSurface.values) if (!oldClone.contains(s) || s == b.surface) s];
+    // Canvas types (Notebook, Gallery, Portfolio, Folder...) are not board
+    // views: per the spec they are canvases added onto the board from the
+    // board's add menu ("Add a canvas"). Only board views are offered; a
+    // board already set to another surface keeps that one chip.
+    final surfaces = [for (final s in SgSurface.values) if (kSgBoardViews.contains(s) || s == b.surface) s];
     final selected = b.surface;
     WidgetsBinding.instance.addPostFrameCallback((_) => _ensureViewChipVisible(selected));
     return SizedBox(
@@ -1194,17 +1197,11 @@ class _SgPaneState extends State<SgPane> {
           _menuAction(Icons.bar_chart_rounded, 'Statistics', () => setState(() { _menu = false; _overlay = 'stats'; })),
           _menuAction(Icons.checklist_rounded, _multi ? 'Stop selecting' : 'Select cards', () => setState(() { _menu = false; _multi = !_multi; })),
           _menuAction(Icons.add_rounded, 'New card', () => setState(() { _menu = false; _overlay = 'create'; })),
-          _menuAction(Icons.dashboard_customize_outlined, 'Add a canvas', () {
-            final ok = store.addCanvas('Canvas ${b.canvases.length + 1}', 'Glass');
-            setState(() {
-              _menu = false;
-              if (!ok) {
-                _showToast(store.notice, red: false);
-              } else {
-                b.surface = SgSurface.canvas;
-              }
-            });
-          }),
+          _menuAction(Icons.dashboard_customize_outlined, 'Add a canvas', () => setState(() {
+                _menu = false;
+                _overlay = 'add-canvas';
+                _query = '';
+              })),
                     _menuAction(Icons.dashboard_outlined, 'Place board', () {
             final hostId = b.id;
             if (b.canvases.isEmpty) {
@@ -1290,6 +1287,7 @@ class _SgPaneState extends State<SgPane> {
     // (regression: overlays trapped the board and Statistics/Genie could not open).
     if (_menu) return _menuBody(b);
     if (_overlay == 'search') return _search(b);
+    if (_overlay == 'add-canvas') return _addCanvas(b);
     if (_overlay == 'stats') return _stats(b);
     // Genie floats over the surface (see build Stack) — do not replace the body.
     if (_overlay == 'editor-bulk') return _bulkEdit(b);
@@ -1363,6 +1361,71 @@ class _SgPaneState extends State<SgPane> {
   }
 
   String _query = '';
+
+  /// The board's add menu for canvases: a scrollable visual library of the
+  /// canvas types (thumbnail + label) with a search field. Picking one adds
+  /// that canvas onto the board and shows it.
+  Widget _addCanvas(SgBoard b) {
+    final q = _query.trim().toLowerCase();
+    final types = [for (final t in kSgCanvasTypes) if (q.isEmpty || t.$1.toLowerCase().contains(q)) t];
+    return Padding(
+      key: const ValueKey('sg-add-canvas'),
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        SizedBox(
+          height: 40,
+          child: Stack(alignment: Alignment.center, children: [
+            Text('Add a canvas', textAlign: TextAlign.center, style: appFont(fontSize: 17, fontWeight: FontWeight.w700, color: Colors.white)),
+            Align(alignment: Alignment.centerRight, child: _icon('Close', Icons.close, () => setState(() => _overlay = ''))),
+          ]),
+        ),
+        Semantics(
+          label: 'Search',
+          textField: true,
+          child: TextField(
+            style: appFont(color: Colors.white, fontSize: 14),
+            decoration: const InputDecoration(hintText: 'Search', hintStyle: TextStyle(color: Colors.white54), prefixIcon: Icon(Icons.search_rounded, color: Colors.white54, size: 18)),
+            onChanged: (v) => setState(() => _query = v),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: GridView.count(
+            crossAxisCount: 3,
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 8,
+            childAspectRatio: 0.82,
+            children: [
+              for (final t in types)
+                Semantics(
+                  button: true,
+                  label: t.$1,
+                  child: GestureDetector(
+                    key: ValueKey('sg-add-canvas-${t.$1}'),
+                    onTap: () {
+                      final ok = store.addCanvas('Canvas ${b.canvases.length + 1}', t.$1);
+                      setState(() {
+                        _overlay = '';
+                        if (!ok) {
+                          _showToast(store.notice, red: false);
+                        } else {
+                          store.touch(() => b.surface = SgSurface.canvas);
+                        }
+                      });
+                    },
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                      Expanded(child: SgCanvasThumb(surface: t.$2)),
+                      const SizedBox(height: 4),
+                      Text(t.$1, textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white)),
+                    ]),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ]),
+    );
+  }
 
   Widget _stats(SgBoard b) {
     final urgent = b.cards.where((c) => c.urgent).length;
