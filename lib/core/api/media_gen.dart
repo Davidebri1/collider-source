@@ -322,7 +322,7 @@ class MediaGen {
   List<(String, String)>? textAttempts(String modelId) => _text[modelId.replaceFirst('code-', '')];
 
   /// One OpenAI-compatible call on a text wire. Throws a raw error string.
-  Future<String> _textCall(String w, String remote, List<Map<String, Object>> messages, {int? maxTokens}) async {
+  Future<String> _textCall(String w, String remote, List<Map<String, Object>> messages, {int? maxTokens, Duration? firstByte}) async {
     final t = _textWires[w]!;
     final key = _keyFor(w);
     final viaProxy = _proxy.isNotEmpty && _proxyRoute.containsKey(w);
@@ -331,19 +331,35 @@ class MediaGen {
     // NVIDIA answers 429 when several rows and the consensus agents hit it in
     // the same minute; wait and ask again (twice) before giving up.
     for (var attempt = 0;; attempt++) {
+      // First-byte limit (agent lists): the answer is streamed, and an entry
+      // that sends nothing within [firstByte] is dropped so the next entry is
+      // asked. Once bytes flow the entry may finish normally.
+      final cancel = firstByte == null ? null : CancelToken();
+      var gotByte = false;
+      final fb = firstByte == null ? null : Timer(firstByte, () {
+        if (!gotByte) cancel!.cancel('first-byte');
+      });
       try {
         final res = await _textDio.post(url,
-            data: {'model': _wireSlug(w, remote), 'messages': messages, if (maxTokens != null) 'max_tokens': maxTokens},
+            data: {'model': _wireSlug(w, remote), 'messages': messages, if (maxTokens != null) 'max_tokens': maxTokens, if (firstByte != null) 'stream': true},
+            cancelToken: cancel,
+            onReceiveProgress: firstByte == null
+                ? null
+                : (_, __) {
+                    gotByte = true;
+                    fb?.cancel();
+                  },
             options: Options(
+              responseType: firstByte == null ? null : ResponseType.plain,
               headers: viaProxy
                   ? {'Content-Type': 'application/json'}
                   : {'Content-Type': 'application/json', 'Authorization': 'Bearer $key'},
             ));
-        final msg = res.data['choices']?[0]?['message'];
-        final text = _messageText(msg);
+        final text = firstByte == null ? _messageText(res.data['choices']?[0]?['message']) : _streamedText(res.data);
         if (text.isEmpty) throw const MediaGenError('empty');
         return text;
       } on DioException catch (e) {
+        if (e.type == DioExceptionType.cancel) throw MediaGenError('timeout: no first byte in ${firstByte?.inSeconds} s');
         final sc = e.response?.statusCode;
         if (w == 'nv' && (sc == 503 || sc == 429)) {
           await Future<void>.delayed(Duration(milliseconds: 2500 * (attempt + 1)));
@@ -351,8 +367,42 @@ class MediaGen {
         }
         if (e.type == DioExceptionType.receiveTimeout || e.type == DioExceptionType.connectionTimeout) throw const MediaGenError('timeout');
         throw MediaGenError('provider ${e.response?.statusCode ?? 'unreachable'}: ${_errBody(e)}');
+      } finally {
+        fb?.cancel();
       }
     }
+  }
+
+  /// The text of a streamed (SSE) chat completion, or of a plain JSON one
+  /// when the provider ignored `stream`.
+  static String _streamedText(dynamic data) {
+    if (data is Map) return _messageText(data['choices']?[0]?['message']);
+    final raw = '$data'.trim();
+    if (raw.startsWith('{')) {
+      try {
+        final j = jsonDecode(raw);
+        if (j is Map) return _messageText(j['choices']?[0]?['message']);
+      } catch (_) {}
+      return '';
+    }
+    final content = StringBuffer();
+    final reasoning = StringBuffer();
+    for (final line in const LineSplitter().convert(raw)) {
+      final l = line.trim();
+      if (!l.startsWith('data:')) continue;
+      final body = l.substring(5).trim();
+      if (body.isEmpty || body == '[DONE]') continue;
+      try {
+        final j = jsonDecode(body);
+        final ch = j is Map ? j['choices'] : null;
+        final d = ch is List && ch.isNotEmpty && ch[0] is Map ? (ch[0]['delta'] ?? ch[0]['message']) : null;
+        if (d is! Map) continue;
+        if (d['content'] is String) content.write(d['content']);
+        final r = d['reasoning_content'] ?? d['reasoning'];
+        if (r is String) reasoning.write(r);
+      } catch (_) {}
+    }
+    return _messageText({'content': content.toString(), 'reasoning_content': reasoning.toString()});
   }
 
   /// Pollinations' OpenAI-compatible text endpoint. Needs no key, so it is the
@@ -412,9 +462,13 @@ class MediaGen {
   /// "chains", or a row id): "3/9 MiniMax M3 via oc". Read by the e2e.
   final Map<String, String> answeredBy = {};
 
-  /// How long one entry of an agent list (consensus, summaries, chains, Genie) may take before the
-  /// next entry is asked.
-  static const Duration _agentEntryLimit = Duration(seconds: 40);
+  /// The most one entry of an agent list (consensus, summaries, chains,
+  /// Genie) may take in all once it has started answering.
+  static const Duration _agentEntryLimit = Duration(seconds: 90);
+
+  /// An agent-list entry that sends no first byte in this long is dropped and
+  /// the next entry is asked (David, Nov 7: ~20 s; ticker rows keep 150 s).
+  static const Duration agentFirstByte = Duration(seconds: 20);
 
   /// The one chain-runner every model call goes through. Asks each entry of
   /// [chain] in order and returns the first real answer. Any failure (402,
@@ -433,7 +487,7 @@ class MediaGen {
         final msgs = _hasImages(messages) && !_seesImages(e) ? await _describeImages(messages) : messages;
         final String text;
         try {
-          final call = _textCall(e.wire, e.remote, msgs, maxTokens: maxTokens);
+          final call = _textCall(e.wire, e.remote, msgs, maxTokens: maxTokens, firstByte: perEntry != null && i < chain.length - 1 ? agentFirstByte : null);
           // A listed entry that hangs (NVIDIA's DeepSeek 4.1 Flash and GLM 5.3 Flash ran into the
           // 125 s gateway limit on Nov 7) must not hold up the rest of the list.
           text = perEntry != null && i < chain.length - 1 ? await call.timeout(perEntry, onTimeout: () => throw const MediaGenError('timeout')) : await call;
