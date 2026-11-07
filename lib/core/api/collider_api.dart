@@ -233,6 +233,9 @@ class ColliderApi {
       // Until the Worker's /page route is deployed it answers with the theme JSON.
       if (head.isNotEmpty && !head.startsWith('[') && !head.startsWith('{')) return html;
     } catch (_) {}
+    // Only a Collider server has /api/page. On GitHub Pages this asked
+    // davidebri1.github.io/api/page, which does not exist (404 every time).
+    if (!_hasServer) return null;
     try {
       final r = await _dio.get('$_base/api/page', queryParameters: {'url': url});
       final html = (r.data as Map)['html'];

@@ -17,6 +17,7 @@ import '../../core/api/collider_api.dart';
 import '../../models/model_def.dart';
 import '../../core/files/file_store.dart';
 import '../../core/vision/vision_kit.dart';
+import 'attached_text.dart';
 
 class FloatingPrompt extends StatefulWidget {
   /// Focused (tapped, swiped up on the dock, or a new conversation).
@@ -40,6 +41,8 @@ class FloatingPrompt extends StatefulWidget {
   final ValueNotifier<String?>? restoreText;
   /// Bumped from outside (the options sheet's Generate) to send the field.
   final ValueNotifier<int>? generateTick;
+  /// A file name to add as an attachment chip (Files → Attach to Message).
+  final ValueNotifier<String?>? attachFile;
 
   const FloatingPrompt({
     super.key,
@@ -58,6 +61,7 @@ class FloatingPrompt extends StatefulWidget {
     this.onOpenOptions,
     this.restoreText,
     this.generateTick,
+    this.attachFile,
   });
 
   @override
@@ -68,16 +72,38 @@ class _FloatingPromptState extends State<FloatingPrompt> {
   final TextEditingController _ctrl = TextEditingController();
   late final FocusNode _focus = FocusNode()..addListener(() { if (mounted) setState(() {}); });
   final List<String> _files = [];
+  bool _loadFocus = false;
 
   @override
   void initState() {
     super.initState();
     _focus.addListener(() {
-      if (_focus.hasFocus && !widget.summoned) widget.onSummon();
+      if (_focus.hasFocus && !widget.summoned && !_loadFocus) widget.onSummon();
+      _loadFocus = false;
     });
-    if (widget.summoned) WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
+    _ctrl.addListener(() { if (mounted) setState(() {}); }); // Send brightens once there is text
+    if (widget.summoned) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
+    } else {
+      // The composer is focused on load (blinking cursor) without summoning it, so the ticker
+      // above stays live.
+      _loadFocus = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) _focus.requestFocus(); });
+    }
     widget.restoreText?.addListener(_onRestore);
     widget.generateTick?.addListener(_onGenerate);
+    widget.attachFile?.addListener(_onAttachFile);
+    _onAttachFile();
+  }
+
+  // Ported from the ARGON 8474 SuperApp (main.dart onAttachToPrompt): the
+  // file joins the composer as a chip, once.
+  void _onAttachFile() {
+    final n = widget.attachFile?.value;
+    if (n == null) return;
+    widget.attachFile!.value = null;
+    if (!_files.contains(n)) _files.add(n);
+    if (mounted) setState(() {});
   }
 
   void _onRestore() {
@@ -110,6 +136,7 @@ class _FloatingPromptState extends State<FloatingPrompt> {
   void dispose() {
     widget.restoreText?.removeListener(_onRestore);
     widget.generateTick?.removeListener(_onGenerate);
+    widget.attachFile?.removeListener(_onAttachFile);
     _ctrl.dispose();
     _focus.dispose();
     super.dispose();
@@ -309,7 +336,7 @@ class _FloatingPromptState extends State<FloatingPrompt> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                           decoration: BoxDecoration(color: const Color(0x4DFFFFFF), borderRadius: BorderRadius.circular(32)),
-                          child: Text(f, style: const TextStyle(fontSize: 20, color: Colors.white)),
+                          child: Text(attachmentChipLabel(f), style: const TextStyle(fontSize: 20, color: Colors.white)),
                         ),
                       ),
                   ]),
@@ -335,18 +362,15 @@ class _FloatingPromptState extends State<FloatingPrompt> {
                     ),
                     const SizedBox(width: 16),
                     Expanded(
-                      child: Container(
-                        // v9.1.2: one thin glass line, as in the reference.
-                        constraints: const BoxConstraints(minHeight: 44),
+                      // The app's dense glass (VGlass: blur, VFrost tint, hairline and rim), so the
+                      // composer reads as an object on any wallpaper.
+                      child: VGlass(
+                        material: VMaterial.prompt,
+                        radius: 24,
+                        fill: VFrost.tint,
                         padding: const EdgeInsets.fromLTRB(20, 2, 4, 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xE618181E), // solid input bar (user reference)
-                          borderRadius: BorderRadius.circular(24),
-                        ),
-                        foregroundDecoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(32),
-                          color: const Color(0x00000000), // v9.1: flat frost, no painted gradient
-                        ),
+                        child: ConstrainedBox(
+                        constraints: const BoxConstraints(minHeight: 44),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
@@ -361,7 +385,10 @@ class _FloatingPromptState extends State<FloatingPrompt> {
                                   cursorColor: Colors.white,
                                   textInputAction: TextInputAction.send,
                                   style: const TextStyle(fontSize: 24, height: 1.17, fontWeight: FontWeight.w500, color: Colors.white),
+                                  autofocus: !widget.summoned,
                                   decoration: const InputDecoration(
+                                    hintText: 'Ask anything',
+                                    hintStyle: TextStyle(fontSize: 24, height: 1.17, fontWeight: FontWeight.w500, color: Color(0x99FFFFFF)),
                                     border: InputBorder.none,
                                     isDense: true,
                                     contentPadding: EdgeInsets.zero,
@@ -372,8 +399,9 @@ class _FloatingPromptState extends State<FloatingPrompt> {
                               ),
                             ),
                             const SizedBox(width: 6),
-                            _SendButton(busy: widget.busy, onTap: _submit),
+                            _SendButton(busy: widget.busy, active: _ctrl.text.trim().isNotEmpty, onTap: _submit),
                           ],
+                        ),
                         ),
                       ),
                     ),
@@ -391,8 +419,9 @@ class _FloatingPromptState extends State<FloatingPrompt> {
 /// Send: clear shape, springs on press, turns into a spinner while models answer.
 class _SendButton extends StatefulWidget {
   final bool busy;
+  final bool active; // there is text to send
   final VoidCallback onTap;
-  const _SendButton({required this.busy, required this.onTap});
+  const _SendButton({required this.busy, required this.onTap, this.active = false});
   @override
   State<_SendButton> createState() => _SendButtonState();
 }
@@ -419,8 +448,8 @@ class _SendButtonState extends State<_SendButton> {
           duration: VMotion.base,
           width: 48,
           height: 48,
-          decoration: const BoxDecoration(
-            color: Color(0x4DFFFFFF),
+          decoration: BoxDecoration(
+            color: widget.active && !widget.busy ? Colors.white : const Color(0x4DFFFFFF),
             shape: BoxShape.circle,
           ),
           child: Center(
@@ -428,7 +457,7 @@ class _SendButtonState extends State<_SendButton> {
               duration: VMotion.fast,
               child: widget.busy
                   ? const SizedBox(key: ValueKey('b'), width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
-                  : const Icon(Icons.arrow_upward_rounded, key: ValueKey('s'), size: 26, color: Colors.white),
+                  : Icon(Icons.arrow_upward_rounded, key: const ValueKey('s'), size: 26, color: widget.active ? const Color(0xFF111111) : Colors.white),
             ),
           ),
         ),

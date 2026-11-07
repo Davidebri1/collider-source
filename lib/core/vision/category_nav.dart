@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'vision_tokens.dart';
 
 /// One subcategory (a content tag) and how many themes carry it.
 class NavLeaf {
@@ -245,7 +246,8 @@ class CategoryBar extends StatelessWidget {
         }
       }
     }
-    return ClipRRect(
+    // The shared pane width (Settings width), centred, like every pane.
+    return Center(child: SizedBox(width: VPane.width(context), child: ClipRRect(
       borderRadius: BorderRadius.circular(999),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
@@ -286,6 +288,6 @@ class CategoryBar extends StatelessWidget {
           ),
         ),
       ),
-    );
+    )));
   }
 }

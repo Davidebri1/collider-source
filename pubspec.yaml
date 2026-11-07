@@ -35,6 +35,12 @@ dependencies:
   trina_grid: ^1.0.0
   planka_app:
     path: packages/smartgen_planka
+  syncfusion_flutter_pdf: ^33.2.13
+  excel: ^4.0.6
+  docx_to_text: ^1.0.1
+  enough_icalendar: ^0.17.0
+  image: 4.3.0
+  archive: 3.6.1
 
 dev_dependencies:
   flutter_test:
@@ -49,6 +55,7 @@ flutter:
   assets:
     - assets/html/
     - assets/branding/
+    - assets/smartgen/
 
   # v9: the type family is bundled, not fetched (one family, on disk, always).
   fonts:

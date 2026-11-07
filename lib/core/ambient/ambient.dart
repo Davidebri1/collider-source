@@ -1,4 +1,3 @@
-import '../vision/vision_tokens.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
@@ -38,7 +37,11 @@ class _AmbientGlowState extends State<AmbientGlow> with SingleTickerProviderStat
         return DecoratedBox(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(widget.radius),
-            boxShadow: VElev.e6,
+            // The provider-colour breathing glow is how an "on" row reads in
+            // the ticker. 9.1.6d (1ee2833) swapped it for the neutral VElev.e6
+            // shadow in its shadow sweep, which made on and off rows look the
+            // same; restored from the v9 source (deea01d).
+            boxShadow: [BoxShadow(color: widget.color.withValues(alpha: widget.min + (widget.max - widget.min) * t), blurRadius: 14 + 10 * t, spreadRadius: -2)],
           ),
           child: child,
         );

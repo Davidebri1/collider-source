@@ -1,0 +1,9 @@
+# Free-plan Wisp relay. Not deployed by this change.
+# Workers Free: WebSocket + cloudflare:sockets connect(). No containers.
+name = "collider-wisp"
+main = "src/index.js"
+compatibility_date = "2024-12-01"
+workers_dev = true
+
+[vars]
+# Origin lock is hard-coded to https://davidebri1.github.io in src/index.js.

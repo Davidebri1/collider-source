@@ -27,7 +27,10 @@ class FilesScreen extends StatefulWidget {
   /// Rail selection (source filter / 'music' / 'search').
   final String category;
 
-  const FilesScreen({super.key, required this.onClose, this.category = 'all'});
+  /// SuperApp port: "Attach to Message" puts the file on the composer.
+  final ValueChanged<StoredFile>? onAttachToPrompt;
+
+  const FilesScreen({super.key, required this.onClose, this.category = 'all', this.onAttachToPrompt});
 
   static const frame = Size(1336.4, 835.2);
   // The group's own width (rail at 0 .. main panel right 1336.4), no margin.
@@ -141,25 +144,16 @@ class _FilesScreenState extends State<FilesScreen> {
             // portrait frame 560 px wide and scaled as one unit to the phone
             // width (~0.7x, readable), instead of shrinking the whole 1336 px
             // landscape window to 0.29x. The sidebar slides in from its button.
-            if (c.maxWidth >= 768) {
-              return FigmaStage(
-                frame: FilesScreen.frame,
-                cropWidth: FilesScreen.cropWidth,
-                center: FilesScreen.center,
-                children: [
-                  Positioned(left: 95.4, top: 0, width: 295, height: 740, child: _sidebar(all)),
-                  Positioned(left: 390.4, top: 0, width: 946, height: 740, child: _main(title, files, cat)),
-                  Positioned(left: 518.8, top: 721, width: 394.1, height: 60.2, child: _segments()),
-                ],
-              );
-            }
+            // David (Nov 7): every pane is centred at the Settings pane's
+            // width, on every screen size. The portrait composition is scaled
+            // so its main panel is exactly VPane.width.
             const pw = FilesScreen.phoneWidth;
-            final s = c.maxWidth / pw;
+            final s = VPane.width(context) / (pw - 28);
             final ph = c.maxHeight / s;
             final top = (MediaQuery.paddingOf(context).top + 60) / s;
             // Clear the home composer and nav bar (playtest: filter bar overlapped the composer).
             final panelH = ph - top - 200 / s;
-            return FigmaStage(
+            return Center(child: SizedBox(width: pw * s, height: c.maxHeight, child: FigmaStage(
               frame: Size(pw, ph),
               cropWidth: pw,
               center: Offset(pw / 2, ph / 2),
@@ -176,7 +170,7 @@ class _FilesScreenState extends State<FilesScreen> {
                   child: NotificationListener<Notification>(child: _sidebar(all, onPicked: () => setState(() => _side = false))),
                 ),
               ],
-            );
+            )));
           })),
           if (_sel.active) Positioned(left: 0, right: 0, bottom: 40, child: Center(child: _selBar(files))),
           Positioned(top: MediaQuery.paddingOf(context).top + 8, right: 8, child: VCloseButton(onTap: widget.onClose)),
@@ -552,7 +546,10 @@ class _FilesScreenState extends State<FilesScreen> {
         barrierDismissible: true,
         barrierLabel: 'Close',
         barrierColor: Colors.black54,
-        pageBuilder: (context, _, __) => Material(type: MaterialType.transparency, child: _FileViewer(file: f, bytes: bytes)),
+        pageBuilder: (context, _, __) => Material(type: MaterialType.transparency, child: _FileViewer(file: f, bytes: bytes, onAttach: widget.onAttachToPrompt == null || !FileStore.isText(f.name) ? null : () {
+          Navigator.of(context).pop();
+          widget.onAttachToPrompt!(f);
+        })),
       );
       return;
     }
@@ -604,7 +601,8 @@ class _ThumbState extends State<_Thumb> {
 class _FileViewer extends StatelessWidget {
   final StoredFile file;
   final Uint8List bytes;
-  const _FileViewer({required this.file, required this.bytes});
+  final VoidCallback? onAttach;
+  const _FileViewer({required this.file, required this.bytes, this.onAttach});
 
   static const int _maxChars = 200000;
 
@@ -642,6 +640,9 @@ class _FileViewer extends StatelessWidget {
             maxWidth: VOverlay.toolWidth(context),
             maxHeight: VOverlay.toolMaxHeight(context),
             leading: close,
+            actions: [
+              if (onAttach != null) VCircleButton(icon: Icons.attach_file_rounded, tooltip: 'Attach to Message', onTap: onAttach!),
+            ],
             child: content,
           ),
         ),

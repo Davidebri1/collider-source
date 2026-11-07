@@ -1,0 +1,22 @@
+# Collider AccountSync Worker -> https://collider.ebridavid.workers.dev
+# API only (no static assets): /health, /auth/*, /v1/records*, /v1/blobs*.
+# DEPLOY.md has the dashboard steps (no wrangler login, no API tokens).
+name = "collider"
+main = "src/index.js"
+compatibility_date = "2026-10-30"
+workers_dev = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "collider-account"
+database_id = "REPLACE_WITH_D1_ID"   # only for wrangler; the dashboard binds by picking the database
+migrations_dir = "migrations"
+
+[[kv_namespaces]]
+binding = "BLOBS"
+id = "REPLACE_WITH_KV_ID"            # only for wrangler; the dashboard binds by picking the namespace
+
+# Variables and secrets (Dashboard > Worker > Settings > Variables and Secrets):
+#   GOOGLE_CLIENT_ID  (text)  Google OAuth Web client ID; needed for /auth/google
+#   APPLE_CLIENT_ID   (text)  optional
+#   DEV_AUTH          leave unset in production ("1" enables /auth/dev for tests)

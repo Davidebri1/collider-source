@@ -20,9 +20,9 @@ void main() {
   test('V2 Smart Gen view chips: one horizontal swipe row, Align in header', () {
     final pane = File('lib/features/smartgen/sg_pane.dart').readAsStringSync();
     final chips = pane.split('Widget _viewChips(SgBoard b)')[1].split('Widget _glassChoice')[0];
-    expect(chips.contains('Wrap('), isFalse, reason: 'view chips must not Wrap into multiple rows');
-    expect(chips.contains('scrollDirection: Axis.horizontal'), isTrue);
-    expect(chips.contains('SgScroll()'), isTrue, reason: 'no scrollbar');
+    expect(chips.contains('Wrap('), isTrue, reason: 'view chips wrap so a label is never cropped');
+    expect(chips.contains('scrollDirection: Axis.horizontal'), isFalse);
+    expect(chips.contains('SgScroll()'), isFalse, reason: 'the chip row is not a scroller');
     final header = pane.split('Widget _header(SgBoard b)')[1].split('Widget _viewChips')[0];
     expect(header.contains('Align to grid') || header.contains('Free place'), isTrue,
         reason: 'Align stays reachable in board chrome');

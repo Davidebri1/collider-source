@@ -99,7 +99,10 @@ void main() {
 
   test('field types and the done hook match the clone', () {
     expect(kFieldTypes, ['text', 'textarea', 'richtext', 'number', 'date', 'datetime', 'checkbox', 'select', 'multi', 'person', 'url', 'file']);
-    expect(SgBoardKind.values.map((k) => k.name), ['notebook', 'portfolio', 'corkboard', 'clipboard', 'ledger', 'desk', 'binder', 'slate']);
+    // Board kinds are the spec's work areas; canvas types (Notebook, Portfolio…) are not board kinds.
+    expect(SgBoardKind.values.map((k) => k.label), ['Kanban Board with Swim lanes', 'Calendar', 'Whiteboard', 'Long wood bench', 'Workbench', 'Desk', 'Table', 'Wood round table', 'Wood Night Stand', 'Wood Long Table', 'Wood Coffee Table']);
+    expect(SgBoardKindX.parse('notebook'), SgBoardKind.desk);
+    expect(SgBoardKindX.parse('slate'), SgBoardKind.whiteboard);
     expect(SgHoldKind.values.map((k) => k.name), ['tray', 'shelf', 'table', 'wall', 'spread', 'rack']);
     final status = <String, String>{};
     runHooks(
