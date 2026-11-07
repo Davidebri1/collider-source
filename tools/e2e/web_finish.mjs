@@ -159,6 +159,16 @@ async function fallback402(h) {
   h.check('fallback: the consensus card shows the answer (Canberra)', !!top && /canberra/i.test(top.label), (top?.label || '').replace(/\s+/g, ' ').slice(0, 160));
   let [ok, d] = painted(h.OUT, fT, ['Canberra']);
   h.check('fallback: the answer is painted on screen (OCR)', ok, d);
+  // A second question: entries that just hung are skipped for 10 minutes.
+  const c2 = h.consoleLines.length;
+  await sendFromComposer(h, page, 'What is the capital of Canada? Answer in one sentence.');
+  const t2 = Date.now();
+  while (Date.now() - t2 < 300000 && !chainLines(h, c2).some((l) => /\[chain\] consensus (answered by|9\/9 )/.test(l))) await h.sleep(1000);
+  const s2 = Math.round((Date.now() - t2) / 1000);
+  h.timing = { ...(h.timing || {}), consensus2: s2 };
+  const l2 = chainLines(h, c2).filter((l) => /\] consensus /.test(l));
+  h.check('fallback: a second question answers within 20 s (hung entries skipped)', s2 <= 20 && l2.some((l) => /answered by/.test(l)), `${s2} s | ${l2.slice(0, 9).join(' | ')}`);
+  await h.shot(page, 'fallback_second_question');
   // Genie (Smart Gen), same list.
   const c1 = h.consoleLines.length;
   await h.boot(page, '?app=smartgen&sg=canvas'); // makes the first board, so Genie has one to edit
@@ -275,12 +285,10 @@ async function smartGenNames(h) {
   await h.boot(page, '?app=smartgen&sg=canvas');
   await h.sleep(1500);
   const canvasTypes = ['Notebook', 'Gallery', 'Portfolio', 'Folder', 'Storyboard', 'Vision board', 'US map', 'World map', 'Swimlane'];
-  // Scroll the view row end to end and collect every chip it offers.
+  // Every chip the view row offers (the row is in the semantics tree even
+  // where it scrolls; a sideways wheel here would switch surfaces).
   const row = new Set();
-  for (let i = 0; i < 6; i++) {
-    for (const l of await h.labels(page)) if (l.y > 150 && l.y < 220) row.add(l.label);
-    await page.mouse.move(h.W / 2, 188); await page.mouse.wheel(i < 3 ? 300 : -300, 0); await h.sleep(400);
-  }
+  for (const l of await h.labels(page)) if (l.y > 150 && l.y < 220) row.add(l.label);
   const fRow = await h.shot(page, 'names_view_row');
   const offered = canvasTypes.filter((t) => row.has(t));
   h.check('names: the board view row offers no canvas types (Notebook, Gallery, Portfolio, Folder...)', offered.length === 0 && row.has('Canvas'), `${fRow} row=${JSON.stringify([...row])}`);

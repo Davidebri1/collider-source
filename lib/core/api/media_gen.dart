@@ -470,6 +470,12 @@ class MediaGen {
   /// the next entry is asked (David, Nov 7: ~20 s; ticker rows keep 150 s).
   static const Duration agentFirstByte = Duration(seconds: 20);
 
+  /// An entry that just hung (no first byte in [agentFirstByte]) is skipped
+  /// by every agent list for this long, so the next question does not wait
+  /// on it again.
+  static const Duration hungCoolOff = Duration(minutes: 10);
+  final Map<String, DateTime> _hungUntil = {};
+
   /// The one chain-runner every model call goes through. Asks each entry of
   /// [chain] in order and returns the first real answer. Any failure (402,
   /// 401, 404, 410, 429 after its retries, 5xx, timeout, empty answer) moves
@@ -481,6 +487,12 @@ class MediaGen {
       final e = chain[i];
       if (!_wireUsable(e.wire)) {
         first ??= MediaGenError(_textWires[e.wire]!.cors ? 'no-key' : 'cors');
+        continue;
+      }
+      final hungKey = '${e.wire} ${e.remote}';
+      if (perEntry != null && i < chain.length - 1 && (_hungUntil[hungKey]?.isAfter(DateTime.now()) ?? false)) {
+        // ignore: avoid_print
+        print('[chain] $role ${i + 1}/${chain.length} ${e.model} via ${e.wire} skipped: hung in the last ${hungCoolOff.inMinutes} min');
         continue;
       }
       try {
@@ -505,6 +517,7 @@ class MediaGen {
       } catch (err) {
         // ignore: avoid_print
         print('[chain] $role ${i + 1}/${chain.length} ${e.model} via ${e.wire} failed: ${'$err'.split('\n').first}');
+        if ('$err'.contains('timeout')) _hungUntil[hungKey] = DateTime.now().add(hungCoolOff);
         if (first == null || '$first'.contains('no-key') || '$first'.contains('cors')) first = err;
       }
     }
