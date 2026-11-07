@@ -86,7 +86,10 @@ async function newPage(browser) {
 }
 
 async function boot(page, q = '', { semantics = true } = {}) {
-  await page.goto(APP + q, { waitUntil: 'networkidle', timeout: 120000 });
+  // 'load', then up to 30 s for the network to settle: a reload with a
+  // long-lived request open (seen in Smart Gen) never reaches networkidle.
+  await page.goto(APP + q, { waitUntil: 'load', timeout: 120000 });
+  await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
   for (let i = 0; i < 80; i++) {
     if (await page.evaluate(() => !!document.querySelector('flt-glass-pane, flutter-view'))) break;
     await sleep(250);
