@@ -30,7 +30,13 @@ class WebFrame extends StatefulWidget {
   /// A link or form inside the page asked for [url]. The browser opens it as
   /// a new address, so the address bar and Back follow the page.
   final ValueChanged<String>? onNavigate;
-  const WebFrame({super.key, required this.url, this.onNavigate});
+
+  /// Native-only hooks (the WebView reports redirects, titles and reloads in
+  /// place); the proxied frame gets a new address for each of those instead.
+  final ValueChanged<String>? onRedirect;
+  final void Function(String url, String title)? onTitle;
+  final int reload;
+  const WebFrame({super.key, required this.url, this.onNavigate, this.onRedirect, this.onTitle, this.reload = 0});
 
   @override
   State<WebFrame> createState() => _WebFrameState();

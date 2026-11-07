@@ -1,4 +1,5 @@
 import '../../../core/theme/edge_fade.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import '../../../core/vision/vision_kit.dart';
 import '../models/browser_tab.dart';
@@ -48,6 +49,7 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
   bool _overview = false;
   final TextEditingController _addr = TextEditingController();
   final Map<String, List<String>> _back = {};
+  final Map<String, List<String>> _fwd = {};
   int _reload = 0;
   String? _shownUrl;
   // OCT24 checkpoint (ARGON OCT24 9c7dd3a): sidebar with tabs, Bookmarks, History.
@@ -99,6 +101,7 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
   void _open(String url, String title) {
     final tab = _tab;
     (_back[tab.id] ??= []).add(tab.url);
+    _fwd[tab.id]?.clear();
     widget.onTabUpdated?.call(tab.copyWith(url: url, title: title));
     setState(() => _overview = false);
   }
@@ -119,8 +122,32 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
     final stack = _back[_tab.id];
     if (stack == null || stack.isEmpty) return;
     final prev = stack.removeLast();
+    (_fwd[_tab.id] ??= []).add(_tab.url);
     widget.onTabUpdated?.call(_tab.copyWith(url: prev, title: _host(prev)));
     setState(() {});
+  }
+
+  void _goForward() {
+    final stack = _fwd[_tab.id];
+    if (stack == null || stack.isEmpty) return;
+    final next = stack.removeLast();
+    (_back[_tab.id] ??= []).add(_tab.url);
+    widget.onTabUpdated?.call(_tab.copyWith(url: next, title: _host(next)));
+    setState(() {});
+  }
+
+  /// Native: the page we asked for was redirected while loading. The tab and
+  /// address bar follow it without adding a Back entry.
+  void _redirected(String url) {
+    widget.onTabUpdated?.call(_tab.copyWith(url: url, title: _host(url)));
+    setState(() {});
+  }
+
+  /// Native: a page finished loading with its own title; History keeps it.
+  void _titled(String url, String title) {
+    if (_tab.url == url && _tab.title != title) widget.onTabUpdated?.call(_tab.copyWith(title: title));
+    BrowserStore.instance.visited(url, title);
+    if (mounted) setState(() {});
   }
 
   @override
@@ -130,7 +157,8 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
       _shownUrl = tab.url;
       _addr.text = _host(tab.url);
       // A page was shown: History keeps it (OCT24 BrowserStore.visited).
-      WidgetsBinding.instance.addPostFrameCallback((_) => BrowserStore.instance.visited(tab.url, tab.title));
+      // Natively the WebView reports it once loaded, with its real title.
+      if (kIsWeb) WidgetsBinding.instance.addPostFrameCallback((_) => BrowserStore.instance.visited(tab.url, tab.title));
     }
     final media = MediaQuery.sizeOf(context);
     final safe = MediaQuery.paddingOf(context);
@@ -176,6 +204,14 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
                           onTap: _goBack,
                           tooltip: 'Back',
                           child: const Icon(Icons.arrow_back_rounded, size: 15, color: VColors.textSecondary),
+                        ),
+                        const SizedBox(width: 6),
+                      ],
+                      if ((_fwd[tab.id] ?? const []).isNotEmpty) ...[
+                        VPress(
+                          onTap: _goForward,
+                          tooltip: 'Forward',
+                          child: const Icon(Icons.arrow_forward_rounded, size: 15, color: VColors.textSecondary),
                         ),
                         const SizedBox(width: 6),
                       ],
@@ -314,6 +350,22 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
   }
 
   Widget _page(BrowserTab tab) {
+    if (!kIsWeb) {
+      // One WebView per tab for as long as the tab lives: it follows its own
+      // links and redirects and reloads in place.
+      return ClipRRect(
+        key: ValueKey('page-${tab.id}'),
+        borderRadius: BorderRadius.circular(VRadius.xl),
+        child: WebFrame(
+          key: ValueKey('frame-${tab.id}'),
+          url: tab.url,
+          reload: _reload,
+          onNavigate: (u) => _open(u, _host(u)),
+          onRedirect: _redirected,
+          onTitle: _titled,
+        ),
+      );
+    }
     return ClipRRect(
       key: ValueKey('page-${tab.url}-$_reload'),
       borderRadius: BorderRadius.circular(VRadius.xl),
