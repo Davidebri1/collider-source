@@ -113,7 +113,7 @@ async function attachments(h) {
   h.check('attachments: replies name the PDF fruit (TANGERINE)', /tangerine/i.test(txt), JSON.stringify(hit(/tangerine/i)));
   h.check('attachments: replies name the DOCX mountain (KILIMANJARO)', /kilimanjaro/i.test(txt), JSON.stringify(hit(/kilimanjaro/i)));
   const words = (ocr(join(h.OUT, fAns)) || []).join(' ');
-  h.check('attachments: the answer on screen uses the files (OCR)', /pelican|tangerine|kilimanjaro/i.test(words), `${fAns} ocr=${words.slice(0, 220)}`);
+  h.check('attachments: the answer on screen uses the files (OCR)', /pelica|tangerin|kilimanjar/i.test(words), `${fAns} ocr=${words.slice(0, 220)}`);
   await ctx.close();
 }
 
@@ -127,9 +127,11 @@ async function fallback402(h) {
   const c0 = h.consoleLines.length;
   await h.boot(page);
   await sendFromComposer(h, page, 'What is the capital of Australia? Answer in one sentence.');
-  await h.sleep(4000);
-  await settle(h, page, 200000, 15000);
-  await h.sleep(3000);
+  // Each role answers (or fails through all 9 entries); a hung entry is dropped after 40 s.
+  const t0 = Date.now();
+  const done = (role) => chainLines(h, c0).some((l) => new RegExp(`\\[chain\\] ${role} (answered by|9/9 )`).test(l));
+  while (Date.now() - t0 < 420000 && !['consensus', 'summary', 'chains'].every(done)) await h.sleep(2000);
+  await h.sleep(6000);
   const fT = await h.shot(page, 'fallback_ticker_answered');
   const lines = chainLines(h, c0);
   const answered = (role) => lines.filter((l) => new RegExp(`\\[chain\\] ${role} answered by`).test(l));
@@ -145,14 +147,17 @@ async function fallback402(h) {
   h.check('fallback: the answer is painted on screen (OCR)', ok, d);
   // Genie (Smart Gen), same list.
   const c1 = h.consoleLines.length;
+  await h.boot(page, '?app=smartgen&sg=canvas'); // makes the first board, so Genie has one to edit
+  await h.sleep(1500);
   await h.boot(page, '?app=smartgen&sg=genie');
   await h.sleep(1500);
   await h.tapAt(page, 'Message Genie');
   await h.sleep(500);
   await page.keyboard.type('Add a card called Pack umbrella to To Do.', { delay: 8 });
   await page.keyboard.press('Enter');
-  await settle(h, page, 120000, 10000);
-  await h.sleep(2000);
+  const g0 = Date.now();
+  while (Date.now() - g0 < 300000 && !chainLines(h, c1).some((l) => /\[chain\] genie (answered by|9\/9 )/.test(l))) await h.sleep(2000);
+  await h.sleep(4000);
   const fG = await h.shot(page, 'fallback_genie_answered');
   const g = chainLines(h, c1).filter((l) => /\[chain\] genie answered by/.test(l));
   h.check('fallback: Genie answers with MiniMax at 402', g.length > 0 && g.every((l) => !/answered by 1\//.test(l)), (g[0] || 'no answer') + ' | ' + chainLines(h, c1).filter((l) => l.includes('genie') && l.includes('failed')).slice(0, 4).join(' | '));

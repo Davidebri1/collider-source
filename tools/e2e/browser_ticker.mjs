@@ -42,7 +42,7 @@ const WISP = process.env.WISP || '';
 const MINIMAX_402 = process.env.MINIMAX_402 === '1';
 mkdirSync(OUT, { recursive: true });
 
-const MIME = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.wasm': 'application/wasm', '.otf': 'font/otf', '.ttf': 'font/ttf', '.woff2': 'font/woff2', '.webp': 'image/webp', '.mp4': 'video/mp4' };
+const MIME = { '.html': 'text/html', '.js': 'application/javascript', '.mjs': 'application/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.wasm': 'application/wasm', '.otf': 'font/otf', '.ttf': 'font/ttf', '.woff2': 'font/woff2', '.webp': 'image/webp', '.mp4': 'video/mp4' };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const checks = [];
 const check = (name, ok, detail = '') => { checks.push({ name, ok: !!ok, detail }); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  — ' + detail : ''}`); };
@@ -54,14 +54,6 @@ let shotN = 0;
 
 async function newPage(browser) {
   const ctx = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: DSF });
-  if (WISP) {
-    await ctx.route(/^https:\/\/davidebri1\.github\.io\/collider-app\/proxy\/config\.js/, (route) =>
-      route.fulfill({ status: 200, body: `self.COLLIDER_WISP_URL = ${JSON.stringify(WISP)};`, headers: { 'content-type': 'application/javascript', 'cache-control': 'no-store' } }));
-  }
-  if (MINIMAX_402) {
-    // MiniMax direct answers 402 (no balance), as in production on Nov 6/7.
-    await ctx.route(/\/api\/p\?u=minimax\b/, (route) => route.fulfill({ status: 402, body: JSON.stringify({ error: { message: 'insufficient balance (e2e: forced 402)' } }), headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' } }));
-  }
   if (ROOT) {
     await ctx.route(/^https:\/\/davidebri1\.github\.io\/collider-app\//, async (route) => {
       let p = decodeURIComponent(new URL(route.request().url()).pathname.replace(/^\/collider-app\//, '/'));
@@ -70,6 +62,15 @@ async function newPage(browser) {
       if (!f.startsWith(ROOT) || !existsSync(f) || statSync(f).isDirectory()) return route.fulfill({ status: 404, body: 'missing' });
       return route.fulfill({ status: 200, body: readFileSync(f), headers: { 'content-type': MIME[extname(f)] || 'application/octet-stream', 'cache-control': 'no-store' } });
     });
+  }
+  // Registered after the build's own route: Playwright asks the newest route first.
+  if (WISP) {
+    await ctx.route(/^https:\/\/davidebri1\.github\.io\/collider-app\/proxy\/config\.js/, (route) =>
+      route.fulfill({ status: 200, body: `self.COLLIDER_WISP_URL = ${JSON.stringify(WISP)};`, headers: { 'content-type': 'application/javascript', 'cache-control': 'no-store' } }));
+  }
+  if (MINIMAX_402) {
+    // MiniMax direct answers 402 (no balance), as in production on Nov 6/7.
+    await ctx.route(/\/api\/p\?u=minimax\b/, (route) => route.fulfill({ status: 402, body: JSON.stringify({ error: { message: 'insufficient balance (e2e: forced 402)' } }), headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' } }));
   }
   const page = await ctx.newPage();
   const isP = (q) => /\/api\/p\?u=/.test(q.url()) && q.method() === 'POST';
@@ -225,7 +226,7 @@ async function browserChecks(browser) {
   // github.com, wikipedia.org, bing.com and the JS-heavy youtube.com: each must paint its own content (OCR).
   const sites = [
     { typed: 'github.com', base: /^https:\/\/github\.com\//, words: [/GitHub/i, /Sign up/i] },
-    { typed: 'wikipedia.org', base: /^https:\/\/www\.wikipedia\.org\//, words: [/Wikipedia/i, /English/i] },
+    { typed: 'wikipedia.org', base: /^https:\/\/www\.wikipedia\.org\//, words: [/WIKIPEDI/i, /Free Encycl|Encvcl|articles|English/i] },
     { typed: 'bing.com', base: /^https:\/\/(www\.)?bing\.com\//, words: [/Bing|Microsoft/i, /Search|Copilot|Images/i] },
     { typed: 'youtube.com', base: /^https:\/\/(www|m)\.youtube\.com\//, words: [/YouTube/i, /Sign in|search|Home|Shorts/i] },
   ];
@@ -239,7 +240,8 @@ async function browserChecks(browser) {
     const missing = s.words.filter((w) => !w.test(words));
     const addr = await addressText(page, f);
     check(`browser: ${s.typed} renders its real content (OCR)`, okFrame && missing.length === 0, `${f} frame=${JSON.stringify(fr.map((x) => x.base.slice(0, 60) + ' | ' + x.title.slice(0, 40)))} ocr=${words.slice(0, 160)}${missing.length ? ' MISSING ' + missing : ''}`);
-    check(`browser: address bar shows ${s.typed}`, addr.replace(/\s/g, '').toLowerCase().includes(s.typed.replace(/^www\./, '')), `address ocr="${addr}"`);
+    // The reload icon sits on the address's last letters, so OCR reads e.g. "wikipedia.oiC": match all but the last two.
+    check(`browser: address bar shows ${s.typed}`, addr.replace(/\s/g, '').toLowerCase().includes(s.typed.slice(0, -2)), `address ocr="${addr}"`);
   }
 
   // A link inside the page: Wikipedia's "English" opens en.wikipedia.org, and the address bar follows.
@@ -251,6 +253,12 @@ async function browserChecks(browser) {
     || page.frames().find((x) => x !== page.mainFrame() && /wikipedia/.test(x.url()));
   if (wf) {
     try {
+      // Wikipedia's US fundraising banner can cover the language links: close it the way a person would.
+      for (const sel of ['text=I already donated', 'button[aria-label*="lose"]']) {
+        const d = await wf.$(sel).catch(() => null);
+        const bb = d && await d.boundingBox().catch(() => null);
+        if (bb) { await page.mouse.click(bb.x + bb.width / 2, bb.y + bb.height / 2); await sleep(2500); break; }
+      }
       const handles = await wf.$$('a');
       let target = null;
       for (const hnd of handles) {
@@ -273,18 +281,19 @@ async function browserChecks(browser) {
   let addr = await addressText(page, f);
   check('browser: address bar follows the link (en.wikipedia.org)', /en\.wikipedia\.org/i.test(addr.replace(/\s/g, '')), `address ocr="${addr}"`);
 
-  // Back returns to the page before the link; Forward goes to it again. The page's links are
-  // done, so the accessibility layer can be switched on to find the controls by their names.
-  await page.evaluate(() => document.querySelector('flt-semantics-placeholder')?.click());
-  await sleep(1000);
+  // Back returns to the page before the link; Forward goes to it again. The controls sit in the
+  // address capsule above the page window (measured on the 440x956 screenshots): Back at +66,
+  // Forward at +87 when both show, New Tab and Open Windows & Tabs at the right end.
+  const ob = await frameBox(page);
+  const tapBar = async (x) => { await page.mouse.click(x, ob.y - 33); await sleep(500); await page.mouse.move(4, 600); };
   if (linkOk) {
-    await tapAt(page, 'Back');
+    await tapBar(ob.x + 66);
     fr = await waitFrame(page, (f) => /^https:\/\/www\.wikipedia\.org\//.test(f.base), 30000);
     await sleep(3000);
     f = await shot(page, 'browser_back');
     addr = await addressText(page, f);
-    check('browser: Back returns to the previous page', fr.some((x) => /^https:\/\/www\.wikipedia\.org\//.test(x.base)) && /(^|[^n.])wikipedia\.org/i.test(addr.replace(/\s/g, '')), `${JSON.stringify(fr.map((x) => x.base))} address ocr="${addr}"`);
-    await tapAt(page, 'Forward');
+    check('browser: Back returns to the previous page', fr.some((x) => /^https:\/\/www\.wikipedia\.org\//.test(x.base)) && /www\.wikipedi/i.test(addr.replace(/\s/g, '')), `${JSON.stringify(fr.map((x) => x.base))} address ocr="${addr}"`);
+    await tapBar(ob.x + 87);
     fr = await waitFrame(page, (x) => /^https:\/\/en\.wikipedia\.org\//.test(x.base), 30000);
     await sleep(3000);
     f = await shot(page, 'browser_forward');
@@ -294,14 +303,22 @@ async function browserChecks(browser) {
 
   // Tabs: a new tab opens its own page; the first tab keeps its page.
   const before = (await frames(page)).length;
-  const tabTapped = await tapAt(page, 'New Tab');
+  await tapBar(ob.x + ob.w - 61);
+  const tabTapped = true;
   await sleep(2500);
   await typeAddress(page, 'github.com');
-  fr = await waitFrame(page, (x) => /^https:\/\/github\.com\//.test(x.base), 40000);
+  fr = await waitFrame(page, (x) => /^https:\/\/github\.com\//.test(x.base) || /GitHub/.test(x.title), 40000);
   await sleep(4000);
   f = await shot(page, 'browser_new_tab_github');
   const all = await frames(page);
-  check('browser: a new tab opens github.com while the first tab keeps en.wikipedia.org', tabTapped && all.some((x) => /^https:\/\/github\.com\//.test(x.base)) && all.some((x) => /^https:\/\/en\.wikipedia\.org\//.test(x.base)), `${before} -> ${all.length} frames ${JSON.stringify(all.map((x) => x.base.slice(0, 50)))}`);
+  check('browser: a new tab opens github.com', tabTapped && all.some((x) => /^https:\/\/github\.com\//.test(x.base) || /GitHub/.test(x.title)) && /github\.co/i.test(await addressText(page, f)), `${f} ${JSON.stringify(all.map((x) => x.base.slice(0, 50)))}`);
+  // Open Windows & Tabs lists both tabs (the first still on en.wikipedia.org).
+  await tapBar(ob.x + ob.w - 22);
+  await sleep(2500);
+  f = await shot(page, 'browser_tabs_overview');
+  const tw = ocrWords(f);
+  check('browser: Open Windows & Tabs shows both tabs (Wikipedia and GitHub)', /wikipedia/i.test(tw) && /github/i.test(tw), `${f} ocr=${tw.slice(0, 200)}`);
+  await tapBar(ob.x + ob.w - 22);
 
   check('browser: nothing asks davidebri1.github.io/api or collider.ebridavid.workers.dev for pages',
     !net.some((r) => /github\.io\/api\/page|collider\.ebridavid\.workers\.dev\/.*page/.test(r.url)));

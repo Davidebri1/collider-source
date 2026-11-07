@@ -412,12 +412,16 @@ class MediaGen {
   /// "chains", or a row id): "3/9 MiniMax M3 via oc". Read by the e2e.
   final Map<String, String> answeredBy = {};
 
+  /// How long one entry of an agent list (consensus, summaries, chains, Genie) may take before the
+  /// next entry is asked.
+  static const Duration _agentEntryLimit = Duration(seconds: 40);
+
   /// The one chain-runner every model call goes through. Asks each entry of
   /// [chain] in order and returns the first real answer. Any failure (402,
   /// 401, 404, 410, 429 after its retries, 5xx, timeout, empty answer) moves
   /// on to the next entry; it only throws when every entry has failed, with
   /// the first meaningful error.
-  Future<String> runChain(String role, List<ChainEntry> chain, List<Map<String, Object>> messages, {int? maxTokens}) async {
+  Future<String> runChain(String role, List<ChainEntry> chain, List<Map<String, Object>> messages, {int? maxTokens, Duration? perEntry}) async {
     Object? first;
     for (var i = 0; i < chain.length; i++) {
       final e = chain[i];
@@ -429,7 +433,10 @@ class MediaGen {
         final msgs = _hasImages(messages) && !_seesImages(e) ? await _describeImages(messages) : messages;
         final String text;
         try {
-          text = await _textCall(e.wire, e.remote, msgs, maxTokens: maxTokens);
+          final call = _textCall(e.wire, e.remote, msgs, maxTokens: maxTokens);
+          // A listed entry that hangs (NVIDIA's DeepSeek 4.1 Flash and GLM 5.3 Flash ran into the
+          // 125 s gateway limit on Nov 7) must not hold up the rest of the list.
+          text = perEntry != null && i < chain.length - 1 ? await call.timeout(perEntry, onTimeout: () => throw const MediaGenError('timeout')) : await call;
         } catch (err) {
           // A model we thought could see images refused them: describe instead.
           if (!identical(msgs, messages) || !_hasImages(messages)) rethrow;
@@ -509,20 +516,20 @@ class MediaGen {
 
   /// Consensus agent 1 (headcount / essence / groups): David's consensus list.
   Future<String> consensus(List<Map<String, Object>> messages) =>
-      runChain('consensus', consensusChain, messages, maxTokens: 2048);
+      runChain('consensus', consensusChain, messages, maxTokens: 2048, perEntry: _agentEntryLimit);
 
   /// The one-line summary under each ticker reply: the Consensus agent, so the
   /// same list.
   Future<String> summary(List<Map<String, Object>> messages) =>
-      runChain('summary', consensusChain, messages, maxTokens: 2048);
+      runChain('summary', consensusChain, messages, maxTokens: 2048, perEntry: _agentEntryLimit);
 
   /// Consensus agent 2 (logical / "link" chain analysis).
   Future<String> logicalChains(List<Map<String, Object>> messages) =>
-      runChain('chains', logicalChainChain, messages, maxTokens: 2048);
+      runChain('chains', logicalChainChain, messages, maxTokens: 2048, perEntry: _agentEntryLimit);
 
   /// Smart Gen Genie: David's Smart Gen list.
   Future<String> genie(List<Map<String, Object>> messages) =>
-      runChain('genie', smartGenChain, messages, maxTokens: 2048);
+      runChain('genie', smartGenChain, messages, maxTokens: 2048, perEntry: _agentEntryLimit);
 
   /// chat.ts hasCredentials: is there a key for the wire this route uses?
   /// Pollinations is keyless in the source (it now answers 402, D61).
