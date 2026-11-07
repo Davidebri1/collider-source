@@ -25,6 +25,8 @@ function ocrRaw(file) {
   }
 }
 export const ocr = (file) => ocrRaw(file)?.lines || null;
+/** [[text, x, y], …] in screenshot pixels (divide by the device scale for page points). */
+export const ocrBoxes = (file) => ocrRaw(file)?.boxes || null;
 /** Screen point of the painted text that starts with [prefix] (OCR). */
 export const ocrFind = (file, prefix) => (ocrRaw(file)?.boxes || []).find((b) => b[0].replace(/\s/g, '').toLowerCase().startsWith(prefix.replace(/\s/g, '').toLowerCase()));
 const squash = (s) => s.toLowerCase().replace(/[^a-z0-9:&/.]/g, '').replace(/:o\b/g, ':0');
@@ -130,7 +132,7 @@ async function filesAttach(h) {
   [ok, d] = painted(OUT, fList, ['import-pro']);
   check('files: after reload the imported file is still listed', ok, d);
   const at = ocrFind(join(OUT, fList), 'import-pro');
-  if (at) await page.mouse.click(at[1], at[2] - 60);
+  if (at) await page.mouse.click(at[1] / (h.DSF || 1), at[2] / (h.DSF || 1) - 60);
   await sleep(1800);
   const fView = await shot(page, 'files_view_text');
   [ok, d] = painted(OUT, fView, [name, 'animal in this file is a narwhal']);

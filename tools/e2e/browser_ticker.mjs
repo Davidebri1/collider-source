@@ -23,7 +23,8 @@
 import { createRequire } from 'module';
 import { mkdirSync, writeFileSync, readFileSync, existsSync, statSync } from 'fs';
 import { join, extname, resolve } from 'path';
-import { featureChecks } from './backup_features.mjs';
+import { featureChecks, ocr, ocrBoxes } from './backup_features.mjs';
+import { webFinishChecks } from './web_finish.mjs';
 
 const require = createRequire(import.meta.url);
 const PW = process.env.PLAYWRIGHT_CORE || '/usr/local/lib/pnpm/5/.pnpm/playwright-core@1.59.1/node_modules/playwright-core';
@@ -34,6 +35,11 @@ const ROOT = process.env.ROOT ? resolve(process.env.ROOT) : null;
 const OUT = resolve(process.env.OUT || 'e2e-out');
 const WAIT = Number(process.env.TICKER_WAIT_S || 150) * 1000;
 const W = 440, H = 956;
+export const DSF = Number(process.env.DSF || 2); // every screenshot at device scale 2 (880x1912)
+// WISP: a Wisp server for the in-app browser's real proxy (Scramjet). Test-only: the build's
+// proxy/config.js is served with this address; the build itself is not changed.
+const WISP = process.env.WISP || '';
+const MINIMAX_402 = process.env.MINIMAX_402 === '1';
 mkdirSync(OUT, { recursive: true });
 
 const MIME = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.wasm': 'application/wasm', '.otf': 'font/otf', '.ttf': 'font/ttf', '.woff2': 'font/woff2', '.webp': 'image/webp', '.mp4': 'video/mp4' };
@@ -47,7 +53,15 @@ let inFlight = 0; // provider calls (Worker /api/p) started and not finished
 let shotN = 0;
 
 async function newPage(browser) {
-  const ctx = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
+  const ctx = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: DSF });
+  if (WISP) {
+    await ctx.route(/^https:\/\/davidebri1\.github\.io\/collider-app\/proxy\/config\.js/, (route) =>
+      route.fulfill({ status: 200, body: `self.COLLIDER_WISP_URL = ${JSON.stringify(WISP)};`, headers: { 'content-type': 'application/javascript', 'cache-control': 'no-store' } }));
+  }
+  if (MINIMAX_402) {
+    // MiniMax direct answers 402 (no balance), as in production on Nov 6/7.
+    await ctx.route(/\/api\/p\?u=minimax\b/, (route) => route.fulfill({ status: 402, body: JSON.stringify({ error: { message: 'insufficient balance (e2e: forced 402)' } }), headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' } }));
+  }
   if (ROOT) {
     await ctx.route(/^https:\/\/davidebri1\.github\.io\/collider-app\//, async (route) => {
       let p = decodeURIComponent(new URL(route.request().url()).pathname.replace(/^\/collider-app\//, '/'));
@@ -104,7 +118,7 @@ async function boot(page, q = '', { semantics = true } = {}) {
   }
 }
 
-const shot = async (page, name) => { const f = `${String(++shotN).padStart(2, '0')}_${name}.png`; await page.screenshot({ path: join(OUT, f) }); return f; };
+const shot = async (page, name) => { const f = `${String(++shotN).padStart(2, '0')}_${name}.png`; await page.screenshot({ path: join(OUT, f) }); return f; }; // 880x1912 at DSF 2
 
 /** Semantics nodes with a label: [{label, x, y, w, h}] */
 const labels = (page) => page.evaluate(() => {
@@ -119,20 +133,33 @@ const labels = (page) => page.evaluate(() => {
   return out;
 });
 
-/** The browser frame(s): title and base address of the markup on screen. */
-const frames = (page) => page.evaluate(() => {
-  const out = [];
-  const walk = (e) => {
-    if (e.tagName === 'IFRAME') {
-      const sd = e.getAttribute('srcdoc') || '';
-      out.push({ src: e.src || '', title: ((sd.match(/<title[^>]*>([^<]*)/i) || [])[1] || '').trim(), base: (sd.match(/<base href="([^"]*)"/) || [])[1] || '', bytes: sd.length });
-    }
-    for (const c of e.children || []) walk(c);
-    if (e.shadowRoot) for (const c of e.shadowRoot.children) walk(c);
-  };
-  walk(document.body);
+/** The browser frame(s): title and the real address on screen. srcdoc frames (page proxy)
+ *  carry their base; live frames (Scramjet, proxy/go/<encoded>) are decoded to the real address. */
+const realOf = (u) => { let m; for (let i = 0; i < 4 && (m = u.match(/\/proxy\/go\/(.+)$/)); i++) u = decodeURIComponent(m[1]); return u; };
+const frames = async (page) => {
+  const out = await page.evaluate(() => {
+    const out = [];
+    const walk = (e) => {
+      if (e.tagName === 'IFRAME' && e.getAttribute('srcdoc') != null) {
+        const sd = e.getAttribute('srcdoc') || '';
+        out.push({ src: e.src || '', title: ((sd.match(/<title[^>]*>([^<]*)/i) || [])[1] || '').trim(), base: (sd.match(/<base href="([^"]*)"/) || [])[1] || '', bytes: sd.length });
+      }
+      for (const c of e.children || []) walk(c);
+      if (e.shadowRoot) for (const c of e.shadowRoot.children) walk(c);
+    };
+    walk(document.body);
+    return out;
+  });
+  for (const f of page.frames()) {
+    const u = f.url();
+    if (!/\/proxy\/go\//.test(u)) continue;
+    let title = '', bytes = 0;
+    try { [title, bytes] = await f.evaluate(() => [document.title, document.documentElement.outerHTML.length]); } catch {}
+    out.push({ src: u, base: realOf(u), title: (title || '').trim(), bytes, live: true, frame: f });
+  }
   return out;
-});
+};
+export { realOf };
 
 /** Taps the centre of the labelled node with the mouse, scrolling the ticker
  *  column when the row is below the visible part of the list. */
@@ -176,75 +203,105 @@ async function waitFrame(page, pred, ms = 30000) {
   return fr;
 }
 
+/** OCR words painted on a screenshot (tools/e2e/ocr.py). */
+const ocrWords = (f) => (ocr(join(OUT, f)) || []).join(' ');
+/** The address field's painted text: OCR of the strip above the page window. */
+async function addressText(page, f) {
+  const b = await frameBox(page);
+  const raw = ocrBoxes(join(OUT, f)) || [];
+  return raw.filter((x) => Math.abs(x[2] / DSF - (b.y - 33)) < 16).map((x) => x[0]).join(' ');
+}
+
 async function browserChecks(browser) {
   const { ctx, page } = await newPage(browser);
   await boot(page, '?browser=1', { semantics: false });
-  let fr = await waitFrame(page, (f) => f.bytes > 1000);
+  let fr = await waitFrame(page, (f) => f.bytes > 1000, 40000);
+  await sleep(2000);
   await shot(page, 'browser_home');
-  check('browser: home page renders', fr.some((f) => f.bytes > 1000), JSON.stringify(fr.map((f) => f.title)));
+  check('browser: home page renders', fr.some((f) => f.bytes > 1000), JSON.stringify(fr.map((f) => f.base + ' | ' + f.title)));
+  const live = fr.some((f) => f.live);
+  check('browser: pages load through the real proxy (iframe src = proxy/frame.html, not srcdoc)', !WISP || live, JSON.stringify(fr.map((f) => (f.live ? 'live ' : 'srcdoc ') + f.base)));
 
+  // github.com, wikipedia.org, bing.com and the JS-heavy youtube.com: each must paint its own content (OCR).
   const sites = [
-    { typed: 'wikipedia.org', want: /Wikipedia/i, base: /^https:\/\/www\.wikipedia\.org\// },
-    { typed: 'github.com', want: /GitHub/i, base: /^https:\/\/github\.com\// },
-    { typed: 'bbc.com', want: /BBC/i, base: /^https:\/\/www\.bbc\.com\//, knownBlocked: true },
+    { typed: 'github.com', base: /^https:\/\/github\.com\//, words: [/GitHub/i, /Sign up/i] },
+    { typed: 'wikipedia.org', base: /^https:\/\/www\.wikipedia\.org\//, words: [/Wikipedia/i, /English/i] },
+    { typed: 'bing.com', base: /^https:\/\/(www\.)?bing\.com\//, words: [/Bing|Microsoft/i, /Search|Copilot|Images/i] },
+    { typed: 'youtube.com', base: /^https:\/\/(www|m)\.youtube\.com\//, words: [/YouTube/i, /Sign in|search|Home|Shorts/i] },
   ];
   for (const s of sites) {
     await typeAddress(page, s.typed);
-    fr = await waitFrame(page, (f) => s.base.test(f.base) && s.want.test(f.title));
-    await sleep(2500);
+    fr = await waitFrame(page, (f) => s.base.test(f.base) && f.bytes > 5000, 45000);
+    await sleep(s.typed === 'youtube.com' ? 9000 : 5000);
     const f = await shot(page, `browser_${s.typed}`);
-    const ok = fr.some((x) => s.base.test(x.base) && s.want.test(x.title));
-    const proxied = net.filter((r) => r.url.includes('/page?url=') && r.url.includes(encodeURIComponent(s.typed))).map((r) => r.status);
-    if (s.knownBlocked && !ok) {
-      check(`browser: ${s.typed} (page proxy answers ${proxied.join(',') || 'nothing'}; shows "could not be loaded")`, proxied.every((x) => x !== 200), `${f}`);
-    } else {
-      check(`browser: ${s.typed} shows ${s.typed}`, ok, `${f} frame=${JSON.stringify(fr.map((x) => x.title.slice(0, 50)))} proxy=${proxied}`);
-    }
+    const words = ocrWords(f);
+    const okFrame = fr.some((x) => s.base.test(x.base));
+    const missing = s.words.filter((w) => !w.test(words));
+    const addr = await addressText(page, f);
+    check(`browser: ${s.typed} renders its real content (OCR)`, okFrame && missing.length === 0, `${f} frame=${JSON.stringify(fr.map((x) => x.base.slice(0, 60) + ' | ' + x.title.slice(0, 40)))} ocr=${words.slice(0, 160)}${missing.length ? ' MISSING ' + missing : ''}`);
+    check(`browser: address bar shows ${s.typed}`, addr.replace(/\s/g, '').toLowerCase().includes(s.typed.replace(/^www\./, '')), `address ocr="${addr}"`);
   }
 
-  // Links: open Wikipedia, tap the "English" link inside the page.
+  // A link inside the page: Wikipedia's "English" opens en.wikipedia.org, and the address bar follows.
   await typeAddress(page, 'wikipedia.org');
-  await waitFrame(page, (f) => /^https:\/\/www\.wikipedia\.org\//.test(f.base));
+  fr = await waitFrame(page, (f) => /^https:\/\/www\.wikipedia\.org\//.test(f.base) && f.bytes > 5000, 40000);
   await sleep(3000);
-  let wf = null;
-  for (const x of page.frames()) {
-    if (x === page.mainFrame()) continue;
-    try { if (/www\.wikipedia\.org/.test(await x.evaluate(() => document.baseURI))) wf = x; } catch {}
-  }
   let linkOk = false, detail = '';
+  const wf = fr.find((f) => f.live && /^https:\/\/www\.wikipedia\.org\//.test(f.base))?.frame
+    || page.frames().find((x) => x !== page.mainFrame() && /wikipedia/.test(x.url()));
   if (wf) {
     try {
-      const a = await wf.evaluate(() => {
-        const l = [...document.links].find((x) => /\/\/en\.wikipedia\.org\/?$/.test(x.href) && x.getBoundingClientRect().height > 0);
-        if (!l) return null;
-        l.scrollIntoView({ block: 'center' });
-        const r = l.getBoundingClientRect();
-        return { x: r.x + r.width / 2, y: r.y + r.height / 2, href: l.href };
-      });
-      if (a) {
-        const box = await (await wf.frameElement()).boundingBox();
-        await page.mouse.click(box.x + a.x, box.y + a.y);
+      const handles = await wf.$$('a');
+      let target = null;
+      for (const hnd of handles) {
+        const href = await hnd.evaluate((l) => l.href);
+        if (/en\.wikipedia\.org(%2F)?\/?$/i.test(realOf(href)) || /^https:\/\/en\.wikipedia\.org\/?$/.test(realOf(href))) { target = { hnd, href }; break; }
+      }
+      if (target) {
+        await target.hnd.scrollIntoViewIfNeeded();
+        const bb = await target.hnd.boundingBox();
+        await page.mouse.click(bb.x + bb.width / 2, bb.y + bb.height / 2);
         fr = await waitFrame(page, (f) => /^https:\/\/en\.wikipedia\.org\//.test(f.base), 30000);
-        await sleep(2500);
+        await sleep(3000);
         linkOk = fr.some((f) => /^https:\/\/en\.wikipedia\.org\//.test(f.base));
-        detail = `clicked ${a.href} -> frame ${JSON.stringify(fr.map((f) => f.base + ' | ' + f.title.slice(0, 40)))}`;
+        detail = `clicked ${realOf(target.href)} -> frame ${JSON.stringify(fr.map((f) => f.base + ' | ' + f.title.slice(0, 40)))}`;
       } else detail = 'English link not found';
     } catch (e) { detail = String(e).slice(0, 200); }
-  } else detail = 'no srcdoc frame';
-  await shot(page, 'browser_link_en_wikipedia');
+  } else detail = 'no wikipedia frame';
+  let f = await shot(page, 'browser_link_en_wikipedia');
   check('browser: a link inside the page opens its page in the browser', linkOk, detail);
+  let addr = await addressText(page, f);
+  check('browser: address bar follows the link (en.wikipedia.org)', /en\.wikipedia\.org/i.test(addr.replace(/\s/g, '')), `address ocr="${addr}"`);
 
-  // Back returns to the page before the link.
+  // Back returns to the page before the link; Forward goes to it again. The page's links are
+  // done, so the accessibility layer can be switched on to find the controls by their names.
+  await page.evaluate(() => document.querySelector('flt-semantics-placeholder')?.click());
+  await sleep(1000);
   if (linkOk) {
-    // Back: the arrow at the left end of the address capsule (after Close
-    // and Sidebar).
-    const b = await frameBox(page);
-    await page.mouse.click(b.x + 62, b.y - 33);
+    await tapAt(page, 'Back');
     fr = await waitFrame(page, (f) => /^https:\/\/www\.wikipedia\.org\//.test(f.base), 30000);
-    await sleep(2000);
-    await shot(page, 'browser_back');
-    check('browser: Back returns to the previous page', fr.some((f) => /^https:\/\/www\.wikipedia\.org\//.test(f.base)), JSON.stringify(fr.map((f) => f.base)));
+    await sleep(3000);
+    f = await shot(page, 'browser_back');
+    addr = await addressText(page, f);
+    check('browser: Back returns to the previous page', fr.some((x) => /^https:\/\/www\.wikipedia\.org\//.test(x.base)) && /(^|[^n.])wikipedia\.org/i.test(addr.replace(/\s/g, '')), `${JSON.stringify(fr.map((x) => x.base))} address ocr="${addr}"`);
+    await tapAt(page, 'Forward');
+    fr = await waitFrame(page, (x) => /^https:\/\/en\.wikipedia\.org\//.test(x.base), 30000);
+    await sleep(3000);
+    f = await shot(page, 'browser_forward');
+    addr = await addressText(page, f);
+    check('browser: Forward goes to the page again', fr.some((x) => /^https:\/\/en\.wikipedia\.org\//.test(x.base)), `${JSON.stringify(fr.map((x) => x.base))} address ocr="${addr}"`);
   }
+
+  // Tabs: a new tab opens its own page; the first tab keeps its page.
+  const before = (await frames(page)).length;
+  const tabTapped = await tapAt(page, 'New Tab');
+  await sleep(2500);
+  await typeAddress(page, 'github.com');
+  fr = await waitFrame(page, (x) => /^https:\/\/github\.com\//.test(x.base), 40000);
+  await sleep(4000);
+  f = await shot(page, 'browser_new_tab_github');
+  const all = await frames(page);
+  check('browser: a new tab opens github.com while the first tab keeps en.wikipedia.org', tabTapped && all.some((x) => /^https:\/\/github\.com\//.test(x.base)) && all.some((x) => /^https:\/\/en\.wikipedia\.org\//.test(x.base)), `${before} -> ${all.length} frames ${JSON.stringify(all.map((x) => x.base.slice(0, 50)))}`);
 
   check('browser: nothing asks davidebri1.github.io/api or collider.ebridavid.workers.dev for pages',
     !net.some((r) => /github\.io\/api\/page|collider\.ebridavid\.workers\.dev\/.*page/.test(r.url)));
@@ -374,14 +431,18 @@ async function tickerChecks(browser) {
   return needKey;
 }
 
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', headless: true, args: ['--headless=new', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--hide-scrollbars'] });
+// With a local Wisp server (box test only), Chrome must be allowed to open ws://127.0.0.1 from the github.io page.
+const LNA = WISP && /127\.0\.0\.1|localhost/.test(WISP) ? ['--disable-features=LocalNetworkAccessChecks,BlockInsecurePrivateNetworkRequests,PrivateNetworkAccessSendPreflights'] : [];
+const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', headless: true, args: ['--headless=new', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--hide-scrollbars', ...LNA] });
 let needKey = [];
 try {
   // ONLY=browser|ticker|features, or a comma list; unset runs all three.
-  const only = (process.env.ONLY || 'browser,ticker,features').split(',');
+  const only = (process.env.ONLY || 'browser,ticker,features,finish').split(',');
   if (only.includes('browser')) await browserChecks(browser);
   if (only.includes('ticker')) needKey = await tickerChecks(browser);
-  if (only.includes('features')) await featureChecks({ browser, newPage, boot, labels, tapAt, shot: (p, n) => shot(p, n), check, warn, sleep, OUT, typeAddress, waitFrame });
+  const h = { browser, newPage, boot, labels, tapAt, shot: (p, n) => shot(p, n), check, warn, sleep, OUT, typeAddress, waitFrame, frames, DSF, W, H, replies, consoleLines, net };
+  if (only.includes('features')) await featureChecks(h);
+  if (only.includes('finish')) await webFinishChecks(h);
 } finally {
   await browser.close();
   writeFileSync(join(OUT, 'network.json'), JSON.stringify(net, null, 1));

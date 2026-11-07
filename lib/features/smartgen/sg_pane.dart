@@ -1050,7 +1050,10 @@ class _SgPaneState extends State<SgPane> {
   Widget _viewChips(SgBoard b) {
     // Single horizontal row with VFadeScroll edge fade (Theme Gallery mask).
     // Selected chip stays scrolled into view via ensureVisible.
-    final surfaces = SgSurface.values;
+    // Corkboard, Clipboard, Ledger, Binder and Slate are names from the old clone, not in the Smart Gen
+    // spec's board or canvas types, so they are not offered (a board already set to one keeps it).
+    const oldClone = {SgSurface.corkboard, SgSurface.clipboard, SgSurface.ledger, SgSurface.binder, SgSurface.slate};
+    final surfaces = [for (final s in SgSurface.values) if (!oldClone.contains(s) || s == b.surface) s];
     final selected = b.surface;
     WidgetsBinding.instance.addPostFrameCallback((_) => _ensureViewChipVisible(selected));
     return SizedBox(
