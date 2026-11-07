@@ -37,8 +37,30 @@ enum SgSurface {
 /// David's clone `FieldTypeEnum` / `FIELD_TYPES`.
 enum SgFieldKind { text, textarea, richtext, number, date, datetime, checkbox, select, multi, person, url, file }
 
-/// David's clone `BoardKindEnum`.
-enum SgBoardKind { notebook, portfolio, corkboard, clipboard, ledger, desk, binder, slate }
+/// Board = the background work area (Smart Gen spec, "Kanban Boards: Default Types").
+/// Notebook, Portfolio, Folder… are canvas types that sit on a board, so they are not board kinds.
+enum SgBoardKind { kanban, calendar, whiteboard, longBench, workbench, desk, table, roundTable, nightStand, longTable, coffeeTable }
+
+extension SgBoardKindX on SgBoardKind {
+  String get label => switch (this) {
+        SgBoardKind.kanban => 'Kanban Board with Swim lanes',
+        SgBoardKind.calendar => 'Calendar',
+        SgBoardKind.whiteboard => 'Whiteboard',
+        SgBoardKind.longBench => 'Long wood bench',
+        SgBoardKind.workbench => 'Workbench',
+        SgBoardKind.desk => 'Desk',
+        SgBoardKind.table => 'Table',
+        SgBoardKind.roundTable => 'Wood round table',
+        SgBoardKind.nightStand => 'Wood Night Stand',
+        SgBoardKind.longTable => 'Wood Long Table',
+        SgBoardKind.coffeeTable => 'Wood Coffee Table',
+      };
+
+  /// Older saves used canvas-type names as board kinds; read them as the nearest board.
+  static SgBoardKind parse(Object? name) =>
+      SgBoardKind.values.asNameMap()[name] ??
+      switch (name) { 'corkboard' || 'slate' => SgBoardKind.whiteboard, _ => SgBoardKind.desk };
+}
 
 /// David's clone `HoldKindEnum`.
 enum SgHoldKind { tray, shelf, table, wall, spread, rack }
@@ -94,14 +116,14 @@ extension SgSurfaceX on SgSurface {
         SgSurface.kanban => 'Kanban',
         SgSurface.calendar => 'Calendar',
         SgSurface.notebook => 'Notebook',
-        SgSurface.album => 'Photo album',
+        SgSurface.album => 'Gallery',
         SgSurface.storyboard => 'Storyboard',
         SgSurface.vision => 'Vision board',
         SgSurface.swimlane => 'Swimlane',
-        SgSurface.portfolio => 'Portfolio desk',
+        SgSurface.portfolio => 'Portfolio',
         SgSurface.usMap => 'US map',
         SgSurface.worldMap => 'World map',
-        SgSurface.files => 'Files',
+        SgSurface.files => 'Folder',
         SgSurface.corkboard => 'Corkboard',
         SgSurface.clipboard => 'Clipboard',
         SgSurface.ledger => 'Ledger',
@@ -469,7 +491,7 @@ class SgBoard {
     this.inheritColumnStatus = true,
     this.urgentAutoCalendar = true,
     this.snapAlign = false,
-    this.kind = SgBoardKind.notebook,
+    this.kind = SgBoardKind.desk,
     List<String>? guests,
     List<SgList>? lists,
     List<SgLabel>? labels,
@@ -586,7 +608,7 @@ class SgBoard {
         inheritColumnStatus: j['inheritColumnStatus'] != false,
         urgentAutoCalendar: j['urgentAutoCalendar'] != false,
         snapAlign: j['snapAlign'] == true,
-        kind: SgBoardKind.values.asNameMap()[j['kind']] ?? SgBoardKind.notebook,
+        kind: SgBoardKindX.parse(j['kind']),
         guests: [for (final g in (j['guests'] as List?) ?? const []) g.toString()],
         lists: [for (final l in (j['lists'] as List?) ?? const []) if (l is Map) SgList.fromJson(l.cast<String, Object?>())],
         labels: [for (final l in (j['labels'] as List?) ?? const []) if (l is Map) SgLabel.fromJson(l.cast<String, Object?>())],

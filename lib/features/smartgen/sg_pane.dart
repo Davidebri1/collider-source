@@ -10,6 +10,7 @@ import '../../core/vision/cpane.dart';
 import '../../core/vision/vision_kit.dart';
 import '../../core/vision/vision_tokens.dart';
 import 'sg_harness_imgs.dart';
+import 'reminder_calendar.dart';
 import 'sg_model.dart';
 import 'sg_free_drag.dart';
 import 'sg_views.dart';
@@ -1233,7 +1234,7 @@ class _SgPaneState extends State<SgPane> {
           Wrap(spacing: 4, children: [
             for (final k in SgBoardKind.values)
               _glassChoice(
-                label: k.name,
+                label: k.label,
                 selected: b.kind == k,
                 size: 10,
                 onSelected: (_) => store.touch(() {
@@ -1750,11 +1751,23 @@ class _SgPaneState extends State<SgPane> {
             const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerLeft,
-              child: ActionChip(
-                avatar: const Icon(Icons.schedule, size: 16, color: _ink),
-                label: Text(_dueLabel(c.dueMs), style: appFont(fontSize: 14, color: _ink, fontWeight: FontWeight.w600)),
-                onPressed: () => _pickDue(c),
-              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                ActionChip(
+                  avatar: const Icon(Icons.schedule, size: 16, color: _ink),
+                  label: Text(_dueLabel(c.dueMs), style: appFont(fontSize: 14, color: _ink, fontWeight: FontWeight.w600)),
+                  onPressed: () => _pickDue(c),
+                ),
+                // Reminder cards go to the user's calendar as a standard .ics (reminder_calendar.dart).
+                if (c.type == SgType.reminder && c.dueMs != null)
+                  Tooltip(
+                    message: 'Calendar',
+                    child: IconButton(
+                      key: const ValueKey('sg-reminder-calendar'),
+                      onPressed: () => exportReminders([c], name: 'reminder-${c.id}.ics'),
+                      icon: const Icon(Icons.event_available_rounded, color: _ink),
+                    ),
+                  ),
+              ]),
             ),
             const SizedBox(height: 8),
             SizedBox(

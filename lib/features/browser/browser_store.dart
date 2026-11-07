@@ -1,10 +1,10 @@
 // The browser's bookmarks, history and settings. Made by Claude (2026-10-21).
 // David, 21 Oct: "does our browser in collider have tabs, bookmarks, history, settings, all working? This should all be
-// part of the package since they are stock features". Kept on the device (shared preferences), as Safari keeps them.
+// part of the package since they are stock features". Saved through AccountSync (SyncedPrefs) like all other user data.
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../../core/account_sync/synced_prefs.dart';
 
 class BrowserPage {
   final String url;
@@ -32,27 +32,26 @@ class BrowserStore extends ChangeNotifier {
 
   Future<void> init() async {
     if (_loaded) return;
-    final p = await SharedPreferences.getInstance();
-    List<BrowserPage> read(String k) {
+    // Bookmarks, history and the desktop-site choice are user data: AccountSync keeps them with the account.
+    Future<List<BrowserPage>> read(String k) async {
       try {
-        return [for (final j in (jsonDecode(p.getString(k) ?? '[]') as List)) BrowserPage.fromJson(Map<String, dynamic>.from(j as Map))];
+        return [for (final j in (jsonDecode(await SyncedPrefs.getString(k) ?? '[]') as List)) BrowserPage.fromJson(Map<String, dynamic>.from(j as Map))];
       } catch (_) {
         return [];
       }
     }
 
-    bookmarks = read(_kBookmarks);
-    history = read(_kHistory);
-    desktop = p.getBool(_kDesktop) ?? false;
+    bookmarks = await read(_kBookmarks);
+    history = await read(_kHistory);
+    desktop = await SyncedPrefs.getBool(_kDesktop) ?? false;
     _loaded = true;
     notifyListeners();
   }
 
   Future<void> _save() async {
-    final p = await SharedPreferences.getInstance();
-    await p.setString(_kBookmarks, jsonEncode([for (final b in bookmarks) b.toJson()]));
-    await p.setString(_kHistory, jsonEncode([for (final h in history) h.toJson()]));
-    await p.setBool(_kDesktop, desktop);
+    await SyncedPrefs.setString(_kBookmarks, jsonEncode([for (final b in bookmarks) b.toJson()]));
+    await SyncedPrefs.setString(_kHistory, jsonEncode([for (final h in history) h.toJson()]));
+    await SyncedPrefs.setBool(_kDesktop, desktop);
   }
 
   bool isBookmarked(String url) => bookmarks.any((b) => b.url == url);

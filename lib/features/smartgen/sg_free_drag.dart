@@ -265,14 +265,10 @@ class SgBoardTileFace extends StatelessWidget {
   Widget build(BuildContext context) {
     final surface = board.surface == SgSurface.kanban
         ? switch (board.kind) {
-            SgBoardKind.notebook => SgSurface.notebook,
-            SgBoardKind.portfolio => SgSurface.portfolio,
-            SgBoardKind.corkboard => SgSurface.corkboard,
-            SgBoardKind.clipboard => SgSurface.clipboard,
-            SgBoardKind.ledger => SgSurface.ledger,
-            SgBoardKind.desk => SgSurface.desk,
-            SgBoardKind.binder => SgSurface.binder,
-            SgBoardKind.slate => SgSurface.slate,
+            SgBoardKind.kanban => SgSurface.kanban,
+            SgBoardKind.calendar => SgSurface.calendar,
+            SgBoardKind.whiteboard => SgSurface.whiteboard,
+            _ => SgSurface.desk,
           }
         : board.surface;
     final (Color fill, IconData icon, Color ink) = switch (surface) {

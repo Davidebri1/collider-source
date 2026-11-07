@@ -897,7 +897,7 @@ class SgAlbum extends StatelessWidget {
       child: SgFreePlane(
         store: store,
         cards: cards,
-        title: 'Photo album',
+        title: 'Gallery',
         titleIcon: Icons.photo_library_outlined,
         onOpen: onOpen,
         slotsFor: (plane, cs) => SgFreeLayouts.grid2(plane, cs.length),
@@ -1111,7 +1111,7 @@ class SgDesk extends StatelessWidget {
         SgFreePlane(
           store: store,
           cards: cards,
-          title: 'Portfolio desk',
+          title: 'Portfolio',
           titleIcon: Icons.desk_rounded,
           onOpen: onOpen,
           slotsFor: (plane, cs) => SgFreeLayouts.papers(plane, cs.length),
@@ -1245,7 +1245,7 @@ class _SgFilesState extends State<SgFiles> {
               Row(mainAxisSize: MainAxisSize.min, children: [
                 const Icon(Icons.folder_open_rounded, size: 16, color: Color(0xFFFFD56A)),
                 const SizedBox(width: 6),
-                Text('Files', textAlign: TextAlign.center, style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white70)),
+                Text('Folder', textAlign: TextAlign.center, style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white70)),
               ]),
               Align(
                 alignment: Alignment.centerRight,
