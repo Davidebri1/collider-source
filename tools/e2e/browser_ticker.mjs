@@ -123,11 +123,11 @@ const frames = (page) => page.evaluate(() => {
 /** Taps the centre of the labelled node with the mouse, scrolling the ticker
  *  column when the row is below the visible part of the list. */
 async function tapAt(page, label, { scroll = false } = {}) {
-  for (let i = 0; i < 6; i++) {
-    const l = (await labels(page)).find((x) => x.label === label);
+  for (let i = 0; i < 12; i++) {
+    const l = (await labels(page)).find((x) => x.label === label || x.label.startsWith(label + '\n'));
     if (!l) return false;
     const cy = l.y + Math.min(l.h, 44) / 2;
-    if (scroll && cy > 760) { await page.mouse.move(W / 2, 600); await page.mouse.wheel(0, 160); await sleep(700); continue; }
+    if (scroll && cy > 772) { await page.mouse.move(W / 2, 600); await page.mouse.wheel(0, 160); await sleep(700); continue; }
     if (scroll && cy < 420) { await page.mouse.move(W / 2, 600); await page.mouse.wheel(0, -160); await sleep(700); continue; }
     await page.mouse.click(l.x + Math.min(l.w, 200) / 2, cy);
     return true;
@@ -263,18 +263,32 @@ async function tickerRun(browser, tag, toggles) {
   await shot(page, `ticker_${tag}_answered`);
   const mine = replies.slice(rmark);
 
-  // Tap-to-expand: tap down the column until a conversation opens.
+  // Tap-to-expand: tap the GLM 5.3 Flash row (it is on in both runs) and read
+  // the conversation that opens above the ticker.
+  await page.keyboard.press('Escape'); // the composer keeps focus after a send
+  await sleep(600);
   let expanded = null;
-  for (let y = 380; y < 760 && !expanded; y += 39) {
-    await page.mouse.click(W / 2, y);
-    await sleep(1400);
+  if (await tapAt(page, 'GLM 5.3 Flash')) {
+    await sleep(2000);
     const l = (await labels(page)).map((x) => x.label);
-    if (l.includes('Copy answer') || l.includes('Search conversation')) {
-      expanded = { y, lines: l.filter((x) => /\d:\d\d (AM|PM)/.test(x)).map((x) => x.replace(/\s+/g, ' ').slice(0, 160)) };
-      await shot(page, `ticker_${tag}_expanded`);
-      await page.mouse.click(W / 2, y);
-      await sleep(900);
+    if (l.includes('Copy answer')) {
+      expanded = { lines: l.filter((x) => /\d:\d\d (AM|PM)/.test(x) && !/^GLM 5\.3 Flash/.test(x)).map((x) => x.replace(/\s+/g, ' ').slice(0, 200)) };
     }
+    await shot(page, `ticker_${tag}_expanded`);
+    await page.keyboard.press('Escape');
+    await sleep(900);
+  }
+  // Consensus: tap the card pinned on top of the ticker.
+  let consensus = null;
+  const top = (await labels(page)).find((x) => /^\d+\/\d+\n/.test(x.label));
+  if (top) {
+    consensus = { card: top.label.replace(/\s+/g, ' ').slice(0, 200) };
+    await page.mouse.click(top.x + 60, top.y + Math.min(top.h, 40) / 2);
+    await sleep(2000);
+    consensus.opened = (await labels(page)).map((x) => x.label.replace(/\s+/g, ' ')).filter((x) => x.length > 20).slice(0, 12);
+    await shot(page, `ticker_${tag}_consensus`);
+    await page.keyboard.press('Escape');
+    await sleep(900);
   }
   // History: the Global rail button.
   await tapAt(page, 'Global');
@@ -282,7 +296,7 @@ async function tickerRun(browser, tag, toggles) {
   const hist = (await labels(page)).map((l) => l.label);
   await shot(page, `ticker_${tag}_history`);
   await ctx.close();
-  return { toggled, mine, expanded, hist };
+  return { toggled, mine, expanded, consensus, hist };
 }
 
 async function tickerChecks(browser) {
@@ -324,6 +338,7 @@ async function tickerChecks(browser) {
   for (const [tag, r] of [['A', a], ['B', b]]) {
     check(`ticker run ${tag}: rows switched on (${r.toggled.length}/${tag === 'A' ? 6 : 4})`, r.toggled.length === (tag === 'A' ? 6 : 4), r.toggled.join(', '));
     check(`ticker run ${tag}: tapping a row opens its conversation`, !!r.expanded && r.expanded.lines.some((x) => /canberra/i.test(x)), JSON.stringify(r.expanded?.lines || []).slice(0, 300));
+    check(`ticker run ${tag}: consensus card shows a headcount and opens`, !!r.consensus && /^\d+\/\d+ /.test(r.consensus.card) && /canberra/i.test(r.consensus.card), JSON.stringify(r.consensus || {}).slice(0, 400));
     check(`ticker run ${tag}: Global History lists the conversation`, r.hist.includes('Global History') && r.hist.some((l) => l.includes('capital of Australia')), '');
   }
   check('ticker: no request to davidebri1.github.io/api or collider.ebridavid.workers.dev for chat',
