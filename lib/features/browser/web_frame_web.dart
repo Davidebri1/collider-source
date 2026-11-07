@@ -24,6 +24,15 @@ import 'page_markup.dart';
 // browser kept showing its opening page whatever address was typed (v9.1.1+).
 int _frameSeq = 0;
 
+/// The browser's real proxy (Scramjet under <app>/proxy/, see
+/// web/proxy/frame.html) is on when web/proxy/config.js names a Wisp server.
+/// Then a tab keeps one live frame that follows its own links, like the
+/// native WebView; without one, pages come through the page proxy as before.
+bool get webFrameIsLive {
+  final v = globalContext['COLLIDER_WISP_URL'];
+  return v != null && v.isA<JSString>() && (v as JSString).toDart.trim().isNotEmpty;
+}
+
 class WebFrame extends StatefulWidget {
   final String url;
 
@@ -39,7 +48,89 @@ class WebFrame extends StatefulWidget {
   const WebFrame({super.key, required this.url, this.onNavigate, this.onRedirect, this.onTitle, this.reload = 0});
 
   @override
-  State<WebFrame> createState() => _WebFrameState();
+  State<WebFrame> createState() => webFrameIsLive ? _LiveFrameState() : _WebFrameState();
+}
+
+/// One tab on the real proxy: an iframe (src, not srcdoc) on
+/// <app>/proxy/frame.html, which runs the site through Scramjet and reports
+/// where the page went and its title.
+class _LiveFrameState extends State<WebFrame> {
+  late final String _type;
+  web.HTMLIFrameElement? _frame;
+  JSFunction? _listener;
+  String _current = '';
+  bool _settled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _current = widget.url;
+    final src = Uri.parse(web.document.baseURI).resolve('proxy/frame.html').toString() + '#' + Uri.encodeComponent(widget.url);
+    _type = 'collider-live-${++_frameSeq}';
+    ui_web.platformViewRegistry.registerViewFactory(_type, (int _) {
+      final f = web.HTMLIFrameElement()
+        ..style.border = '0'
+        ..style.width = '100%'
+        ..style.height = '100%'
+        ..style.background = 'white'
+        ..src = src;
+      f.setAttribute('allow', 'fullscreen; autoplay; clipboard-write; encrypted-media; picture-in-picture');
+      _frame = f;
+      return f;
+    });
+    _listener = ((web.MessageEvent ev) {
+      final f = _frame;
+      if (f == null || ev.source == null || !identical(ev.source, f.contentWindow)) return;
+      final d = ev.data?.dartify();
+      if (d is! Map || d['colliderFrame'] != true) return;
+      final url = d['url'];
+      if (d['nav'] == true && url is String) _moved(url);
+      if (d['loaded'] == true) {
+        _settled = true;
+        final t = d['title'];
+        if (url is String && url.isNotEmpty && t is String && t.trim().isNotEmpty) widget.onTitle?.call(url, t.trim());
+      }
+    }).toJS;
+    web.window.addEventListener('message', _listener);
+  }
+
+  void _moved(String url) {
+    if (url.isEmpty || url == _current || url == 'about:blank') return;
+    _current = url;
+    if (_settled) {
+      widget.onNavigate?.call(url);
+    } else {
+      widget.onRedirect?.call(url);
+    }
+  }
+
+  void _post(Map<String, String> m) {
+    final w = _frame?.contentWindow;
+    if (w != null) w.postMessage(m.jsify(), web.window.location.origin.toJS);
+  }
+
+  @override
+  void didUpdateWidget(covariant WebFrame old) {
+    super.didUpdateWidget(old);
+    if (widget.reload != old.reload) {
+      _settled = false;
+      _post({'colliderCmd': 'reload'});
+    } else if (widget.url != _current) {
+      _current = widget.url;
+      _settled = false;
+      _post({'colliderGo': widget.url});
+    }
+  }
+
+  @override
+  void dispose() {
+    final l = _listener;
+    if (l != null) web.window.removeEventListener('message', l);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => HtmlElementView(viewType: _type);
 }
 
 class _WebFrameState extends State<WebFrame> {

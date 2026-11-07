@@ -8,6 +8,9 @@
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+/// A native tab is always one live WebView that follows its own links.
+bool get webFrameIsLive => true;
+
 class WebFrame extends StatefulWidget {
   final String url;
 

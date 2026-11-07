@@ -1,5 +1,4 @@
 import '../../../core/theme/edge_fade.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import '../../../core/vision/vision_kit.dart';
 import '../models/browser_tab.dart';
@@ -158,7 +157,7 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
       _addr.text = _host(tab.url);
       // A page was shown: History keeps it (OCT24 BrowserStore.visited).
       // Natively the WebView reports it once loaded, with its real title.
-      if (kIsWeb) WidgetsBinding.instance.addPostFrameCallback((_) => BrowserStore.instance.visited(tab.url, tab.title));
+      if (!webFrameIsLive) WidgetsBinding.instance.addPostFrameCallback((_) => BrowserStore.instance.visited(tab.url, tab.title));
     }
     final media = MediaQuery.sizeOf(context);
     final safe = MediaQuery.paddingOf(context);
@@ -350,8 +349,8 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
   }
 
   Widget _page(BrowserTab tab) {
-    if (!kIsWeb) {
-      // One WebView per tab for as long as the tab lives: it follows its own
+    if (webFrameIsLive) {
+      // One live frame per tab (native WebView, or the web proxy frame) for as long as the tab lives: it follows its own
       // links and redirects and reloads in place.
       return ClipRRect(
         key: ValueKey('page-${tab.id}'),
