@@ -26,6 +26,7 @@ import 'features/ticker/widgets/consensus_row.dart';
 import 'features/ticker/widgets/message_zoom_overlay.dart';
 import 'features/ticker/widgets/local_history_pane.dart';
 import 'features/prompt/floating_prompt.dart';
+import 'features/prompt/attached_text.dart';
 import 'features/nav/permanent_nav_bar.dart';
 import 'features/nav/side_nav_rail.dart';
 import 'features/nav/contextual_side_nav.dart';
@@ -244,6 +245,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   bool _genOptionsOpen = false;
   /// Put back into the composer when a send cannot run (D59).
   final ValueNotifier<String?> _restoreText = ValueNotifier<String?>(null);
+  final ValueNotifier<String?> _attachFile = ValueNotifier<String?>(null);
   /// Bumped by the options sheet's Generate: the composer sends its text.
   final ValueNotifier<int> _generateTick = ValueNotifier<int>(0);
 
@@ -1675,7 +1677,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           child: FloatingPrompt(
             summoned: _isComposerSummoned,
             busy: _busy,
-            onSubmitPrompt: (text, files) => _onSendPrompt(text, files),
+            onSubmitPrompt: (text, files) async => _onSendPrompt(await promptWithAttachedText(text, files), files),
             onSummon: () => setState(() {
               _closeAllPanes();
               _expandedModelIds.clear();
@@ -1692,6 +1694,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             onOpenOptions: () => setState(() => _genOptionsOpen = true),
             restoreText: _restoreText,
             generateTick: _generateTick,
+            attachFile: _attachFile,
           ),
         ),
       );
@@ -2632,6 +2635,11 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               bottom: 78,
               child: FilesScreen(
                 onClose: () => _requestSwitchSurface(null),
+                onAttachToPrompt: (f) {
+                  _attachFile.value = f.name;
+                  _requestSwitchSurface(null);
+                  setState(() => _isComposerSummoned = true);
+                },
               ),
             ),
 

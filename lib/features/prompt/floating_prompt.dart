@@ -40,6 +40,8 @@ class FloatingPrompt extends StatefulWidget {
   final ValueNotifier<String?>? restoreText;
   /// Bumped from outside (the options sheet's Generate) to send the field.
   final ValueNotifier<int>? generateTick;
+  /// A file name to add as an attachment chip (Files → Attach to Message).
+  final ValueNotifier<String?>? attachFile;
 
   const FloatingPrompt({
     super.key,
@@ -58,6 +60,7 @@ class FloatingPrompt extends StatefulWidget {
     this.onOpenOptions,
     this.restoreText,
     this.generateTick,
+    this.attachFile,
   });
 
   @override
@@ -78,6 +81,18 @@ class _FloatingPromptState extends State<FloatingPrompt> {
     if (widget.summoned) WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
     widget.restoreText?.addListener(_onRestore);
     widget.generateTick?.addListener(_onGenerate);
+    widget.attachFile?.addListener(_onAttachFile);
+    _onAttachFile();
+  }
+
+  // Ported from the ARGON 8474 SuperApp (main.dart onAttachToPrompt): the
+  // file joins the composer as a chip, once.
+  void _onAttachFile() {
+    final n = widget.attachFile?.value;
+    if (n == null) return;
+    widget.attachFile!.value = null;
+    if (!_files.contains(n)) _files.add(n);
+    if (mounted) setState(() {});
   }
 
   void _onRestore() {
@@ -110,6 +125,7 @@ class _FloatingPromptState extends State<FloatingPrompt> {
   void dispose() {
     widget.restoreText?.removeListener(_onRestore);
     widget.generateTick?.removeListener(_onGenerate);
+    widget.attachFile?.removeListener(_onAttachFile);
     _ctrl.dispose();
     _focus.dispose();
     super.dispose();

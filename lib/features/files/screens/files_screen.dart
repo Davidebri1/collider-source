@@ -27,7 +27,10 @@ class FilesScreen extends StatefulWidget {
   /// Rail selection (source filter / 'music' / 'search').
   final String category;
 
-  const FilesScreen({super.key, required this.onClose, this.category = 'all'});
+  /// SuperApp port: "Attach to Message" puts the file on the composer.
+  final ValueChanged<StoredFile>? onAttachToPrompt;
+
+  const FilesScreen({super.key, required this.onClose, this.category = 'all', this.onAttachToPrompt});
 
   static const frame = Size(1336.4, 835.2);
   // The group's own width (rail at 0 .. main panel right 1336.4), no margin.
@@ -552,7 +555,10 @@ class _FilesScreenState extends State<FilesScreen> {
         barrierDismissible: true,
         barrierLabel: 'Close',
         barrierColor: Colors.black54,
-        pageBuilder: (context, _, __) => Material(type: MaterialType.transparency, child: _FileViewer(file: f, bytes: bytes)),
+        pageBuilder: (context, _, __) => Material(type: MaterialType.transparency, child: _FileViewer(file: f, bytes: bytes, onAttach: widget.onAttachToPrompt == null || !FileStore.isText(f.name) ? null : () {
+          Navigator.of(context).pop();
+          widget.onAttachToPrompt!(f);
+        })),
       );
       return;
     }
@@ -604,7 +610,8 @@ class _ThumbState extends State<_Thumb> {
 class _FileViewer extends StatelessWidget {
   final StoredFile file;
   final Uint8List bytes;
-  const _FileViewer({required this.file, required this.bytes});
+  final VoidCallback? onAttach;
+  const _FileViewer({required this.file, required this.bytes, this.onAttach});
 
   static const int _maxChars = 200000;
 
@@ -642,6 +649,9 @@ class _FileViewer extends StatelessWidget {
             maxWidth: VOverlay.toolWidth(context),
             maxHeight: VOverlay.toolMaxHeight(context),
             leading: close,
+            actions: [
+              if (onAttach != null) VCircleButton(icon: Icons.attach_file_rounded, tooltip: 'Attach to Message', onTap: onAttach!),
+            ],
             child: content,
           ),
         ),
