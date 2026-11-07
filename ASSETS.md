@@ -18,6 +18,6 @@ edge, JPEG quality 82. No people, logos, or text. The app wallpaper is not used.
 | leather.jpg | Portfolio, collection | https://polyhaven.com/a/brown_leather (`brown_leather_albedo_1k.jpg`) | CC0 | Resize |
 | linen.jpg | Gallery | https://polyhaven.com/a/rough_linen | CC0 | Resize |
 
-Glass is desk.jpg seen through a translucent paper veil. Mirror is desk.jpg inside a dark frame, the board as seen in a mirror lying on it. A separate CC0 photograph of a blank mirror, with no reflected person, room, or text, was not in these catalogues.
+Glass leaves the desk photograph visible through the object. Mirror is desk.jpg inside a dark frame (the board as seen in a mirror lying on it). Notebook, Diary and Journal are leather.jpg wrapped around two paper.jpg pages; Notebook also has ruling and a margin drawn on the paper. Gallery is a leather cover with two linen photo mats. Folder is cardboard.jpg with a tab and a paper interior. Portfolio is leather around paper. Collection is linen around paper. Table is table.jpg with a wood edge. A separate CC0 photograph of a blank mirror, open notebook, or folder, with no person, text, or logo, was not in these catalogues.
 
 Poly Haven: https://polyhaven.com/license (CC0). ambientCG: https://docs.ambientcg.com/license/ (CC0).

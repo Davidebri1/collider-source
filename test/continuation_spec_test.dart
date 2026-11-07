@@ -55,10 +55,12 @@ void main() {
     expect(bin.disposition, AttachmentDisposition.nameOnly);
     expect(bin.text, contains('name and size only'));
     expect(bin.imageUri, isNull);
-    final big = classifyAttachment('photo.png', Uint8List(kAttachedImageMaxBytes + 1));
-    expect(big.disposition, AttachmentDisposition.imageSkipped);
+    final raw = Uint8List(kAttachedImageMaxBytes + 1);
+    final big = classifyAttachment('photo.png', raw);
+    expect(big.disposition, AttachmentDisposition.nameOnly);
     expect(big.imageUri, isNull);
-    expect(big.text, contains('over 4 MB'));
+    expect(big.text, contains('name and size only'));
+    expect(raw.length, kAttachedImageMaxBytes + 1);
     final note = classifyAttachment('note.txt', Uint8List.fromList('hello board'.codeUnits));
     expect(note.disposition, AttachmentDisposition.text);
     expect(note.text, 'hello board');

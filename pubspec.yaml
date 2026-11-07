@@ -39,6 +39,8 @@ dependencies:
   excel: ^4.0.6
   docx_to_text: ^1.0.1
   enough_icalendar: ^0.17.0
+  image: 4.3.0
+  archive: 3.6.1
 
 dev_dependencies:
   flutter_test:

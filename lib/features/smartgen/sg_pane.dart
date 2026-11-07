@@ -1261,7 +1261,10 @@ class _SgPaneState extends State<SgPane> {
   }
 
   Widget _menuAction(IconData icon, String label, VoidCallback onTap) {
-    return InkWell(
+    return Semantics(
+      button: true,
+      label: label,
+      child: InkWell(
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -1271,6 +1274,7 @@ class _SgPaneState extends State<SgPane> {
           Text(label, style: appFont(fontSize: 16, color: Colors.white)),
         ]),
       ),
+    ),
     );
   }
 

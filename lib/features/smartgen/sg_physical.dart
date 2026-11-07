@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_font.dart';
 import 'sg_assets.dart';
 import 'sg_model.dart';
+import 'sg_object_face.dart';
 
 /// Top-down photographic board. Canvas types sit on it as objects and hold cards.
 class SgPhysicalStage extends StatefulWidget {
@@ -47,7 +48,7 @@ class _SgPhysicalStageState extends State<SgPhysicalStage> {
     return LayoutBuilder(builder: (context, box) {
       final size = Size(box.maxWidth, box.maxHeight);
       return Stack(key: _stageKey, fit: StackFit.expand, children: [
-        Positioned.fill(child: _BoardPhoto(kind: b.kind)),
+        Positioned.fill(child: sgBoardFace(b)),
         for (var i = 0; i < b.canvases.length; i++) _canvas(b, b.canvases[i], i, size),
         for (final c in b.cards)
           if (c.canvasId.isEmpty && c.id != _dragCard)
@@ -126,10 +127,9 @@ class _SgPhysicalStageState extends State<SgPhysicalStage> {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(7),
                 child: Stack(fit: StackFit.expand, children: [
-                  _CanvasSurface(kind: canvas.kind),
-                  if (canvas.kind == 'Notebook') const CustomPaint(painter: _RulePainter()),
+                  sgObjectFace(canvas.kind),
                   Padding(
-                    padding: const EdgeInsets.all(4),
+                    padding: const EdgeInsets.all(2),
                     child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                       GestureDetector(
                         onPanStart: (_) {
@@ -161,7 +161,12 @@ class _SgPhysicalStageState extends State<SgPhysicalStage> {
                           ]),
                         ),
                       ),
-                      Expanded(child: _working(b, canvas, cards)),
+                      Expanded(
+                        child: Padding(
+                          padding: sgObjectInsets(canvas.kind),
+                          child: _working(b, canvas, cards),
+                        ),
+                      ),
                     ]),
                   ),
                   Positioned(
@@ -319,66 +324,6 @@ class _SgPhysicalStageState extends State<SgPhysicalStage> {
   }
 }
 
-class _BoardPhoto extends StatelessWidget {
-  const _BoardPhoto({required this.kind});
-  final SgBoardKind kind;
-
-  @override
-  Widget build(BuildContext context) {
-    final photo = AssetImage(sgBoardPhoto(kind));
-    if (kind == SgBoardKind.roundTable) {
-      return Stack(fit: StackFit.expand, children: [
-        const Image(image: AssetImage('assets/smartgen/desk.jpg'), fit: BoxFit.cover),
-        Center(child: AspectRatio(aspectRatio: 1, child: ClipOval(child: Image(image: photo, fit: BoxFit.cover)))),
-      ]);
-    }
-    if (kind == SgBoardKind.nightStand) {
-      return Stack(fit: StackFit.expand, children: [
-        const Image(image: AssetImage('assets/smartgen/desk.jpg'), fit: BoxFit.cover),
-        Center(child: FractionallySizedBox(widthFactor: 0.62, heightFactor: 0.42, child: Image(image: photo, fit: BoxFit.cover))),
-      ]);
-    }
-    return Image(image: photo, fit: BoxFit.cover, filterQuality: FilterQuality.high);
-  }
-}
-
-class _CanvasSurface extends StatelessWidget {
-  const _CanvasSurface({required this.kind});
-  final String kind;
-
-  @override
-  Widget build(BuildContext context) {
-    final photo = AssetImage(sgCanvasPhoto(kind));
-    if (kind == 'Glass') {
-      return const Image(image: AssetImage('assets/smartgen/desk.jpg'), fit: BoxFit.cover, opacity: AlwaysStoppedAnimation(0.55));
-    }
-    if (kind == 'Mirror') {
-      return Stack(fit: StackFit.expand, children: [
-        Image(image: photo, fit: BoxFit.cover),
-        const DecoratedBox(decoration: BoxDecoration(border: Border.fromBorderSide(BorderSide(color: Color(0xFF3A2A1C), width: 6)))),
-      ]);
-    }
-    return Image(image: photo, fit: BoxFit.cover, filterQuality: FilterQuality.medium);
-  }
-}
-
-class _RulePainter extends CustomPainter {
-  const _RulePainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0x334A6FA5)
-      ..strokeWidth = 1;
-    for (var y = 28.0; y < size.height; y += 14) {
-      canvas.drawLine(Offset(8, y), Offset(size.width - 6, y), paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
 /// Library thumbnail: the type's photographic working surface.
 class SgPhotoThumb extends StatelessWidget {
   const SgPhotoThumb({super.key, required this.kind});
@@ -388,7 +333,10 @@ class SgPhotoThumb extends StatelessWidget {
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),
-      child: Image.asset(sgCanvasPhoto(kind), fit: BoxFit.cover),
+      child: Stack(fit: StackFit.expand, children: [
+        Image.asset('assets/smartgen/desk.jpg', fit: BoxFit.cover),
+        Padding(padding: const EdgeInsets.all(4), child: sgObjectFace(kind)),
+      ]),
     );
   }
 }

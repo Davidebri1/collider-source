@@ -17,6 +17,7 @@ import '../../core/api/collider_api.dart';
 import '../../models/model_def.dart';
 import '../../core/files/file_store.dart';
 import '../../core/vision/vision_kit.dart';
+import 'attached_text.dart';
 
 class FloatingPrompt extends StatefulWidget {
   /// Focused (tapped, swiped up on the dock, or a new conversation).
@@ -335,7 +336,7 @@ class _FloatingPromptState extends State<FloatingPrompt> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                           decoration: BoxDecoration(color: const Color(0x4DFFFFFF), borderRadius: BorderRadius.circular(32)),
-                          child: Text(f, style: const TextStyle(fontSize: 20, color: Colors.white)),
+                          child: Text(attachmentChipLabel(f), style: const TextStyle(fontSize: 20, color: Colors.white)),
                         ),
                       ),
                   ]),

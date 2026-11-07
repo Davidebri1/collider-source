@@ -102,17 +102,42 @@ async function userFromAuth(request, env) {
   return { userId: row.user_id, token, exp: row.expires_at_ms };
 }
 
+const PROD_HOSTS = new Set(['collider.ebridavid.workers.dev']);
+
+/** Claims checks before the signature. Exported for the local audit test. */
+export function googleClaimsOk(payload, clientId, nowMs = Date.now()) {
+  if (!payload || typeof payload !== 'object') return false;
+  const aud = payload.aud;
+  const audOk = aud === clientId || (Array.isArray(aud) && aud.includes(clientId));
+  if (!clientId || !audOk) return false;
+  if (payload.iss !== 'https://accounts.google.com' && payload.iss !== 'accounts.google.com') return false;
+  if (!payload.sub) return false;
+  if ((payload.exp || 0) * 1000 <= nowMs) return false;
+  if (payload.nbf && payload.nbf * 1000 > nowMs + 60_000) return false;
+  return true;
+}
+
+/** Dev sign-in cannot run on the public host, even if DEV_AUTH was set. */
+export function devAuthAllowed(request, env) {
+  if (env.DEV_AUTH !== '1') return false;
+  let host = '';
+  try {
+    host = new URL(request.url).hostname;
+  } catch {
+    return false;
+  }
+  if (PROD_HOSTS.has(host)) return false;
+  return true;
+}
+
 /** Verify Google ID token (OIDC) — standard JWKS pattern. */
 async function verifyGoogleIdToken(idToken, clientId) {
   const parts = idToken.split('.');
   if (parts.length !== 3) return null;
   const header = JSON.parse(new TextDecoder().decode(b64urlToBytes(parts[0])));
+  if (header.alg !== 'RS256') return null;
   const payload = JSON.parse(new TextDecoder().decode(b64urlToBytes(parts[1])));
-  if (payload.aud !== clientId) return null;
-  if (payload.iss !== 'https://accounts.google.com' && payload.iss !== 'accounts.google.com') {
-    return null;
-  }
-  if ((payload.exp || 0) * 1000 < Date.now()) return null;
+  if (!googleClaimsOk(payload, clientId)) return null;
   const jwks = await (await fetch('https://www.googleapis.com/oauth2/v3/certs')).json();
   const jwk = (jwks.keys || []).find((k) => k.kid === header.kid);
   if (!jwk) return null;
@@ -142,9 +167,11 @@ async function verifyAppleIdToken(idToken, clientId) {
   const parts = idToken.split('.');
   if (parts.length !== 3) return null;
   const header = JSON.parse(new TextDecoder().decode(b64urlToBytes(parts[0])));
+  if (header.alg !== 'RS256') return null;
   const payload = JSON.parse(new TextDecoder().decode(b64urlToBytes(parts[1])));
-  if (clientId && payload.aud !== clientId) return null;
+  if (!clientId || payload.aud !== clientId) return null;
   if (payload.iss !== 'https://appleid.apple.com') return null;
+  if (!payload.sub) return null;
   if ((payload.exp || 0) * 1000 < Date.now()) return null;
   const jwks = await (await fetch('https://appleid.apple.com/auth/keys')).json();
   const jwk = (jwks.keys || []).find((k) => k.kid === header.kid);
@@ -227,7 +254,9 @@ async function handleAuth(request, env, path) {
     const body = await request.json().catch(() => null);
     const idToken = body?.id_token;
     if (!idToken) return json(request, 400, { error: 'id_token required' });
-    const claims = await verifyAppleIdToken(idToken, env.APPLE_CLIENT_ID || '');
+    const clientId = env.APPLE_CLIENT_ID || '';
+    if (!clientId) return json(request, 503, { error: 'APPLE_CLIENT_ID not configured' });
+    const claims = await verifyAppleIdToken(idToken, clientId);
     if (!claims) return json(request, 401, { error: 'invalid id_token' });
     const user = await upsertUser(env, {
       provider: 'apple',
@@ -241,7 +270,7 @@ async function handleAuth(request, env, path) {
 
   // Local / staging only.
   if (request.method === 'POST' && path === '/auth/dev') {
-    if (env.DEV_AUTH !== '1') return json(request, 404, { error: 'not found' });
+    if (!devAuthAllowed(request, env)) return json(request, 404, { error: 'not found' });
     const body = await request.json().catch(() => null);
     const email = (body?.email || '').trim();
     if (!email) return json(request, 400, { error: 'email required' });
@@ -458,7 +487,7 @@ export default {
       if (path.startsWith('/v1/blobs')) return await handleBlobs(request, env, path, url);
       return json(request, 404, { error: 'not found' });
     } catch (e) {
-      return json(request, 500, { error: 'server error', detail: String(e && e.message || e).slice(0, 200) });
+      return json(request, 500, { error: 'server error' });
     }
   },
 };

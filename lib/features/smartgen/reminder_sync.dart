@@ -120,7 +120,8 @@ LocalReminder reminderFromCard(SgCard c) {
 }
 
 /// Google Calendar API. Requires an OAuth access token with calendar.events.
-/// There is no token in the app build; the caller obtains one from Google.
+/// The token is only the Authorization header for these calls. It is not
+/// written onto the card, into AccountSync, or into the app build.
 class GoogleCalendarGateway {
   GoogleCalendarGateway({Dio? dio})
       : _dio = dio ??
