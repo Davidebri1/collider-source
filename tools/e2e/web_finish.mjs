@@ -8,7 +8,11 @@
  */
 import { execFileSync } from 'child_process';
 import { join } from 'path';
-import { ocr, painted } from './backup_features.mjs';
+import { readFileSync, writeFileSync } from 'fs';
+import { ocr, ocrBoxes, painted } from './backup_features.mjs';
+const ocrBoxesOf = (h, f, prefix) => (ocrBoxes(join(h.OUT, f)) || []).find((b) => b[0].replace(/\s/g, '').toLowerCase().startsWith(prefix.replace(/\s/g, '').toLowerCase()));
+/** Mean luminance of a PNG (decoded with Python/PIL). */
+function meanLum(buf) { const p = '/tmp/_lum.png'; writeFileSync(p, buf); return Number(execFileSync('python3', ['-c', "import sys;from PIL import Image,ImageStat;print(ImageStat.Stat(Image.open(sys.argv[1]).convert('L')).mean[0])", p], { encoding: 'utf8' }).trim()); }
 
 export const SCREENS = [
   ['home', ''],
@@ -52,7 +56,8 @@ export async function screensTour(h, only = null) {
 }
 
 export async function webFinishChecks(h) {
-  const parts = (process.env.FINISH || 'screens,names,attach,fallback').split(',');
+  const parts = (process.env.FINISH || 'composer,screens,names,attach,fallback').split(',');
+  if (parts.includes('composer')) await composer(h);
   if (parts.includes('screens')) await screensTour(h, process.env.SCREENS ? process.env.SCREENS.split(',') : null);
   if (parts.includes('names')) await smartGenNames(h);
   if (parts.includes('attach')) await attachments(h);
@@ -153,7 +158,7 @@ async function fallback402(h) {
   await h.sleep(1500);
   await h.tapAt(page, 'Message Genie');
   await h.sleep(500);
-  await page.keyboard.type('Add a card called Pack umbrella to To Do.', { delay: 8 });
+  await page.keyboard.type('Add a reminder card called Pack umbrella to To Do.', { delay: 8 });
   await page.keyboard.press('Enter');
   const g0 = Date.now();
   while (Date.now() - g0 < 300000 && !chainLines(h, c1).some((l) => /\[chain\] genie (answered by|9\/9 )/.test(l))) await h.sleep(2000);
@@ -163,8 +168,51 @@ async function fallback402(h) {
   h.check('fallback: Genie answers with MiniMax at 402', g.length > 0 && g.every((l) => !/answered by 1\//.test(l)), (g[0] || 'no answer') + ' | ' + chainLines(h, c1).filter((l) => l.includes('genie') && l.includes('failed')).slice(0, 4).join(' | '));
   [ok, d] = painted(h.OUT, fG, ['Pack umbrella']);
   h.check('fallback: Genie\'s change is painted on screen (OCR "Pack umbrella")', ok, d);
+  await reminderIcs(h, page);
   await ctx.close();
 }
+
+/** (6) The Reminder card Genie made gets a due time, then its Calendar button hands over a real .ics. */
+async function reminderIcs(h, page) {
+  await h.boot(page, '?app=smartgen&sg=editor');
+  await h.sleep(1500);
+  let f = await h.shot(page, 'reminder_card');
+  const [okTitle, dT] = painted(h.OUT, f, ['Pack umbrella']);
+  await h.tapAt(page, 'Add date'); await h.sleep(1200);
+  await h.tapAt(page, 'OK'); await h.sleep(1200); // date
+  await h.tapAt(page, 'OK'); await h.sleep(1500); // time
+  f = await h.shot(page, 'reminder_due_set');
+  const dl = page.waitForEvent('download', { timeout: 15000 }).catch(() => null);
+  const tapped = await h.tapAt(page, 'Calendar');
+  const d = await dl;
+  let ics = '';
+  if (d) { const p = join(h.OUT, 'reminder.ics'); await d.saveAs(p); ics = readFileSync(p, 'utf8'); }
+  h.check('reminders: a Reminder card with a due time exports a calendar event (.ics)', okTitle && tapped && /BEGIN:VCALENDAR/.test(ics) && /BEGIN:VEVENT/.test(ics) && /SUMMARY:Pack umbrella/i.test(ics) && /BEGIN:VALARM/.test(ics),
+    `${f} title=${okTitle} tapped=${tapped} file=${d ? d.suggestedFilename() : 'none'} ics=${ics.replace(/\r?\n/g, ' | ').slice(0, 240)}`);
+}
+
+/** (7) Home composer: visible glass bar, "Ask anything", focused on load, Send brightens with text. */
+async function composer(h) {
+  const { page, ctx } = await h.newPage(h.browser);
+  await h.boot(page, '', { semantics: false });
+  const f = await h.shot(page, 'composer_on_load');
+  const [ok, d] = painted(h.OUT, f, ['Ask anything']);
+  h.check('composer: "Ask anything" is shown on load (OCR)', ok, d);
+  const focused = await page.evaluate(() => { const a = document.activeElement; const deep = (e) => (e && e.shadowRoot && e.shadowRoot.activeElement) ? deep(e.shadowRoot.activeElement) : e; const x = deep(a); return x ? x.tagName : ''; });
+  h.check('composer: it has the keyboard focus on load (blinking cursor)', /INPUT|TEXTAREA/.test(focused), `active=${focused}`);
+  // Send circle brightness before / after typing (the circle at the right end of the bar).
+  const at = ocrBoxesOf(h, f, 'Ask anything');
+  const y = at ? at[2] / h.DSF : 880, x = h.W - 62;
+  const lum = async () => { const b = await page.screenshot({ clip: { x: x - 6, y: y - 6, width: 12, height: 12 } }); return meanLum(b); };
+  const before = await lum();
+  await page.keyboard.type('hello', { delay: 20 });
+  await h.sleep(600);
+  const after = await lum();
+  const f2 = await h.shot(page, 'composer_typed');
+  h.check('composer: Send brightens once there is text', after > before + 60, `luminance ${before.toFixed(0)} -> ${after.toFixed(0)} at ${x},${Math.round(y)} (${f2})`);
+  await ctx.close();
+}
+
 
 /** (2) Smart Gen names: the board-kind choices are the spec's work areas; canvas names are the spec's. */
 async function smartGenNames(h) {

@@ -432,11 +432,13 @@ async function tickerChecks(browser) {
       warn(`ticker: ${row} — provider timed out upstream at test time (row shows its error)`, summary);
     } else check(`ticker: ${row} answers`, false, summary || 'never asked');
   }
-  // Consensus agent 1 (headcount/essence) and 2 (chains) ran on real replies.
-  const cons = all.filter((r) => r.agent && /minimax-m3\.1-flash/i.test(r.model) && r.status === 200 && /RATIO:/i.test(r.text));
-  check('ticker: consensus agent 1 (MiniMax M3.1 Flash) returns a headcount', cons.length > 0, cons[0]?.text.replace(/\s+/g, ' ').slice(0, 120));
-  const chains = all.filter((r) => r.agent && /deepseek/i.test(r.model) && r.status === 200 && /CHAIN/i.test(r.text));
-  check('ticker: consensus agent 2 (DeepSeek V4.1 Flash) returns logical chains', chains.length > 0, chains[0]?.text.replace(/\s+/g, ' ').slice(0, 120));
+  // Consensus agent 1 (headcount/essence) and 2 (chains) answered, from whichever entry of
+  // David's list was working (the app logs "[chain] <role> answered by n/9 …").
+  const chainLog = consoleLines.filter((l) => l.includes('[chain]'));
+  const by = (role) => chainLog.filter((l) => l.includes(`[chain] ${role} answered by`));
+  check('ticker: consensus agent 1 answers (headcount)', by('consensus').length > 0, by('consensus')[0] || chainLog.filter((l) => l.includes('consensus')).slice(-3).join(' | '));
+  check('ticker: consensus agent 2 answers (logical chains)', by('chains').length > 0, by('chains')[0] || chainLog.filter((l) => l.includes('chains')).slice(-3).join(' | '));
+  check('ticker: one-line summaries answer', by('summary').length > 0, by('summary')[0] || '');
   for (const [tag, r] of [['A', a], ['B', b]]) {
     check(`ticker run ${tag}: rows switched on (${r.toggled.length}/${tag === 'A' ? 6 : 4})`, r.toggled.length === (tag === 'A' ? 6 : 4), r.toggled.join(', '));
     check(`ticker run ${tag}: tapping a row opens its conversation`, !!r.expanded && r.expanded.lines.some((x) => /^You /.test(x)) && r.expanded.lines.some((x) => /canberra/i.test(x) && !/^You /.test(x)), JSON.stringify(r.expanded?.lines || []).slice(0, 300));
