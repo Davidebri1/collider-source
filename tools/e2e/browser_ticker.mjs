@@ -14,12 +14,16 @@
  * status), console.txt, replies.json (the words each provider sent back) and
  * report.json (PASS/FAIL per check). Exit code 1 when any check fails.
  *
+ * ONLY=browser|ticker|features (comma list) limits the run; features are the
+ * backup ports (backup_features.mjs), read back by OCR (ocr.py).
+ *
  * Env: CHROME (default /usr/bin/google-chrome), PLAYWRIGHT_CORE (path to
  * playwright-core), TICKER_WAIT_S (default 150).
  */
 import { createRequire } from 'module';
 import { mkdirSync, writeFileSync, readFileSync, existsSync, statSync } from 'fs';
 import { join, extname, resolve } from 'path';
+import { featureChecks } from './backup_features.mjs';
 
 const require = createRequire(import.meta.url);
 const PW = process.env.PLAYWRIGHT_CORE || '/usr/local/lib/pnpm/5/.pnpm/playwright-core@1.59.1/node_modules/playwright-core';
@@ -229,9 +233,10 @@ async function browserChecks(browser) {
 
   // Back returns to the page before the link.
   if (linkOk) {
-    // Back: the arrow at the left end of the address capsule.
+    // Back: the arrow at the left end of the address capsule (after Close
+    // and Sidebar).
     const b = await frameBox(page);
-    await page.mouse.click(b.x + 26, b.y - 33);
+    await page.mouse.click(b.x + 62, b.y - 33);
     fr = await waitFrame(page, (f) => /^https:\/\/www\.wikipedia\.org\//.test(f.base), 30000);
     await sleep(2000);
     await shot(page, 'browser_back');
@@ -369,8 +374,11 @@ async function tickerChecks(browser) {
 const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', headless: true, args: ['--headless=new', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--hide-scrollbars'] });
 let needKey = [];
 try {
-  if (process.env.ONLY !== 'ticker') await browserChecks(browser);
-  if (process.env.ONLY !== 'browser') needKey = await tickerChecks(browser);
+  // ONLY=browser|ticker|features, or a comma list; unset runs all three.
+  const only = (process.env.ONLY || 'browser,ticker,features').split(',');
+  if (only.includes('browser')) await browserChecks(browser);
+  if (only.includes('ticker')) needKey = await tickerChecks(browser);
+  if (only.includes('features')) await featureChecks({ browser, newPage, boot, labels, tapAt, shot: (p, n) => shot(p, n), check, warn, sleep, OUT, typeAddress, waitFrame });
 } finally {
   await browser.close();
   writeFileSync(join(OUT, 'network.json'), JSON.stringify(net, null, 1));
