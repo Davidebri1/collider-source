@@ -136,7 +136,14 @@ async function fallback402(h) {
   // Each role answers (or fails through all 9 entries); a hung entry is dropped after 40 s.
   const t0 = Date.now();
   const done = (role) => chainLines(h, c0).some((l) => new RegExp(`\\[chain\\] ${role} (answered by|9/9 )`).test(l));
-  while (Date.now() - t0 < 420000 && !['consensus', 'summary', 'chains'].every(done)) await h.sleep(2000);
+  const when = {};
+  while (Date.now() - t0 < 420000 && !['consensus', 'summary', 'chains'].every(done)) {
+    for (const r of ['consensus', 'summary', 'chains']) if (when[r] == null && done(r)) when[r] = Math.round((Date.now() - t0) / 1000);
+    await h.sleep(1000);
+  }
+  for (const r of ['consensus', 'summary', 'chains']) if (when[r] == null && done(r)) when[r] = Math.round((Date.now() - t0) / 1000);
+  h.timing = { ...(h.timing || {}), ...when };
+  h.check('fallback: consensus answers within 60 s with MiniMax at 402 (time to answer)', when.consensus != null && when.consensus <= 60, `consensus ${when.consensus} s, summary ${when.summary} s, chains ${when.chains} s after send`);
   await h.sleep(6000);
   const fT = await h.shot(page, 'fallback_ticker_answered');
   const lines = chainLines(h, c0);
@@ -144,7 +151,8 @@ async function fallback402(h) {
   h.check('fallback: MiniMax direct was forced to 402', forced.length > 0, `${forced.length} MiniMax call(s) answered 402`);
   for (const role of ['consensus', 'summary', 'chains']) {
     const a = answered(role);
-    h.check(`fallback: ${role} answers with MiniMax at 402`, a.length > 0 && a.every((l) => !/answered by 1\//.test(l)), (a[0] || 'no answer') + ' | ' + lines.filter((l) => l.includes(`] ${role} `) && l.includes('failed')).slice(0, 4).join(' | '));
+    // chains has its own list (MiniMax is not on it), so any entry may answer.
+    h.check(role === 'chains' ? 'fallback: chains answers from its own list' : `fallback: ${role} answers with MiniMax at 402`, a.length > 0 && (role === 'chains' || a.every((l) => !/answered by 1\//.test(l))), (a[0] || 'no answer') + ' | ' + lines.filter((l) => l.includes(`] ${role} `) && l.includes('failed')).slice(0, 4).join(' | '));
   }
   // The consensus card on screen (top of the ticker) reads Canberra.
   const top = (await h.labels(page)).find((x) => /^\d+\/\d+\n/.test(x.label));
@@ -162,7 +170,9 @@ async function fallback402(h) {
   await page.keyboard.type('Add a reminder card called Pack umbrella to To Do.', { delay: 8 });
   await page.keyboard.press('Enter');
   const g0 = Date.now();
-  while (Date.now() - g0 < 300000 && !chainLines(h, c1).some((l) => /\[chain\] genie (answered by|9\/9 )/.test(l))) await h.sleep(2000);
+  while (Date.now() - g0 < 300000 && !chainLines(h, c1).some((l) => /\[chain\] genie (answered by|9\/9 )/.test(l))) await h.sleep(1000);
+  h.timing = { ...(h.timing || {}), genie: Math.round((Date.now() - g0) / 1000) };
+  h.check('fallback: Genie time to answer (s)', true, `${h.timing.genie} s after send`);
   await h.sleep(4000);
   const fG = await h.shot(page, 'fallback_genie_answered');
   const g = chainLines(h, c1).filter((l) => /\[chain\] genie answered by/.test(l));
@@ -260,5 +270,39 @@ async function smartGenNames(h) {
   h.check('names: Board kind offers the spec\'s work areas, not canvas objects', missing.length === 0 && wrong.length === 0, `${fK} missing=${JSON.stringify(missing)} wrong=${JSON.stringify(wrong)}`);
   const [ok, d] = painted(h.OUT, fK, ['Board kind', 'Workbench']);
   h.check('names: Board kind choices are painted (OCR)', ok, d);
+  // Canvas types are not board views; they are added onto the board from
+  // the board's add menu (Board menu > Add a canvas: library + search).
+  await h.boot(page, '?app=smartgen&sg=canvas');
+  await h.sleep(1500);
+  const canvasTypes = ['Notebook', 'Gallery', 'Portfolio', 'Folder', 'Storyboard', 'Vision board', 'US map', 'World map', 'Swimlane'];
+  // Scroll the view row end to end and collect every chip it offers.
+  const row = new Set();
+  for (let i = 0; i < 6; i++) {
+    for (const l of await h.labels(page)) if (l.y > 150 && l.y < 220) row.add(l.label);
+    await page.mouse.move(h.W / 2, 188); await page.mouse.wheel(i < 3 ? 300 : -300, 0); await h.sleep(400);
+  }
+  const fRow = await h.shot(page, 'names_view_row');
+  const offered = canvasTypes.filter((t) => row.has(t));
+  h.check('names: the board view row offers no canvas types (Notebook, Gallery, Portfolio, Folder...)', offered.length === 0 && row.has('Canvas'), `${fRow} row=${JSON.stringify([...row])}`);
+  await h.tapAt(page, 'Board menu');
+  await h.sleep(1000);
+  await h.tapAt(page, 'Add a canvas');
+  await h.sleep(1200);
+  const fLib = await h.shot(page, 'add_canvas_library');
+  const libLab = (await h.labels(page)).map((l) => l.label);
+  const libMissing = ['Glass', 'Notebook', 'Gallery', 'Portfolio', 'Folder'].filter((t) => !libLab.includes(t));
+  h.check('add menu: Add a canvas shows the canvas library (thumbnails + labels) with a search field', libMissing.length === 0 && libLab.some((l) => /Search/.test(l)), `${fLib} missing=${JSON.stringify(libMissing)}`);
+  await h.tapAt(page, 'Search');
+  await h.sleep(300);
+  await page.keyboard.type('note', { delay: 20 });
+  await h.sleep(800);
+  const fSearch = await h.shot(page, 'add_canvas_search');
+  const sLab = (await h.labels(page)).map((l) => l.label);
+  h.check('add menu: search narrows the library ("note" -> Notebook)', sLab.includes('Notebook') && !sLab.includes('Gallery'), fSearch);
+  await h.tapAt(page, 'Notebook');
+  await h.sleep(1500);
+  const fNb = await h.shot(page, 'add_canvas_notebook_on_board');
+  const nLab = (await h.labels(page)).map((l) => l.label);
+  h.check('add menu: picking Notebook adds a Notebook canvas onto the board (canvas chip 2)', nLab.includes('2') && !nLab.includes('Add a canvas'), `${fNb} ${nLab.slice(0, 20).join(' | ')}`);
   await ctx.close();
 }
