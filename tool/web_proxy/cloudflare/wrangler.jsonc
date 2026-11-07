@@ -1,0 +1,23 @@
+// Collider Wisp relay on Cloudflare Containers -> https://collider-wisp.ebridavid.workers.dev/wisp/
+// Plan: Workers Paid ($5/month). See ../DEPLOY.md, "Cloudflare Containers".
+{
+  "name": "collider-wisp",
+  "main": "src/index.js",
+  "compatibility_date": "2026-11-07",
+  "workers_dev": true,
+  "containers": [
+    {
+      "class_name": "WispContainer",
+      "image": "../Dockerfile",
+      "image_build_context": "..",
+      "instance_type": "lite",
+      "max_instances": 1
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "WISP", "class_name": "WispContainer" }]
+  },
+  "exports": {
+    "WispContainer": { "type": "durable-object", "storage": "sqlite" }
+  }
+}

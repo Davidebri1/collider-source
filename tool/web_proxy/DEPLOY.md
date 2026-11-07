@@ -47,3 +47,38 @@ Prerequisite: the branch with `tool/web_proxy/` is pushed to David's GitHub repo
 
 Command-line alternative (Cloud Shell, after steps 1–3):
 `gcloud run deploy collider-wisp --source tool/web_proxy --region us-east1 --allow-unauthenticated --port 8080 --timeout 3600 --min-instances 0 --max-instances 1 --memory 256Mi`
+
+
+## Cloudflare Containers (if David chooses Cloudflare)
+
+`tool/web_proxy/cloudflare/` contains:
+- `wrangler.jsonc`: the Worker `collider-wisp`, one `lite` container built from `../Dockerfile`, `max_instances: 1`.
+- `src/index.js`: a Worker that answers `/healthz` itself, returns 403 for any Origin other than
+  `https://davidebri1.github.io`, and passes the `/wisp/` WebSocket to the container.
+  The container sleeps after 10 idle minutes and starts again on the next connection, which takes a few seconds.
+
+I checked this with `wrangler deploy --dry-run`. It is not tested end to end, because the box has no Docker.
+
+**Plan and cost** (Cloudflare Containers pricing page, checked 2026-11-07):
+- Containers are **not on the Free plan**. They need the **Workers Paid plan, $5/month**, which needs a card.
+- The plan includes 25 GiB-hours of memory, 375 vCPU-minutes and 200 GB-hours of disk each month.
+- Beyond that: $0.0000025 per GiB-second of memory, $0.000020 per vCPU-second, and $0.00000007 per GB-second of disk.
+- Egress: 1 TB a month is included in North America and Europe, then $0.025/GB.
+- The `lite` instance is 1/16 vCPU, 256 MiB and 2 GB disk. Running it around the clock is about 180 GiB-hours of memory and 1,440 GB-hours of disk.
+  That works out to roughly **$1.40 + $0.30 a month over the $5**. Since it sleeps when idle, it usually costs just the **$5**.
+- Compared with Cloud Run: about $5/month instead of about $0, and the same card requirement. The advantages are one vendor
+  (Cloudflare, like the Workers) and no 60-minute WebSocket cap.
+
+**Dashboard steps** (Workers Builds builds the Dockerfile on Cloudflare, so no local Docker and no API token are needed):
+1. Sign in at https://dash.cloudflare.com (account `ebridavid`). Go to **Workers & Pages > Plans** (or
+   **Manage account > Billing**), choose **Workers Paid ($5/month)**, enter the card, and confirm.
+2. Open **Workers & Pages**, select **Create application**, then **Import a repository** (Git). Connect
+   GitHub if asked, and authorize the Cloudflare app for `davidebri1/collider-app` only.
+3. Select the repository. Set Project name to `collider-wisp` (it must match `name` in
+   `wrangler.jsonc`), Production branch to the branch with these files, and **Root directory** to
+   `tool/web_proxy/cloudflare`. Leave the build command empty and set the deploy command to `npx wrangler deploy`.
+   Select **Save and Deploy**.
+4. Wait for the build to finish. The first one builds and pushes the image, and the container takes a few minutes to provision.
+   Then open `https://collider-wisp.ebridavid.workers.dev/healthz`. It should show `ok`.
+5. Set `web/proxy/config.js` to
+   `self.COLLIDER_WISP_URL = 'wss://collider-wisp.ebridavid.workers.dev/wisp/';`, then rebuild and publish the web app.
