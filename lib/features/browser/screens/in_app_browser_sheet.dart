@@ -2,6 +2,7 @@ import '../../../core/theme/edge_fade.dart';
 import 'package:flutter/material.dart';
 import '../../../core/vision/vision_kit.dart';
 import '../models/browser_tab.dart';
+import '../browser_store.dart';
 import '../browser_urls.dart';
 import '../web_frame.dart';
 
@@ -49,6 +50,9 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
   final Map<String, List<String>> _back = {};
   int _reload = 0;
   String? _shownUrl;
+  // OCT24 checkpoint (ARGON OCT24 9c7dd3a): sidebar with tabs, Bookmarks, History.
+  bool _sidebar = false;
+  String? _side;
 
   BrowserTab get _tab => widget.tabs.firstWhere((t) => t.id == _activeTabId, orElse: () => widget.tabs.first);
 
@@ -56,6 +60,9 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
   void initState() {
     super.initState();
     _activeTabId = widget.initialTabId;
+    BrowserStore.instance.init().then((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
@@ -122,6 +129,8 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
     if (_shownUrl != tab.url) {
       _shownUrl = tab.url;
       _addr.text = _host(tab.url);
+      // A page was shown: History keeps it (OCT24 BrowserStore.visited).
+      WidgetsBinding.instance.addPostFrameCallback((_) => BrowserStore.instance.visited(tab.url, tab.title));
     }
     final media = MediaQuery.sizeOf(context);
     final safe = MediaQuery.paddingOf(context);
@@ -143,6 +152,17 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
           child: Row(
             children: [
               VCircleButton(icon: Icons.close_rounded, size: 32, tooltip: 'Close', onTap: widget.onClose),
+              const SizedBox(width: VSpace.xxs),
+              VCircleButton(
+                icon: Icons.view_sidebar_outlined,
+                size: 32,
+                tooltip: 'Sidebar',
+                selected: _sidebar,
+                onTap: () => setState(() {
+                  _sidebar = !_sidebar;
+                  _side = null;
+                }),
+              ),
               const SizedBox(width: VSpace.xs - 2),
               Expanded(
                 child: Container(
@@ -204,13 +224,92 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
           child: VGlass(
             material: VMaterial.work,
             radius: VRadius.xl,
-            child: _overview ? _tabsOverview() : _page(tab),
+            child: Stack(children: [
+              Positioned.fill(child: _overview ? _tabsOverview() : _page(tab)),
+              if (_sidebar) Positioned(left: 8, top: 8, width: 240, child: _sidebarPanel()),
+            ]),
           ),
         ),
         const SizedBox(height: VSpace.sm),
         const VWindowBar(),
       ],
     ),
+    );
+  }
+
+  /// Ported from the OCT24 checkpoint's _sidebarPanel. Left out: Settings →
+  /// Request Desktop Website (pages come through the page proxy, which cannot
+  /// ask for a desktop site) and Save (no download path on Pages); Close is
+  /// the ornament's own close button.
+  Widget _sidebarPanel() {
+    final store = BrowserStore.instance;
+    Widget row(IconData? icon, String label, VoidCallback onTap, {bool on = false}) => VPress(
+          onTap: onTap,
+          child: Container(
+            height: 40,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(color: on ? const Color(0x24FFFFFF) : Colors.transparent, borderRadius: BorderRadius.circular(11)),
+            child: Row(
+              children: [
+                if (icon != null) ...[Icon(icon, size: 17, color: VColors.textSecondary), const SizedBox(width: 10)],
+                Expanded(child: Text(label, maxLines: 1, softWrap: false, overflow: TextOverflow.fade, style: VType.callout())),
+              ],
+            ),
+          ),
+        );
+    Widget page(BrowserPage p) => row(null, p.title.isEmpty ? _host(p.url) : p.title, () {
+          setState(() => _sidebar = false);
+          _go(p.url);
+        });
+    Widget back(String label) => row(Icons.chevron_left_rounded, label, () => setState(() => _side = null));
+
+    final List<Widget> children;
+    switch (_side) {
+      case 'bookmarks':
+        final here = store.isBookmarked(_tab.url);
+        children = [
+          back('Bookmarks'),
+          row(here ? Icons.bookmark_rounded : Icons.bookmark_add_outlined, _tab.title.isEmpty ? _host(_tab.url) : _tab.title,
+              () => setState(() => store.toggleBookmark(_tab.url, _tab.title)),
+              on: here),
+          const Divider(height: 10, color: Color(0x1FFFFFFF)),
+          for (final b in store.bookmarks) page(b),
+        ];
+      case 'history':
+        children = [
+          back('History'),
+          for (final h in store.history.take(200)) page(h),
+          if (store.history.isNotEmpty) ...[
+            const Divider(height: 10, color: Color(0x1FFFFFFF)),
+            row(Icons.delete_outline_rounded, 'Clear History', () => setState(store.clearHistory)),
+          ],
+        ];
+      default:
+        children = [
+          for (final t in widget.tabs)
+            row(null, t.title.isEmpty ? _host(t.url) : t.title, () {
+              _switchTab(t.id);
+              setState(() => _sidebar = false);
+            }, on: t.id == _activeTabId),
+          const Divider(height: 10, color: Color(0x1FFFFFFF)),
+          row(Icons.bookmark_border_rounded, 'Bookmarks', () => setState(() => _side = 'bookmarks')),
+          row(Icons.history_rounded, 'History', () => setState(() => _side = 'history')),
+        ];
+    }
+    return DecoratedBox(
+      decoration: BoxDecoration(color: const Color(0xFF1C2026), borderRadius: BorderRadius.circular(16)),
+      child: VGlass(
+        material: VMaterial.modal,
+        radius: 16,
+        padding: const EdgeInsets.all(6),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.6),
+          child: EdgeFade(fadeHeight: 16, child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Column(mainAxisSize: MainAxisSize.min, children: children),
+          )),
+        ),
+      ),
     );
   }
 
