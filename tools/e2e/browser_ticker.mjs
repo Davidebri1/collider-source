@@ -39,6 +39,7 @@ const check = (name, ok, detail = '') => { checks.push({ name, ok: !!ok, detail 
 const warns = [];
 const warn = (name, detail = '') => { warns.push({ name, detail }); console.log(`WARN  ${name}${detail ? '  — ' + detail : ''}`); };
 const net = [], consoleLines = [], replies = [];
+let inFlight = 0; // provider calls (Worker /api/p) started and not finished
 let shotN = 0;
 
 async function newPage(browser) {
@@ -53,6 +54,10 @@ async function newPage(browser) {
     });
   }
   const page = await ctx.newPage();
+  const isP = (q) => /\/api\/p\?u=/.test(q.url()) && q.method() === 'POST';
+  page.on('request', (q) => { if (isP(q)) inFlight++; });
+  page.on('requestfinished', (q) => { if (isP(q)) inFlight--; });
+  page.on('requestfailed', (q) => { if (isP(q)) inFlight--; });
   page.on('response', async (r) => {
     const q = r.request();
     let model = '', agent = false;
@@ -254,13 +259,17 @@ async function tickerRun(browser, tag, toggles) {
   await page.keyboard.press('Enter');
   await sleep(4000);
   await shot(page, `ticker_${tag}_sent`);
-  // Wait until no provider call has finished for 20 s (after at least 40 s), or WAIT runs out.
+  // Wait until every provider call (rows, summaries, both consensus agents)
+  // has finished and none has started for 10 s, or WAIT runs out.
   const t0 = Date.now();
+  let idleSince = 0;
   while (Date.now() - t0 < WAIT) {
-    await sleep(2000);
-    const lastAt = net.filter((r) => /\/api\/p\?u=/.test(r.url)).map((r) => Date.parse(r.t)).pop() || t0;
-    if (Date.now() - lastAt > 20000 && Date.now() - t0 > 40000) break;
+    await sleep(1000);
+    if (inFlight > 0 || Date.now() - t0 < 20000) { idleSince = 0; continue; }
+    idleSince ||= Date.now();
+    if (Date.now() - idleSince > 10000) break;
   }
+  await sleep(1500); // let the last response bodies be read
   await sleep(3000);
   await shot(page, `ticker_${tag}_answered`);
   const mine = replies.slice(rmark);
@@ -348,7 +357,7 @@ async function tickerChecks(browser) {
   check('ticker: consensus agent 2 (DeepSeek V4.1 Flash) returns logical chains', chains.length > 0, chains[0]?.text.replace(/\s+/g, ' ').slice(0, 120));
   for (const [tag, r] of [['A', a], ['B', b]]) {
     check(`ticker run ${tag}: rows switched on (${r.toggled.length}/${tag === 'A' ? 6 : 4})`, r.toggled.length === (tag === 'A' ? 6 : 4), r.toggled.join(', '));
-    check(`ticker run ${tag}: tapping a row opens its conversation`, !!r.expanded?.open && r.expanded.lines.some((x) => /canberra/i.test(x)), JSON.stringify(r.expanded?.lines || []).slice(0, 300));
+    check(`ticker run ${tag}: tapping a row opens its conversation`, !!r.expanded && r.expanded.lines.some((x) => /^You /.test(x)) && r.expanded.lines.some((x) => /canberra/i.test(x) && !/^You /.test(x)), JSON.stringify(r.expanded?.lines || []).slice(0, 300));
     check(`ticker run ${tag}: consensus card shows a headcount and opens`, !!r.consensus && /^\d+\/\d+ /.test(r.consensus.card) && /canberra/i.test(r.consensus.card), JSON.stringify(r.consensus || {}).slice(0, 400));
     check(`ticker run ${tag}: Global History lists the conversation`, r.hist.includes('Global History') && r.hist.some((l) => l.includes('capital of Australia')), '');
   }
