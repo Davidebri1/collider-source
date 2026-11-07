@@ -165,20 +165,37 @@ class VOverlay {
   static bool _phone(BuildContext c) => MediaQuery.sizeOf(c).width < 768;
 
   /// Menus: settings, history, models, skills, tiers, zoom, alert.
-  static double menuWidth(BuildContext c) {
-    final w = MediaQuery.sizeOf(c).width;
-    return _phone(c) ? (w - 104).clamp(240.0, 300.0) : 340.0;
-  }
+  static double menuWidth(BuildContext c) => VPane.width(c);
 
   static double menuMaxHeight(BuildContext c) => MediaQuery.sizeOf(c).height * 0.46;
 
   /// Tools: Smart Gen, Discover, Files, Browser, Consensus.
-  static double toolWidth(BuildContext c) {
-    final w = MediaQuery.sizeOf(c).width;
-    return _phone(c) ? (w - 104).clamp(260.0, 300.0) : (w * 0.46).clamp(480.0, 640.0);
-  }
+  static double toolWidth(BuildContext c) => VPane.width(c);
 
   static double toolMaxHeight(BuildContext c) => MediaQuery.sizeOf(c).height * (_phone(c) ? 0.56 : 0.6);
+}
+
+/// David (Nov 7): every pane is centred at the Settings pane's width. This
+/// is the one width; Settings, Smart Gen, Files, Market, Themes, Music,
+/// Consensus, Browser, menus and tools all read it. No screen keeps its own
+/// number.
+class VPane {
+  VPane._();
+  static bool phone(BuildContext c) => MediaQuery.sizeOf(c).width < 700;
+  static double width(BuildContext c) {
+    final w = MediaQuery.sizeOf(c).width;
+    return phone(c) ? (w * 0.82).clamp(280.0, 360.0) : 1179 * 0.30;
+  }
+}
+
+/// Centres [child] at [VPane.width], full height of its slot.
+class VPaneFrame extends StatelessWidget {
+  final Widget child;
+  final double? height;
+  const VPaneFrame({super.key, required this.child, this.height});
+  @override
+  Widget build(BuildContext context) =>
+      Center(child: SizedBox(width: VPane.width(context), height: height, child: child));
 }
 
 class VMotion {

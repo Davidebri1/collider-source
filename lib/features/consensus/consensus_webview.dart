@@ -290,10 +290,14 @@ class _ConsensusWebViewState extends State<ConsensusWebView> {
     if (isMobile) {
       // Source mobile layout: the scene IS the screen, edge to edge, on the
       // scene's own #07080b surface, with its own header and back control.
-      return Container(
-        color: const Color(0xFF07080B),
-        child: SafeArea(child: LayoutBuilder(builder: (context, c) => _scene(c))),
-      );
+      // David (Nov 7): centred at the Settings pane's width like every pane.
+      return SafeArea(child: VPaneFrame(child: ClipRRect(
+        borderRadius: BorderRadius.circular(VRadius.xl),
+        child: ColoredBox(
+          color: const Color(0xFF07080B),
+          child: LayoutBuilder(builder: (context, c) => _scene(c)),
+        ),
+      )));
     }
     return Stack(
       fit: StackFit.expand,

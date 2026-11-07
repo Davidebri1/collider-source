@@ -144,25 +144,16 @@ class _FilesScreenState extends State<FilesScreen> {
             // portrait frame 560 px wide and scaled as one unit to the phone
             // width (~0.7x, readable), instead of shrinking the whole 1336 px
             // landscape window to 0.29x. The sidebar slides in from its button.
-            if (c.maxWidth >= 768) {
-              return FigmaStage(
-                frame: FilesScreen.frame,
-                cropWidth: FilesScreen.cropWidth,
-                center: FilesScreen.center,
-                children: [
-                  Positioned(left: 95.4, top: 0, width: 295, height: 740, child: _sidebar(all)),
-                  Positioned(left: 390.4, top: 0, width: 946, height: 740, child: _main(title, files, cat)),
-                  Positioned(left: 518.8, top: 721, width: 394.1, height: 60.2, child: _segments()),
-                ],
-              );
-            }
+            // David (Nov 7): every pane is centred at the Settings pane's
+            // width, on every screen size. The portrait composition is scaled
+            // so its main panel is exactly VPane.width.
             const pw = FilesScreen.phoneWidth;
-            final s = c.maxWidth / pw;
+            final s = VPane.width(context) / (pw - 28);
             final ph = c.maxHeight / s;
             final top = (MediaQuery.paddingOf(context).top + 60) / s;
             // Clear the home composer and nav bar (playtest: filter bar overlapped the composer).
             final panelH = ph - top - 200 / s;
-            return FigmaStage(
+            return Center(child: SizedBox(width: pw * s, height: c.maxHeight, child: FigmaStage(
               frame: Size(pw, ph),
               cropWidth: pw,
               center: Offset(pw / 2, ph / 2),
@@ -179,7 +170,7 @@ class _FilesScreenState extends State<FilesScreen> {
                   child: NotificationListener<Notification>(child: _sidebar(all, onPicked: () => setState(() => _side = false))),
                 ),
               ],
-            );
+            )));
           })),
           if (_sel.active) Positioned(left: 0, right: 0, bottom: 40, child: Center(child: _selBar(files))),
           Positioned(top: MediaQuery.paddingOf(context).top + 8, right: 8, child: VCloseButton(onTap: widget.onClose)),

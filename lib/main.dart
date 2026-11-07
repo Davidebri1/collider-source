@@ -2542,7 +2542,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // v9.1.4 (playtest #14): dissolves out instead of a hard cut.
             Positioned.fill(child: MaterializeSwitch(show: _activeDrawer == 'premium', builder: (_) => GestureDetector(
                 behavior: HitTestBehavior.translucent,
-                child: PremiumThemeMarketView(
+                // David (Nov 7): centred at the Settings pane's width.
+                child: VPaneFrame(child: ClipRRect(borderRadius: BorderRadius.circular(VRadius.xl), child: PremiumThemeMarketView(
                 // v9.1.4 (playtest #2): rebuild once the catalog arrives, so a
                 // direct link shows real covers.
                 key: ValueKey('market-${WallpaperCatalog.premiumThemes.length}'),
@@ -2567,7 +2568,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                 },
                 onClose: () => setState(() => _activeDrawer = null),
                 onFree: () => setState(() => _activeDrawer = 'themes'),
-              ),
+              ))),
               ))),
 
           // No songs in the catalog: no Music drawer (v8.3, D46).
@@ -2597,9 +2598,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                   // Same width formula as SettingsDrawer (phone 0.82 / desktop panel).
                   // Single SettingsGlassPane host — SgPane fills it without a nested
                   // CPane phoneBoard (that double wrapper left a frost band under the canvas).
-                  final paneW = phone
-                      ? (size.width * 0.82).clamp(280.0, 360.0)
-                      : SettingsDrawer.panel.width;
+                  final paneW = VPane.width(context);
                   final paneH = phone
                       ? (size.height * 0.78).clamp(480.0, 740.0)
                       : (size.height * 0.78).clamp(SettingsDrawer.panel.height, 740.0);
@@ -2631,7 +2630,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
           if (_activeDrawer == 'market')
             Positioned(
-              left: isMobile ? 0 : 360,
+              left: 0,
               right: 0,
               top: 0,
               bottom: 78,
@@ -2648,7 +2647,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
           if (_activeDrawer == 'files')
             Positioned(
-              left: isMobile ? 0 : 360,
+              left: 0,
               right: 0,
               top: 0,
               bottom: 78,

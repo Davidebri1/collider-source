@@ -75,9 +75,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
             listenable: Listenable.merge([FloatingMusic.enabled, ThemeCatalog.instance]),
             builder: (context, __) {
               final phone = MediaQuery.sizeOf(context).width < 700;
-              final paneW = phone
-                  ? (MediaQuery.sizeOf(context).width * 0.82).clamp(280.0, 360.0)
-                  : SettingsDrawer.panel.width;
+              final paneW = VPane.width(context);
 
               final body = switch (_page) {
                 _SettingsPage.root => _RootSettings(
@@ -108,7 +106,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
               // Wide: keep Figma frame scale for root only; account/plans use readable phone-scale pane.
               if (_page != _SettingsPage.root) {
                 return SizedBox(
-                  width: (MediaQuery.sizeOf(context).width * 0.36).clamp(320.0, 420.0),
+                  width: paneW,
                   child: SettingsGlassPane(child: body),
                 );
               }

@@ -23,10 +23,7 @@ class _AccountSheetState extends State<AccountSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final phone = MediaQuery.sizeOf(context).width < 700;
-    final paneW = phone
-        ? (MediaQuery.sizeOf(context).width * 0.82).clamp(280.0, 360.0)
-        : 1179 * 0.30;
+    final paneW = VPane.width(context);
 
     return Stack(
       fit: StackFit.expand,
