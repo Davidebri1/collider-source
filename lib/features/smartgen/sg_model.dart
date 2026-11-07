@@ -39,14 +39,32 @@ enum SgFieldKind { text, textarea, richtext, number, date, datetime, checkbox, s
 
 /// Board = the background work area (Smart Gen spec, "Kanban Boards: Default Types").
 /// Notebook, Portfolio, Folder… are canvas types that sit on a board, so they are not board kinds.
-enum SgBoardKind { kanban, calendar, whiteboard, longBench, workbench, desk, table, roundTable, nightStand, longTable, coffeeTable }
+enum SgBoardKind {
+  kanban,
+  calendar,
+  whiteboard,
+  whiteboardLanes,
+  whiteboardPlain,
+  longBench,
+  workbench,
+  desk,
+  table,
+  roundTable,
+  nightStand,
+  longTable,
+  coffeeTable,
+  charts,
+}
 
 extension SgBoardKindX on SgBoardKind {
   String get label => switch (this) {
         SgBoardKind.kanban => 'Kanban Board with Swim lanes',
         SgBoardKind.calendar => 'Calendar',
-        SgBoardKind.whiteboard => 'Whiteboard',
+        SgBoardKind.whiteboard => 'Whiteboard empty',
+        SgBoardKind.whiteboardLanes => 'Whiteboard with swim lanes',
+        SgBoardKind.whiteboardPlain => 'White board without swim lanes',
         SgBoardKind.longBench => 'Long wood bench',
+        SgBoardKind.charts => 'Various Different Charts and diagrams',
         SgBoardKind.workbench => 'Workbench',
         SgBoardKind.desk => 'Desk',
         SgBoardKind.table => 'Table',
@@ -141,20 +159,25 @@ extension SgSurfaceX on SgSurface {
 /// names; 'Glass' is the plain free canvas. They are not board views.
 const List<(String, SgSurface?)> kSgCanvasTypes = [
   ('Glass', null),
-  ('Notebook', SgSurface.notebook),
-  ('Gallery', SgSurface.album),
+  ('Mirror', null),
+  ('Swimlane vertical', SgSurface.swimlane),
+  ('Swimlane horizontal', SgSurface.swimlane),
+  ('Name Photo Description', null),
   ('Portfolio', SgSurface.portfolio),
+  ('Notebook', SgSurface.notebook),
+  ('Collection', null),
   ('Folder', SgSurface.files),
-  ('Swimlane', SgSurface.swimlane),
-  ('Storyboard', SgSurface.storyboard),
-  ('Vision board', SgSurface.vision),
-  ('US map', SgSurface.usMap),
-  ('World map', SgSurface.worldMap),
+  ('Gallery', SgSurface.album),
+  ('Diary', SgSurface.notebook),
+  ('Journal', SgSurface.notebook),
+  ('Kanban Board widget', SgSurface.kanban),
+  ('Table', null),
+  ('Calendar Widget', SgSurface.calendar),
+  ('Chart', null),
 ];
 
-/// Board views (the row under the board title): the spec's board types the
-/// app draws, plus Canvas, the layer that holds the board's canvases.
-const Set<SgSurface> kSgBoardViews = {SgSurface.kanban, SgSurface.calendar, SgSurface.whiteboard, SgSurface.desk, SgSurface.canvas};
+/// Board-view chips. Canvas is not a board view: canvases are objects on the board.
+const Set<SgSurface> kSgBoardViews = {SgSurface.kanban, SgSurface.calendar, SgSurface.whiteboard, SgSurface.desk};
 
 /// The surface a canvas of [kind] draws, or null for a plain Glass canvas.
 SgSurface? sgCanvasTypeSurface(String kind) {
@@ -341,6 +364,8 @@ class SgCard {
     this.canvasId = '',
     this.dx = 12,
     this.dy = 12,
+    this.fx = -1,
+    this.fy = -1,
   })  : tags = tags ?? [],
         hiddenKeys = hiddenKeys ?? {},
         labelIds = labelIds ?? [],
@@ -385,6 +410,9 @@ class SgCard {
   String canvasId;
   double dx;
   double dy;
+  /// Position on the canvas object, 0–1. Negative means the stage places it.
+  double fx;
+  double fy;
 
   bool get hasHidden => hiddenNotes.isNotEmpty || hiddenKeys.isNotEmpty;
   bool attrHidden(String key) => hiddenKeys.contains(key);
@@ -431,6 +459,8 @@ class SgCard {
         'canvasId': canvasId,
         'dx': dx,
         'dy': dy,
+        'fx': fx,
+        'fy': fy,
       };
 
   static SgCard fromJson(Map<String, Object?> j) => SgCard(
@@ -468,6 +498,8 @@ class SgCard {
         canvasId: j['canvasId'] as String? ?? '',
         dx: (j['dx'] as num?)?.toDouble() ?? 12,
         dy: (j['dy'] as num?)?.toDouble() ?? 12,
+        fx: (j['fx'] as num?)?.toDouble() ?? -1,
+        fy: (j['fy'] as num?)?.toDouble() ?? -1,
       );
 }
 
@@ -479,6 +511,10 @@ class SgCanvas {
     this.color = 0xFF1A2838,
     this.hold = SgHoldKind.tray,
     this.backgroundThemeId = '',
+    this.x = -1,
+    this.y = -1,
+    this.w = -1,
+    this.h = -1,
   });
   final String id;
   String name;
@@ -487,6 +523,11 @@ class SgCanvas {
   SgHoldKind hold;
   /// WallpaperTheme.id from ThemeCatalog — empty keeps the tint only.
   String backgroundThemeId;
+  /// Frame on the board, as fractions of the stage. Negative means automatic.
+  double x;
+  double y;
+  double w;
+  double h;
   Map<String, Object?> toJson() => {
         'id': id,
         'name': name,
@@ -494,14 +535,22 @@ class SgCanvas {
         'color': color,
         'hold': hold.name,
         'backgroundThemeId': backgroundThemeId,
+        'x': x,
+        'y': y,
+        'w': w,
+        'h': h,
       };
   static SgCanvas fromJson(Map<String, Object?> j) => SgCanvas(
         id: j['id']! as String,
-        name: j['name'] as String? ?? 'Canvas',
+        name: j['name'] as String? ?? 'Glass',
         kind: j['kind'] as String? ?? 'Glass',
         color: (j['color'] as num?)?.toInt() ?? 0xFF1A2838,
         hold: SgHoldKind.values.asNameMap()[j['hold']] ?? SgHoldKind.tray,
         backgroundThemeId: j['backgroundThemeId'] as String? ?? '',
+        x: (j['x'] as num?)?.toDouble() ?? -1,
+        y: (j['y'] as num?)?.toDouble() ?? -1,
+        w: (j['w'] as num?)?.toDouble() ?? -1,
+        h: (j['h'] as num?)?.toDouble() ?? -1,
       );
 }
 
@@ -823,6 +872,8 @@ class SgStore extends ChangeNotifier {
       name: name.trim().isEmpty ? 'Untitled board' : name.trim(),
       lists: [todo, doing, done],
       statuses: ['To Do', 'Doing', 'Done'],
+      surface: SgSurface.desk,
+      kind: SgBoardKind.desk,
     );
     boards.add(b);
     activeBoardId = b.id;
@@ -956,6 +1007,10 @@ class SgStore extends ChangeNotifier {
       status: list.title,
       rank: top,
     );
+    if (b.canvases.isNotEmpty) {
+      final host = b.canvases[b.canvasIndex.clamp(0, b.canvases.length - 1)];
+      c.canvasId = host.id;
+    }
     c.activity.add(SgActivity(at: DateTime.now().millisecondsSinceEpoch, text: 'Card added'));
     b.cards.insert(0, c);
     notice = '';
@@ -1014,11 +1069,81 @@ class SgStore extends ChangeNotifier {
       return false;
     }
     _checkpoint();
-    b.canvases.add(SgCanvas(id: _id('v'), name: name, kind: kind));
+    final i = b.canvases.length;
+    final col = i % 2;
+    final row = i ~/ 2;
+    b.canvases.add(SgCanvas(
+      id: _id('v'),
+      name: name,
+      kind: kind,
+      x: 0.04 + col * 0.48,
+      y: (0.05 + row * 0.36).clamp(0.04, 0.62),
+      w: 0.44,
+      h: 0.32,
+    ));
     b.canvasIndex = b.canvases.length - 1;
     notice = '';
     _commit();
     return true;
+  }
+
+  void placeCanvasFrame(String canvasId, double x, double y, double w, double h) {
+    final b = board;
+    if (b == null) return;
+    final canvas = b.canvases.where((c) => c.id == canvasId).firstOrNull;
+    if (canvas == null) return;
+    _checkpoint();
+    canvas.x = x.clamp(0.0, 0.92);
+    canvas.y = y.clamp(0.0, 0.92);
+    canvas.w = w.clamp(0.22, 0.96);
+    canvas.h = h.clamp(0.18, 0.96);
+    _commit();
+  }
+
+  void removeCanvas(String canvasId) {
+    final b = board;
+    if (b == null) return;
+    _checkpoint();
+    b.canvases.removeWhere((c) => c.id == canvasId);
+    for (final c in b.cards) {
+      if (c.canvasId == canvasId) c.canvasId = '';
+    }
+    if (b.canvases.isEmpty) {
+      b.canvasIndex = 0;
+    } else {
+      b.canvasIndex = b.canvasIndex.clamp(0, b.canvases.length - 1);
+    }
+    _commit();
+  }
+
+  /// Move a card onto a canvas on this board, or onto another board.
+  /// Saved through AccountSync (_commit).
+  void transferCard(String cardId, {required String boardId, String canvasId = '', double fx = -1, double fy = -1}) {
+    SgCard? card;
+    SgBoard? from;
+    for (final b in boards) {
+      for (final c in b.cards) {
+        if (c.id == cardId) {
+          card = c;
+          from = b;
+        }
+      }
+    }
+    final to = boards.where((b) => b.id == boardId).firstOrNull;
+    if (card == null || from == null || to == null) return;
+    _checkpoint();
+    if (!identical(from, to)) {
+      from.cards.remove(card);
+      if (to.lists.isNotEmpty) {
+        card.listId = to.orderedLists.first.id;
+        card.status = to.orderedLists.first.title;
+      }
+      to.cards.add(card);
+    }
+    card.canvasId = canvasId;
+    card.fx = fx;
+    card.fy = fy;
+    _commit();
   }
 
   /// Place [boardId] as a free-drag tile on [canvasId] (AccountSync via _commit).

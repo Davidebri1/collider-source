@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/account_sync/account_sync.dart';
 import '../../core/vision/vision_kit.dart';
+import 'account_id_token.dart';
 import '../../models/model_def.dart';
 import 'settings_glass.dart';
 
@@ -328,23 +329,25 @@ class ContinueWithAppleButton extends StatelessWidget {
 }
 
 Future<void> _continueWithGoogle(BuildContext context) async {
-  final base = AccountSync.instance.baseUrl;
-  final local = base.contains('localhost') || base.contains('127.0.0.1');
-  if (local) {
-    final ok = await AccountSync.instance.signInDev(email: 'user@collider.app', name: 'Collider');
-    if (!ok && context.mounted) {
-      await showVAlert(
-        context,
-        icon: Icons.person_outline_rounded,
-        title: 'Sign in is unavailable',
-        actions: const [VAlertChoice('OK')],
-      );
-    }
-  } else if (context.mounted) {
+  // Production sign-in is a Google ID token verified by the account Worker.
+  // /auth/dev is not this path.
+  final idToken = await requestGoogleIdToken();
+  if (!context.mounted) return;
+  if (idToken == null) {
     await showVAlert(
       context,
       icon: Icons.person_outline_rounded,
-      title: 'Continue with Google',
+      title: 'Sign in is unavailable',
+      actions: const [VAlertChoice('OK')],
+    );
+    return;
+  }
+  final ok = await AccountSync.instance.signInWithIdToken(provider: 'google', idToken: idToken);
+  if (!ok && context.mounted) {
+    await showVAlert(
+      context,
+      icon: Icons.person_outline_rounded,
+      title: 'Sign in is unavailable',
       actions: const [VAlertChoice('OK')],
     );
   }

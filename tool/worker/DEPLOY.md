@@ -54,9 +54,29 @@ from `tool/worker`.
 
 ## What the app still needs
 
-The app already points at this URL (`lib/main.dart:73`, `COLLIDER_ACCOUNT_API`).
+The app already points at this URL (`lib/main.dart`, `COLLIDER_ACCOUNT_API`).
 AccountSync pings `/health`, and it syncs only after a sign-in.
-`AccountSync.signInWithIdToken` exists, but no screen calls it yet, because the
-web build has no Google Sign-In button that returns an ID token. Until one is
-added, the app keeps using its local copy (which survives a reload) and the
-Worker has no users.
+Continue with Google calls `signInWithIdToken` with a Google Identity Services
+ID token. It does not call `/auth/dev`. Dev sign-in stays on the Worker for
+the local API test only (`DEV_AUTH=1`).
+
+This Worker is not deployed. `collider.ebridavid.workers.dev` was not created
+by this change. A local reload is not cross-device sync.
+
+## Google sign-in and calendar (David's setup, not done here)
+
+1. In Google Cloud Console, create an OAuth client of type **Web** for Collider.
+   Authorized JavaScript origin: `https://davidebri1.github.io`.
+   No client secret belongs in the app.
+2. Enable the **Google Calendar API** on that project.
+3. Put the client id in `web/account_config.js` as `COLLIDER_GOOGLE_CLIENT_ID`
+   (it ships empty). Rebuild is not required if that file is replaced on the host.
+4. Continue with Google then asks Google for an ID token and the account Worker
+   verifies it (`POST /auth/google`). Calendar Sync asks for an access token
+   with scope `https://www.googleapis.com/auth/calendar.events` and talks to
+   Google Calendar from the browser. Export still downloads an `.ics` file.
+   Export is not sync.
+5. The account Worker must be deployed (steps above) and `GOOGLE_CLIENT_ID`
+   on the Worker must be the same client id, or sign-in returns 401/503.
+   Apple sign-in still needs an Apple Services ID (`COLLIDER_APPLE_CLIENT_ID`);
+   the Apple button does not sign in until that exists.

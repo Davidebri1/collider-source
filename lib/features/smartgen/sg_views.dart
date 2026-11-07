@@ -828,7 +828,7 @@ class _SgNotebookState extends State<SgNotebook> {
         for (final p in (c.pages.isEmpty ? [c.description.isEmpty ? c.title : c.description] : c.pages)) (c, p),
     ];
     if (sheets.isEmpty) {
-      return Center(child: Text('No notebook pages yet', style: appFont(color: Colors.white70, fontSize: 13)));
+      return Image.asset('assets/smartgen/paper.jpg', fit: BoxFit.cover);
     }
     final title = sheets[_index.clamp(0, sheets.length - 1)].$1.title;
     return Padding(
@@ -1579,7 +1579,7 @@ class _SgCanvasBoardState extends State<SgCanvasBoard> {
     if (b.canvases.isEmpty) {
       return ColoredBox(
         color: const Color(0xFF12141A),
-        child: Center(child: Text('Add a canvas from the board menu', style: appFont(fontSize: 13, color: Colors.white70))),
+        child: Image.asset('assets/smartgen/desk.jpg', fit: BoxFit.cover),
       );
     }
     final canvas = b.canvases[b.canvasIndex.clamp(0, b.canvases.length - 1)];

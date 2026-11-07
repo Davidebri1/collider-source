@@ -53,6 +53,7 @@ flutter:
   assets:
     - assets/html/
     - assets/branding/
+    - assets/smartgen/
 
   # v9: the type family is bundled, not fetched (one family, on disk, always).
   fonts:

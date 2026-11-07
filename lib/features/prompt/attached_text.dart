@@ -7,13 +7,13 @@ import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 import '../../core/files/file_store.dart';
 
-/// Every file attached in the composer goes to the models with the prompt:
-/// - images as images (vision models see them; MediaGen describes them for
-///   text-only models),
-/// - PDF (Syncfusion PDF), DOCX (docx_to_text), XLSX (excel) and CSV / any
-///   other text as their text,
-/// - anything else as its text when it decodes as text; otherwise only its
-///   name and size are sent.
+/// What the model actually receives for one attachment.
+enum AttachmentDisposition { image, text, imageSkipped, nameOnly }
+
+/// Attachments the parsers can read: images, PDF (Syncfusion), DOCX
+/// (docx_to_text), XLSX (excel), and text that decodes as text (CSV, Markdown,
+/// JSON, code). A binary file sends its name and size only. An image over
+/// 4 MB is not sent. Neither case is treated as the model having read the file.
 const int kAttachedTextMaxChars = 20000;
 
 /// Largest image sent inline (bytes before base64).
@@ -84,7 +84,23 @@ String? extractText(String name, Uint8List bytes) {
 class AttachedPrompt {
   final String text;
   final List<String> imageDataUris;
-  const AttachedPrompt(this.text, this.imageDataUris);
+  final Map<String, AttachmentDisposition> dispositions;
+  const AttachedPrompt(this.text, this.imageDataUris, [this.dispositions = const {}]);
+}
+
+({String text, AttachmentDisposition disposition, String? imageUri}) classifyAttachment(String name, Uint8List bytes) {
+  final mime = imageMimeFor(name);
+  if (mime != null) {
+    if (bytes.length <= kAttachedImageMaxBytes) {
+      return (text: '[image attached]', disposition: AttachmentDisposition.image, imageUri: 'data:$mime;base64,${base64Encode(bytes)}');
+    }
+    return (text: '[image not sent; file is over 4 MB]', disposition: AttachmentDisposition.imageSkipped, imageUri: null);
+  }
+  final t = extractText(name, bytes);
+  if (t == null) {
+    return (text: '[${bytes.length} bytes; name and size only]', disposition: AttachmentDisposition.nameOnly, imageUri: null);
+  }
+  return (text: t, disposition: AttachmentDisposition.text, imageUri: null);
 }
 
 Future<AttachedPrompt> promptWithAttachments(String prompt, List<String> names) async {
@@ -92,6 +108,7 @@ Future<AttachedPrompt> promptWithAttachments(String prompt, List<String> names) 
   final store = FileStore.instance;
   final texts = <(String, String)>[];
   final images = <String>[];
+  final dispositions = <String, AttachmentDisposition>{};
   for (final n in names) {
     StoredFile? f;
     for (final s in store.files) {
@@ -100,18 +117,13 @@ Future<AttachedPrompt> promptWithAttachments(String prompt, List<String> names) 
     if (f == null) continue;
     final bytes = await store.bytesOf(f.id);
     if (bytes == null) continue;
-    final mime = imageMimeFor(f.name);
-    if (mime != null) {
-      if (bytes.length <= kAttachedImageMaxBytes) {
-        images.add('data:$mime;base64,${base64Encode(bytes)}');
-        texts.add((f.name, '[image attached]'));
-      }
-      continue;
-    }
-    final t = extractText(f.name, bytes);
-    texts.add((f.name, t ?? '[${bytes.length} bytes; not readable as text]'));
+    final classified = classifyAttachment(f.name, bytes);
+    texts.add((f.name, classified.text));
+    dispositions[f.name] = classified.disposition;
+    final uri = classified.imageUri;
+    if (uri != null) images.add(uri);
   }
-  return AttachedPrompt(composeWithAttachments(prompt, texts), images);
+  return AttachedPrompt(composeWithAttachments(prompt, texts), images, dispositions);
 }
 
 /// Text-only form, kept for callers that send no images.
