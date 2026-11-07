@@ -249,6 +249,15 @@ class MediaGen {
   static final MediaGen instance = MediaGen._();
   final Dio _dio = Dio(BaseOptions(connectTimeout: const Duration(seconds: 15), receiveTimeout: const Duration(minutes: 6)));
 
+  /// Text replies. The Worker sends nothing back until the provider has
+  /// finished the whole answer, and on web Dio's connectTimeout keeps running
+  /// until the response headers arrive. With the shared 15 s connectTimeout,
+  /// every reply that took longer than 15 s (MiMo ~55 s, MiniMax on NVIDIA
+  /// ~20 s, GLM 5.3 Flash on NVIDIA ~115 s) was aborted in the browser and the
+  /// row said "Couldn't reach this model", even though the provider answered.
+  /// The Worker itself gives up at about 125 s, so 150 s covers it.
+  final Dio _textDio = Dio(BaseOptions(connectTimeout: const Duration(seconds: 150), receiveTimeout: const Duration(seconds: 180)));
+
   ({String base, String key}) _wire(_Route r) {
     // OpenRouter removed. CrazyRouter carries crazy:true media rows and any
     // remaining openrouter-* media that still resolves through this helper.
@@ -285,24 +294,30 @@ class MediaGen {
     final viaProxy = _proxy.isNotEmpty && _proxyRoute.containsKey(w);
     if (!viaProxy && key.isEmpty) throw const MediaGenError('no-key');
     final url = viaProxy ? '$_proxy/api/p?u=${_proxyRoute[w]}' : '${t.base}/chat/completions';
-    try {
-      final res = await _dio.post(url,
-          data: {'model': _wireSlug(w, remote), 'messages': messages, if (maxTokens != null) 'max_tokens': maxTokens},
-          options: Options(
-            headers: viaProxy
-                ? {'Content-Type': 'application/json'}
-                : {'Content-Type': 'application/json', 'Authorization': 'Bearer $key'},
-            receiveTimeout: const Duration(seconds: 180),
-          ));
-      final msg = res.data['choices']?[0]?['message'];
-      final text = _messageText(msg);
-      if (text.isEmpty) throw const MediaGenError('empty');
-      return text;
-    } on DioException catch (e) {
-      final sc = e.response?.statusCode;
-      if (w == 'nv' && (sc == 503 || sc == 429)) await Future<void>.delayed(const Duration(milliseconds: 1500));
-      if (e.type == DioExceptionType.receiveTimeout || e.type == DioExceptionType.connectionTimeout) throw const MediaGenError('timeout');
-      throw MediaGenError('provider ${e.response?.statusCode ?? 'unreachable'}: ${_errBody(e)}');
+    // NVIDIA answers 429 when several rows and the consensus agents hit it in
+    // the same minute; wait and ask again (twice) before giving up.
+    for (var attempt = 0;; attempt++) {
+      try {
+        final res = await _textDio.post(url,
+            data: {'model': _wireSlug(w, remote), 'messages': messages, if (maxTokens != null) 'max_tokens': maxTokens},
+            options: Options(
+              headers: viaProxy
+                  ? {'Content-Type': 'application/json'}
+                  : {'Content-Type': 'application/json', 'Authorization': 'Bearer $key'},
+            ));
+        final msg = res.data['choices']?[0]?['message'];
+        final text = _messageText(msg);
+        if (text.isEmpty) throw const MediaGenError('empty');
+        return text;
+      } on DioException catch (e) {
+        final sc = e.response?.statusCode;
+        if (w == 'nv' && (sc == 503 || sc == 429)) {
+          await Future<void>.delayed(Duration(milliseconds: 2500 * (attempt + 1)));
+          if (attempt < 2) continue;
+        }
+        if (e.type == DioExceptionType.receiveTimeout || e.type == DioExceptionType.connectionTimeout) throw const MediaGenError('timeout');
+        throw MediaGenError('provider ${e.response?.statusCode ?? 'unreachable'}: ${_errBody(e)}');
+      }
     }
   }
 
