@@ -1825,7 +1825,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   /// only until the summary lands, or if the agent cannot be reached.
   Future<void> _summarise(String id, String text) async {
     try {
-      final s = await MediaGen.instance.consensus([
+      final s = await MediaGen.instance.summary([
         {'role': 'system', 'content': 'Summarise the reply in ONE plain sentence of at most 14 words. No preamble, no quotes, no markdown.'},
         {'role': 'user', 'content': text.length > 6000 ? text.substring(0, 6000) : text},
       ]);
