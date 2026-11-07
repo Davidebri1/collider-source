@@ -2606,7 +2606,13 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                     child: SizedBox(
                       width: paneW,
                       height: paneH,
-                      child: SettingsGlassPane(
+                      // Absorb taps on the pane's own glass. A control that
+                      // removes itself mid-gesture must not fall through to the
+                      // full-screen scrim and dismiss Smart Gen.
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () {},
+                        child: SettingsGlassPane(
                         padding: EdgeInsets.zero,
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(28),
@@ -2621,6 +2627,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                             },
                           ),
                         ),
+                      ),
                       ),
                     ),
                   );

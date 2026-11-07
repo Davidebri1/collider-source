@@ -20,7 +20,10 @@ class _SgPhysicalStageState extends State<SgPhysicalStage> {
   final GlobalKey _stageKey = GlobalKey();
   String? _dragCard;
   bool _acceptedElsewhere = false;
-  double _ox = 0, _oy = 0;
+  Offset? _cardLocal;
+  int? _activePointer;
+  String _gesture = '';
+  Offset _lastGlobal = Offset.zero;
 
   @override
   void dispose() {
@@ -51,8 +54,14 @@ class _SgPhysicalStageState extends State<SgPhysicalStage> {
         Positioned.fill(child: sgBoardFace(b)),
         for (var i = 0; i < b.canvases.length; i++) _canvas(b, b.canvases[i], i, size),
         for (final c in b.cards)
-          if (c.canvasId.isEmpty && c.id != _dragCard)
+          if (c.canvasId.isEmpty)
             Positioned(left: 8, bottom: 8, child: _cardFace(c)),
+        if (_dragCard != null && _cardLocal != null && b.cards.any((c) => c.id == _dragCard))
+          Positioned(
+            left: _cardLocal!.dx,
+            top: _cardLocal!.dy,
+            child: IgnorePointer(child: Opacity(opacity: 0.92, child: _cardFace(b.cards.firstWhere((c) => c.id == _dragCard)))),
+          ),
         if (others.isNotEmpty)
           Positioned(
             left: 8,
@@ -94,7 +103,7 @@ class _SgPhysicalStageState extends State<SgPhysicalStage> {
 
   Widget _canvas(SgBoard b, SgCanvas canvas, int index, Size size) {
     final frame = _frame(canvas, index, size);
-    final cards = [for (final c in b.cards) if (c.canvasId == canvas.id && c.id != _dragCard) c];
+    final cards = [for (final c in b.cards) if (c.canvasId == canvas.id) c];
     return Positioned(
       left: frame.left,
       top: frame.top,
@@ -131,35 +140,38 @@ class _SgPhysicalStageState extends State<SgPhysicalStage> {
                   Padding(
                     padding: const EdgeInsets.all(2),
                     child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                      GestureDetector(
-                        onPanStart: (_) {
-                          _ox = canvas.x < 0 ? frame.left / size.width : canvas.x;
-                          _oy = canvas.y < 0 ? frame.top / size.height : canvas.y;
-                        },
-                        onPanUpdate: (d) {
-                          setState(() {
-                            canvas.x = (_ox + d.delta.dx / size.width).clamp(0.0, 0.72);
-                            canvas.y = (_oy + d.delta.dy / size.height).clamp(0.0, 0.72);
-                            _ox = canvas.x;
-                            _oy = canvas.y;
-                            canvas.w = canvas.w < 0 ? frame.width / size.width : canvas.w;
-                            canvas.h = canvas.h < 0 ? frame.height / size.height : canvas.h;
-                          });
-                        },
-                        onPanEnd: (_) => widget.store.placeCanvasFrame(canvas.id, canvas.x, canvas.y, canvas.w < 0 ? 0.44 : canvas.w, canvas.h < 0 ? 0.32 : canvas.h),
-                        child: SizedBox(
-                          height: 20,
-                          child: Row(children: [
-                            Expanded(child: Text(canvas.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFF1C1B19)))),
-                            Tooltip(
-                              message: 'Close',
-                              child: GestureDetector(
-                                onTap: () => widget.store.removeCanvas(canvas.id),
-                                child: const Icon(Icons.close, size: 14, color: Color(0xFF1C1B19)),
+                      SizedBox(
+                        height: 22,
+                        child: Row(children: [
+                          Expanded(
+                            child: Semantics(
+                              container: true,
+                              button: true,
+                              label: 'Move ${canvas.kind}',
+                              child: ExcludeSemantics(
+                                child: Listener(
+                                  behavior: HitTestBehavior.opaque,
+                                  onPointerDown: (e) => _beginFrame(e, canvas, size, frame, 'move'),
+                                  onPointerMove: (e) => _updateFrame(e, canvas, size),
+                                  onPointerUp: (e) => _endFrame(e, canvas),
+                                  onPointerCancel: (e) => _endFrame(e, canvas),
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(left: 6),
+                                    child: Text(canvas.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFF1C1B19))),
+                                  ),
+                                ),
                               ),
                             ),
-                          ]),
-                        ),
+                          ),
+                          Semantics(
+                            button: true,
+                            label: 'Remove ${canvas.kind}',
+                            child: GestureDetector(
+                              onTap: () => widget.store.removeCanvas(canvas.id),
+                              child: const SizedBox(width: 22, height: 22, child: Icon(Icons.close, size: 14, color: Color(0xFF1C1B19))),
+                            ),
+                          ),
+                        ]),
                       ),
                       Expanded(
                         child: Padding(
@@ -172,19 +184,18 @@ class _SgPhysicalStageState extends State<SgPhysicalStage> {
                   Positioned(
                     right: 0,
                     bottom: 0,
-                    child: GestureDetector(
-                      onPanUpdate: (d) {
-                        final w = ((canvas.w < 0 ? frame.width / size.width : canvas.w) * size.width + d.delta.dx) / size.width;
-                        final h = ((canvas.h < 0 ? frame.height / size.height : canvas.h) * size.height + d.delta.dy) / size.height;
-                        setState(() {
-                          canvas.w = w.clamp(0.24, 0.96);
-                          canvas.h = h.clamp(0.18, 0.9);
-                          if (canvas.x < 0) canvas.x = frame.left / size.width;
-                          if (canvas.y < 0) canvas.y = frame.top / size.height;
-                        });
-                      },
-                      onPanEnd: (_) => widget.store.placeCanvasFrame(canvas.id, canvas.x, canvas.y, canvas.w, canvas.h),
-                      child: const SizedBox(width: 16, height: 16),
+                      child: Semantics(
+                      container: true,
+                      button: true,
+                      label: 'Resize ${canvas.kind}',
+                      child: Listener(
+                        behavior: HitTestBehavior.opaque,
+                        onPointerDown: (e) => _beginFrame(e, canvas, size, frame, 'resize'),
+                        onPointerMove: (e) => _updateFrame(e, canvas, size),
+                        onPointerUp: (e) => _endFrame(e, canvas),
+                        onPointerCancel: (e) => _endFrame(e, canvas),
+                        child: const SizedBox(width: 36, height: 36, child: CustomPaint(painter: _ResizeGripPainter())),
+                      ),
                     ),
                   ),
                 ]),
@@ -196,20 +207,50 @@ class _SgPhysicalStageState extends State<SgPhysicalStage> {
     );
   }
 
+  void _beginFrame(PointerDownEvent e, SgCanvas canvas, Size size, Rect frame, String mode) {
+    _activePointer = e.pointer;
+    _gesture = mode;
+    _lastGlobal = e.position;
+    if (canvas.x < 0) canvas.x = frame.left / size.width;
+    if (canvas.y < 0) canvas.y = frame.top / size.height;
+    if (canvas.w < 0) canvas.w = frame.width / size.width;
+    if (canvas.h < 0) canvas.h = frame.height / size.height;
+  }
+
+  void _updateFrame(PointerMoveEvent e, SgCanvas canvas, Size size) {
+    if (e.pointer != _activePointer || size.width <= 0 || size.height <= 0) return;
+    final dx = (e.position.dx - _lastGlobal.dx) / size.width;
+    final dy = (e.position.dy - _lastGlobal.dy) / size.height;
+    _lastGlobal = e.position;
+    setState(() {
+      if (_gesture == 'move') {
+        canvas.x = (canvas.x + dx).clamp(0.0, 0.72);
+        canvas.y = (canvas.y + dy).clamp(0.0, 0.72);
+      } else if (_gesture == 'resize') {
+        canvas.w = (canvas.w + dx).clamp(0.24, 0.96);
+        canvas.h = (canvas.h + dy).clamp(0.18, 0.9);
+      }
+    });
+  }
+
+  void _endFrame(PointerEvent e, SgCanvas canvas) {
+    if (e.pointer != _activePointer) return;
+    _activePointer = null;
+    widget.store.placeCanvasFrame(canvas.id, canvas.x, canvas.y, canvas.w, canvas.h);
+  }
+
   Widget _working(SgBoard b, SgCanvas canvas, List<SgCard> cards) {
     return switch (canvas.kind) {
       'Kanban Board widget' || 'Swimlane vertical' || 'Swimlane horizontal' => _lanes(b, cards, vertical: canvas.kind != 'Swimlane horizontal'),
-      'Calendar Widget' => _month(),
-      'Chart' => _chart(b),
+      // The face already draws the chart, month, or portrait. The card sits
+      // at the bottom so that drawing stays visible.
+      'Calendar Widget' || 'Chart' || 'Name Photo Description' => Align(alignment: Alignment.bottomLeft, child: _cards(cards)),
       _ => _cards(cards),
     };
   }
 
   Widget _cards(List<SgCard> cards) {
-    return ListView(
-      physics: const NeverScrollableScrollPhysics(),
-      children: [for (final c in cards) _cardFace(c)],
-    );
+    return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [for (final c in cards) _cardFace(c)]);
   }
 
   Widget _lanes(SgBoard b, List<SgCard> cards, {required bool vertical}) {
@@ -231,79 +272,70 @@ class _SgPhysicalStageState extends State<SgPhysicalStage> {
     return Column(children: lanes);
   }
 
-  Widget _month() {
-    final now = DateTime.now();
-    final days = DateTime(now.year, now.month + 1, 0).day;
-    return Wrap(children: [
-      for (var d = 1; d <= days; d++)
-        SizedBox(width: 16, height: 14, child: Text('$d', style: appFont(fontSize: 8, color: const Color(0xFF1C1B19)))),
-    ]);
+  void _dropCard(SgCard c, Offset global) {
+    if (_acceptedElsewhere) {
+      _acceptedElsewhere = false;
+      setState(() => _dragCard = null);
+      return;
+    }
+    final box = _stageKey.currentContext?.findRenderObject() as RenderBox?;
+    final board = widget.store.board;
+    if (box != null && board != null) {
+      final local = box.globalToLocal(global);
+      SgCanvas? hit;
+      var hitIndex = 0;
+      for (var i = board.canvases.length - 1; i >= 0; i--) {
+        if (_frame(board.canvases[i], i, box.size).contains(local)) {
+          hit = board.canvases[i];
+          hitIndex = i;
+          break;
+        }
+      }
+      if (hit != null) {
+        final frame = _frame(hit, hitIndex, box.size);
+        widget.store.transferCard(
+          c.id,
+          boardId: board.id,
+          canvasId: hit.id,
+          fx: ((local.dx - frame.left) / frame.width).clamp(0.02, 0.62),
+          fy: ((local.dy - frame.top) / frame.height).clamp(0.16, 0.7),
+        );
+      }
+    }
+    setState(() {
+      _dragCard = null;
+      _cardLocal = null;
+    });
   }
 
-  Widget _chart(SgBoard b) {
-    final counts = <SgType, int>{};
-    for (final c in b.cards) {
-      counts[c.type] = (counts[c.type] ?? 0) + 1;
-    }
-    if (counts.isEmpty) return const SizedBox.expand();
-    final maxN = counts.values.fold<int>(1, (m, n) => n > m ? n : m);
-    return Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-      for (final e in counts.entries.take(6))
-        Expanded(
-          child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
-            SizedBox(height: 36 * e.value / maxN, child: const ColoredBox(color: Color(0xFF3D7A6A))),
-            Text(e.key.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 7, color: const Color(0xFF1C1B19))),
-          ]),
-        ),
-    ]);
+  void _cardDown(SgCard c, PointerDownEvent e) {
+    final box = _stageKey.currentContext?.findRenderObject() as RenderBox?;
+    setState(() {
+      _dragCard = c.id;
+      _cardLocal = box?.globalToLocal(e.position) ?? Offset.zero;
+    });
+  }
+
+  void _cardMove(PointerMoveEvent e) {
+    if (_dragCard == null) return;
+    final box = _stageKey.currentContext?.findRenderObject() as RenderBox?;
+    setState(() => _cardLocal = box?.globalToLocal(e.position));
   }
 
   Widget _cardFace(SgCard c) {
     final ctrl = _title(c);
-    return LongPressDraggable<String>(
-      data: c.id,
-      feedback: Material(color: Colors.transparent, child: _face(c, ctrl, editing: false)),
-      childWhenDragging: const SizedBox(width: 108, height: 36),
-      onDragStarted: () => setState(() => _dragCard = c.id),
-      onDragEnd: (d) {
-        if (_acceptedElsewhere) {
-          _acceptedElsewhere = false;
-          setState(() => _dragCard = null);
-          return;
-        }
-        final box = _stageKey.currentContext?.findRenderObject() as RenderBox?;
-        final board = widget.store.board;
-        if (box != null && board != null) {
-          final local = box.globalToLocal(d.offset);
-          SgCanvas? hit;
-          var hitIndex = 0;
-          for (var i = board.canvases.length - 1; i >= 0; i--) {
-            if (_frame(board.canvases[i], i, box.size).contains(local)) {
-              hit = board.canvases[i];
-              hitIndex = i;
-              break;
-            }
-          }
-          if (hit != null) {
-            final frame = _frame(hit, hitIndex, box.size);
-            widget.store.transferCard(
-              c.id,
-              boardId: board.id,
-              canvasId: hit.id,
-              fx: ((local.dx - frame.left) / frame.width).clamp(0.02, 0.62),
-              fy: ((local.dy - frame.top) / frame.height).clamp(0.16, 0.7),
-            );
-          }
-        }
-        setState(() => _dragCard = null);
-      },
-      child: GestureDetector(onDoubleTap: () => widget.onOpen(c), child: _face(c, ctrl, editing: true)),
+    return GestureDetector(
+      excludeFromSemantics: true,
+      onDoubleTap: () => widget.onOpen(c),
+      child: _face(c, ctrl, editing: true),
     );
   }
 
   Widget _face(SgCard c, TextEditingController ctrl, {required bool editing}) {
-    return Container(
-      width: 108,
+    return Opacity(
+      opacity: _dragCard == c.id ? 0.35 : 1,
+      child: Container(
+      width: 124,
       margin: const EdgeInsets.only(bottom: 4),
       padding: const EdgeInsets.fromLTRB(6, 4, 6, 4),
       decoration: BoxDecoration(
@@ -312,16 +344,58 @@ class _SgPhysicalStageState extends State<SgPhysicalStage> {
         boxShadow: const [BoxShadow(color: Color(0x55000000), blurRadius: 2, offset: Offset(0, 1))],
         border: const Border(left: BorderSide(color: Color(0xFF3D7A6A), width: 3)),
       ),
-      child: editing
-          ? TextField(
-              controller: ctrl,
-              style: appFont(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFF1C1B19)),
-              decoration: const InputDecoration(isCollapsed: true, border: InputBorder.none),
-              onSubmitted: (v) => widget.store.touch(() => c.title = v.trim().isEmpty ? c.title : v.trim()),
-            )
-          : Text(c.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFF1C1B19))),
+      child: Semantics(
+        container: true,
+        explicitChildNodes: true,
+        child: Row(children: [
+        Semantics(
+          container: true,
+          button: true,
+          label: 'Drag ${c.title}',
+          child: Listener(
+            behavior: HitTestBehavior.opaque,
+            onPointerDown: (e) => _cardDown(c, e),
+            onPointerMove: _cardMove,
+            onPointerUp: (e) => _dropCard(c, e.position),
+            onPointerCancel: (e) => _dropCard(c, e.position),
+            child: const SizedBox(width: 28, height: 22, child: ColoredBox(color: Color(0xFF3D7A6A))),
+          ),
+        ),
+        const SizedBox(width: 4),
+        Expanded(
+          child: editing
+              ? TextField(
+                  controller: ctrl,
+                  style: appFont(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFF1C1B19)),
+                  decoration: const InputDecoration(isCollapsed: true, border: InputBorder.none),
+                  onSubmitted: (v) => widget.store.touch(() => c.title = v.trim().isEmpty ? c.title : v.trim()),
+                  onTapOutside: (_) => widget.store.touch(() => c.title = ctrl.text.trim().isEmpty ? c.title : ctrl.text.trim()),
+                )
+              : Text(c.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFF1C1B19))),
+        ),
+      ]),
+      ),
+    ),
     );
   }
+}
+
+class _ResizeGripPainter extends CustomPainter {
+  const _ResizeGripPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFF1C1B19)
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+    canvas.drawLine(Offset(size.width - 8, size.height - 4), Offset(size.width - 4, size.height - 4), paint);
+    canvas.drawLine(Offset(size.width - 4, size.height - 8), Offset(size.width - 4, size.height - 4), paint);
+    canvas.drawLine(Offset(size.width - 14, size.height - 4), Offset(size.width - 4, size.height - 14), paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 /// Library thumbnail: the type's photographic working surface.

@@ -12,9 +12,13 @@ for f in sys.argv[1:]:
     for e in (eng, loose):
         res, _ = e(f)
         for box, text, _score in (res or []):
-            if text in lines:
-                continue
-            lines.append(text)
             xs = [p[0] for p in box]; ys = [p[1] for p in box]
-            boxes.append([text, round(sum(xs) / 4), round(sum(ys) / 4)])
+            pos = [text, round(sum(xs) / 4), round(sum(ys) / 4)]
+            # Lines stay unique for readers that join them. Boxes keep every
+            # painted instance so a chip can be clicked when the same word
+            # also appears in the view row.
+            if text not in lines:
+                lines.append(text)
+            if pos not in boxes:
+                boxes.append(pos)
     print(json.dumps({"file": f, "lines": lines, "boxes": boxes}))

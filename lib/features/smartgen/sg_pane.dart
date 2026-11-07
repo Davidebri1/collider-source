@@ -680,17 +680,23 @@ class _SgPaneState extends State<SgPane> {
     }
     final b = store.board;
     if (b == null) return;
+    // "canvas" is the physical stage. It must not reset a board the user
+    // already set to Workbench, a table, or a whiteboard — including after reload.
     final kind = switch (section) {
       'kanban' => SgBoardKind.kanban,
       'calendar' => SgBoardKind.calendar,
       'whiteboard' => SgBoardKind.whiteboard,
-      'desk' || 'canvas' => SgBoardKind.desk,
+      'desk' => SgBoardKind.desk,
       _ => null,
     };
-    if (kind == null) return;
+    if (kind == null) {
+      store.atHome = false;
+      if (mounted) setState(() {});
+      return;
+    }
     store.touch(() {
       b.kind = kind;
-      b.surface = kind == SgBoardKind.desk ? SgSurface.desk : (SgSurface.values.asNameMap()[section] ?? SgSurface.desk);
+      b.surface = SgSurface.values.asNameMap()[section] ?? b.surface;
     });
     store.atHome = false;
     if (mounted) setState(() {});
@@ -1100,7 +1106,15 @@ class _SgPaneState extends State<SgPane> {
     // board's add menu ("Add a canvas"). Only board views are offered; a
     // board already set to another surface keeps that one chip.
     const surfaces = [SgSurface.desk, SgSurface.kanban, SgSurface.calendar, SgSurface.whiteboard];
-    final selected = kSgBoardViews.contains(b.surface) ? b.surface : SgSurface.desk;
+    // Highlight a view only when the board kind is that view. A workbench or
+    // table is not the Desk, even though the physical stage stays on this pane.
+    final selected = switch (b.kind) {
+      SgBoardKind.kanban => SgSurface.kanban,
+      SgBoardKind.calendar => SgSurface.calendar,
+      SgBoardKind.whiteboard || SgBoardKind.whiteboardLanes || SgBoardKind.whiteboardPlain => SgSurface.whiteboard,
+      SgBoardKind.desk => SgSurface.desk,
+      SgBoardKind.longBench || SgBoardKind.workbench || SgBoardKind.table || SgBoardKind.roundTable || SgBoardKind.nightStand || SgBoardKind.longTable || SgBoardKind.coffeeTable || SgBoardKind.charts => null,
+    };
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
       child: Wrap(
@@ -1111,7 +1125,7 @@ class _SgPaneState extends State<SgPane> {
           for (final s in surfaces)
             _glassChoice(
               label: s.label,
-              selected: selected == s,
+              selected: selected != null && selected == s,
               size: 11,
               onSelected: (_) {
                 store.touch(() {
@@ -1182,28 +1196,30 @@ class _SgPaneState extends State<SgPane> {
   }
 
   Widget _menuBody(SgBoard b) {
-    return ScrollConfiguration(
-      behavior: const SgScroll(),
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
-        children: [
-          SizedBox(
-            height: 44,
-            child: Stack(alignment: Alignment.center, children: [
-              Text('Board menu', textAlign: TextAlign.center, style: appFont(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white)),
-              Align(alignment: Alignment.centerRight, child: _icon('Close', Icons.close, () => setState(() => _menu = false))),
-            ]),
-          ),
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      SizedBox(
+        height: 44,
+        child: Stack(alignment: Alignment.center, children: [
+          Text('Board menu', textAlign: TextAlign.center, style: appFont(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white)),
+          Align(alignment: Alignment.centerRight, child: _icon('Close', Icons.close, () => setState(() => _menu = false))),
+        ]),
+      ),
+      _menuAction(Icons.add_rounded, 'New card', () => setState(() { _menu = false; _overlay = 'create'; })),
+      _menuAction(Icons.dashboard_customize_outlined, 'Add a canvas', () => setState(() {
+            _menu = false;
+            _overlay = 'add-canvas';
+            _query = '';
+          })),
+      Expanded(
+        child: ScrollConfiguration(
+          behavior: const SgScroll(),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
+            children: [
           _menuAction(Icons.search_rounded, 'Search', () => setState(() { _menu = false; _overlay = 'search'; })),
           _menuAction(Icons.bar_chart_rounded, 'Statistics', () => setState(() { _menu = false; _overlay = 'stats'; })),
           _menuAction(Icons.checklist_rounded, _multi ? 'Stop selecting' : 'Select cards', () => setState(() { _menu = false; _multi = !_multi; })),
-          _menuAction(Icons.add_rounded, 'New card', () => setState(() { _menu = false; _overlay = 'create'; })),
-          _menuAction(Icons.dashboard_customize_outlined, 'Add a canvas', () => setState(() {
-                _menu = false;
-                _overlay = 'add-canvas';
-                _query = '';
-              })),
-                    _menuAction(Icons.dashboard_outlined, 'Place board', () {
+          _menuAction(Icons.dashboard_outlined, 'Place board', () {
             final hostId = b.id;
             if (b.canvases.isEmpty) {
               store.addCanvas('Glass', 'Glass');
@@ -1238,11 +1254,14 @@ class _SgPaneState extends State<SgPane> {
                 label: k.label,
                 selected: b.kind == k,
                 size: 10,
-                onSelected: (_) => store.touch(() {
-                  b.kind = k;
-                  final surface = SgSurface.values.asNameMap()[k.name];
-                  if (surface != null) b.surface = surface;
-                }),
+                onSelected: (_) {
+                  store.touch(() {
+                    b.kind = k;
+                    final surface = SgSurface.values.asNameMap()[k.name];
+                    if (surface != null) b.surface = surface;
+                  });
+                  setState(() => _menu = false);
+                },
               ),
           ]),
           _toggle('Auto arrange', b.autoArrange, (v) => store.touch(() => b.autoArrange = v)),
@@ -1255,9 +1274,11 @@ class _SgPaneState extends State<SgPane> {
             for (final k in SgStatusKind.values)
               _glassChoice(label: _statusKindLabel(k), selected: b.statusKind == k, size: 10, onSelected: (_) => store.touch(() => b.statusKind = k)),
           ]),
-        ],
+            ],
+          ),
+        ),
       ),
-    );
+    ]);
   }
 
   Widget _menuAction(IconData icon, String label, VoidCallback onTap) {
@@ -1322,7 +1343,10 @@ class _SgPaneState extends State<SgPane> {
         padding: const EdgeInsets.all(8),
         child: Wrap(spacing: 8, runSpacing: 8, children: [
           for (final t in SgType.values)
-            GestureDetector(
+            Semantics(
+              button: true,
+              label: t.label,
+              child: GestureDetector(
               onTap: () {
                 final c = store.addCard(t);
                 if (c == null) {
@@ -1344,6 +1368,7 @@ class _SgPaneState extends State<SgPane> {
                   Text(t.label, textAlign: TextAlign.center, style: appFont(fontSize: 11, color: Colors.white)),
                 ]),
               ),
+            ),
             ),
         ]),
       ),

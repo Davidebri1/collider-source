@@ -1076,10 +1076,10 @@ class SgStore extends ChangeNotifier {
       id: _id('v'),
       name: name,
       kind: kind,
-      x: 0.04 + col * 0.48,
-      y: (0.05 + row * 0.36).clamp(0.04, 0.62),
-      w: 0.44,
-      h: 0.32,
+      x: 0.06 + col * 0.48,
+      y: (0.06 + row * 0.36).clamp(0.04, 0.62),
+      w: 0.42,
+      h: 0.34,
     ));
     b.canvasIndex = b.canvases.length - 1;
     notice = '';

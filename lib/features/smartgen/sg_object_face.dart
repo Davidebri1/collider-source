@@ -30,6 +30,14 @@ Widget sgBoardFace(SgBoard board) {
           ),
         ),
       ]),
+    SgBoardKind.table => _furniture(photo, width: 0.84, height: 0.68, edge: 10),
+    SgBoardKind.longTable => _furniture(photo, width: 0.94, height: 0.34, edge: 6),
+    SgBoardKind.coffeeTable => _furniture(photo, width: 0.58, height: 0.28, edge: 8),
+    SgBoardKind.longBench => _furniture(photo, width: 0.94, height: 0.2, edge: 0),
+    SgBoardKind.whiteboardPlain => Stack(fit: StackFit.expand, children: [
+        Image(image: photo, fit: BoxFit.cover),
+        Center(child: FractionallySizedBox(widthFactor: 0.9, heightFactor: 0.8, child: _paperSheet())),
+      ]),
     SgBoardKind.whiteboardLanes || SgBoardKind.kanban => Stack(fit: StackFit.expand, children: [
         Image(image: photo, fit: BoxFit.cover),
         Padding(
@@ -68,6 +76,27 @@ Widget sgBoardFace(SgBoard board) {
   };
 }
 
+/// A tabletop on the desk floor, so the piece reads as furniture rather than a full-bleed texture.
+Widget _furniture(AssetImage photo, {required double width, required double height, required double edge}) {
+  return Stack(fit: StackFit.expand, children: [
+    const Image(image: AssetImage('assets/smartgen/desk.jpg'), fit: BoxFit.cover),
+    Center(
+      child: FractionallySizedBox(
+        widthFactor: width,
+        heightFactor: height,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(3),
+            border: edge <= 0 ? null : Border.all(color: const Color(0xFF24160E), width: edge),
+            boxShadow: const [BoxShadow(color: Color(0x99000000), blurRadius: 18, offset: Offset(0, 10))],
+            image: DecorationImage(image: photo, fit: BoxFit.cover),
+          ),
+        ),
+      ),
+    ),
+  ]);
+}
+
 String sgBoardAsset(SgBoardKind kind) => switch (kind) {
       SgBoardKind.desk => 'assets/smartgen/desk.jpg',
       SgBoardKind.table => 'assets/smartgen/table.jpg',
@@ -85,6 +114,8 @@ EdgeInsets sgObjectInsets(String kind) => switch (kind) {
       'Gallery' || 'Portfolio' || 'Collection' => const EdgeInsets.fromLTRB(14, 26, 12, 12),
       'Folder' => const EdgeInsets.fromLTRB(8, 28, 8, 8),
       'Glass' => const EdgeInsets.fromLTRB(10, 22, 10, 10),
+      'Name Photo Description' => const EdgeInsets.fromLTRB(8, 78, 8, 6),
+      'Chart' || 'Calendar Widget' => const EdgeInsets.fromLTRB(8, 36, 8, 4),
       'Mirror' => const EdgeInsets.fromLTRB(14, 26, 14, 14),
       _ => const EdgeInsets.fromLTRB(8, 22, 8, 8),
     };
@@ -99,7 +130,9 @@ Widget sgObjectFace(String kind) {
     'Mirror' => _mirror(),
     'Table' => _tableTop(),
     'Swimlane vertical' || 'Swimlane horizontal' || 'Kanban Board widget' => _plasterBoard(),
-    'Calendar Widget' || 'Chart' || 'Name Photo Description' => _paperSheet(),
+    'Calendar Widget' => _paperSheet(child: Padding(padding: const EdgeInsets.only(top: 20), child: _monthGrid())),
+    'Chart' => _paperSheet(child: const CustomPaint(painter: _ChartBarsPainter(), child: SizedBox.expand())),
+    'Name Photo Description' => _namePhoto(),
     _ => _paperSheet(),
   });
 }
@@ -277,6 +310,32 @@ Widget _plasterBoard() {
   );
 }
 
+Widget _namePhoto() {
+  return DecoratedBox(
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(2),
+      boxShadow: const [BoxShadow(color: Color(0x88000000), blurRadius: 8, offset: Offset(0, 4))],
+      image: const DecorationImage(image: AssetImage('assets/smartgen/paper.jpg'), fit: BoxFit.cover),
+    ),
+    child: const Padding(
+      padding: EdgeInsets.fromLTRB(8, 8, 8, 4),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Expanded(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              border: Border.fromBorderSide(BorderSide(color: Color(0xFF1C1B19), width: 3)),
+              image: DecorationImage(image: AssetImage('assets/smartgen/linen.jpg'), fit: BoxFit.cover),
+            ),
+          ),
+        ),
+        SizedBox(height: 4),
+        Text('Name', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF1C1B19))),
+        Text('Description', style: TextStyle(fontSize: 9, color: Color(0xFF5C564C))),
+      ]),
+    ),
+  );
+}
+
 Widget _paperSheet({Widget? child}) {
   return DecoratedBox(
     decoration: BoxDecoration(
@@ -305,7 +364,9 @@ Widget _bars(SgBoard board) {
   for (final c in board.cards) {
     counts[c.type.label] = (counts[c.type.label] ?? 0) + 1;
   }
-  if (counts.isEmpty) return const SizedBox.expand();
+  if (counts.isEmpty) {
+    return const CustomPaint(painter: _ChartBarsPainter(), child: SizedBox.expand());
+  }
   final maxN = counts.values.fold<int>(1, (m, n) => n > m ? n : m);
   return Padding(
     padding: const EdgeInsets.all(8),
@@ -322,6 +383,25 @@ Widget _bars(SgBoard board) {
         ),
     ]),
   );
+}
+
+class _ChartBarsPainter extends CustomPainter {
+  const _ChartBarsPainter();
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = const Color(0xFF3D7A6A);
+    const heights = [0.35, 0.8, 0.25, 0.62, 0.48];
+    final gap = size.width * 0.04;
+    final barW = (size.width - gap * (heights.length + 1)) / heights.length;
+    for (var i = 0; i < heights.length; i++) {
+      final h = size.height * heights[i];
+      final x = gap + i * (barW + gap);
+      canvas.drawRect(Rect.fromLTWH(x, size.height - h - 8, barW, h), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _RulePainter extends CustomPainter {
