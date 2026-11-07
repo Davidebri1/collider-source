@@ -9,6 +9,7 @@
 // The frame is sandboxed without allow-same-origin, so a page's scripts run on
 // an opaque origin: they can never reach Collider's storage, cookies or /api.
 import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 import 'dart:ui_web' as ui_web;
 
 import 'package:flutter/material.dart';

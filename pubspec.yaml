@@ -35,6 +35,9 @@ dependencies:
   trina_grid: ^1.0.0
   planka_app:
     path: packages/smartgen_planka
+  syncfusion_flutter_pdf: ^33.2.13
+  excel: ^4.0.6
+  docx_to_text: ^1.0.1
 
 dev_dependencies:
   flutter_test:

@@ -322,7 +322,7 @@ class MediaGen {
   List<(String, String)>? textAttempts(String modelId) => _text[modelId.replaceFirst('code-', '')];
 
   /// One OpenAI-compatible call on a text wire. Throws a raw error string.
-  Future<String> _textCall(String w, String remote, List<Map<String, String>> messages, {int? maxTokens}) async {
+  Future<String> _textCall(String w, String remote, List<Map<String, Object>> messages, {int? maxTokens}) async {
     final t = _textWires[w]!;
     final key = _keyFor(w);
     final viaProxy = _proxy.isNotEmpty && _proxyRoute.containsKey(w);
@@ -365,7 +365,7 @@ class MediaGen {
   /// Payment Required. Serialize through [_pollinationsGate] and retry 402/429.
   Future<void>? _pollinationsGate;
 
-  Future<String> _pollinationsText(List<Map<String, String>> messages) async {
+  Future<String> _pollinationsText(List<Map<String, Object>> messages) async {
     // Queue callers so consensus / multi-row Home do not stampede the free tier.
     while (_pollinationsGate != null) {
       try {
@@ -382,7 +382,7 @@ class MediaGen {
     }
   }
 
-  Future<String> _pollinationsTextOnce(List<Map<String, String>> messages) async {
+  Future<String> _pollinationsTextOnce(List<Map<String, Object>> messages) async {
     Object? last;
     for (var attempt = 0; attempt < 4; attempt++) {
       if (attempt > 0) {
@@ -417,7 +417,7 @@ class MediaGen {
   /// 401, 404, 410, 429 after its retries, 5xx, timeout, empty answer) moves
   /// on to the next entry; it only throws when every entry has failed, with
   /// the first meaningful error.
-  Future<String> runChain(String role, List<ChainEntry> chain, List<Map<String, String>> messages, {int? maxTokens}) async {
+  Future<String> runChain(String role, List<ChainEntry> chain, List<Map<String, Object>> messages, {int? maxTokens}) async {
     Object? first;
     for (var i = 0; i < chain.length; i++) {
       final e = chain[i];
@@ -426,7 +426,17 @@ class MediaGen {
         continue;
       }
       try {
-        final text = await _textCall(e.wire, e.remote, messages, maxTokens: maxTokens);
+        final msgs = _hasImages(messages) && !_seesImages(e) ? await _describeImages(messages) : messages;
+        final String text;
+        try {
+          text = await _textCall(e.wire, e.remote, msgs, maxTokens: maxTokens);
+        } catch (err) {
+          // A model we thought could see images refused them: describe instead.
+          if (!identical(msgs, messages) || !_hasImages(messages)) rethrow;
+          final t = await _textCall(e.wire, e.remote, await _describeImages(messages), maxTokens: maxTokens);
+          answeredBy[role] = '${i + 1}/${chain.length} ${e.model} via ${e.wire} (image described)';
+          return t;
+        }
         answeredBy[role] = '${i + 1}/${chain.length} ${e.model} via ${e.wire}';
         // ignore: avoid_print
         print('[chain] $role answered by ${answeredBy[role]} (${e.remote})');
@@ -440,21 +450,78 @@ class MediaGen {
     throw first ?? const MediaGenError('no-key');
   }
 
+  /// Models that read images themselves (checked Nov 7, 2026 with a test
+  /// image through the Worker). Every other model gets a description.
+  static const Set<String> _vision = {
+    'cr mimo-v2.6-flash',
+    'cr glm-5.3-flash',
+    'cr deepseek-v4.1-flash',
+    'nv minimaxai/minimax-m3.1-flash',
+  };
+  bool _seesImages(ChainEntry e) => _vision.contains('${e.wire} ${e.remote}');
+
+  /// Who describes an image for a text-only model: the vision-capable listed
+  /// models, in roster order.
+  static const List<ChainEntry> _describers = [
+    (model: 'GLM 5.3 Flash', wire: 'cr', remote: 'glm-5.3-flash'),
+    (model: 'DeepSeek V4.1 Flash', wire: 'cr', remote: 'deepseek-v4.1-flash'),
+    (model: 'MiniMax M3.1 Flash', wire: 'nv', remote: 'minimaxai/minimax-m3.1-flash'),
+    (model: 'MiMo V2.6 Flash', wire: 'cr', remote: 'mimo-v2.6-flash'),
+  ];
+
+  static bool _hasImages(List<Map<String, Object>> messages) =>
+      messages.any((m) => m['content'] is List && (m['content'] as List).any((p) => p is Map && p['type'] == 'image_url'));
+
+  final Map<int, Future<String>> _descriptions = {};
+
+  /// The same messages with every image replaced by a written description.
+  Future<List<Map<String, Object>>> _describeImages(List<Map<String, Object>> messages) async {
+    final out = <Map<String, Object>>[];
+    for (final m in messages) {
+      final c = m['content'];
+      if (c is! List) {
+        out.add(m);
+        continue;
+      }
+      final b = StringBuffer();
+      for (final p in c) {
+        if (p is! Map) continue;
+        if (p['type'] == 'text') {
+          b.write(p['text']);
+        } else if (p['type'] == 'image_url') {
+          final url = '${(p['image_url'] as Map)['url']}';
+          final d = await (_descriptions[url.hashCode] ??= runChain('describe', _describers, [
+            {
+              'role': 'user',
+              'content': [
+                {'type': 'text', 'text': 'Describe this image in detail for someone who cannot see it. Quote any text in it exactly.'},
+                {'type': 'image_url', 'image_url': {'url': url}},
+              ],
+            },
+          ], maxTokens: 1024).catchError((_) => 'The image could not be described.'));
+          b.write('\n\n[Attached image, described: $d]');
+        }
+      }
+      out.add({...m, 'content': b.toString()});
+    }
+    return out;
+  }
+
   /// Consensus agent 1 (headcount / essence / groups): David's consensus list.
-  Future<String> consensus(List<Map<String, String>> messages) =>
+  Future<String> consensus(List<Map<String, Object>> messages) =>
       runChain('consensus', consensusChain, messages, maxTokens: 2048);
 
   /// The one-line summary under each ticker reply: the Consensus agent, so the
   /// same list.
-  Future<String> summary(List<Map<String, String>> messages) =>
+  Future<String> summary(List<Map<String, Object>> messages) =>
       runChain('summary', consensusChain, messages, maxTokens: 2048);
 
   /// Consensus agent 2 (logical / "link" chain analysis).
-  Future<String> logicalChains(List<Map<String, String>> messages) =>
+  Future<String> logicalChains(List<Map<String, Object>> messages) =>
       runChain('chains', logicalChainChain, messages, maxTokens: 2048);
 
   /// Smart Gen Genie: David's Smart Gen list.
-  Future<String> genie(List<Map<String, String>> messages) =>
+  Future<String> genie(List<Map<String, Object>> messages) =>
       runChain('genie', smartGenChain, messages, maxTokens: 2048);
 
   /// chat.ts hasCredentials: is there a key for the wire this route uses?
@@ -598,7 +665,7 @@ class MediaGen {
   }
 
   /// callOpenRouter (non-streaming): text answer for General / Coding.
-  Future<String> chat(String modelId, List<Map<String, String>> messages) async {
+  Future<String> chat(String modelId, List<Map<String, Object>> messages) async {
     final tx = _text[modelId.replaceFirst('code-', '')];
     if (tx != null) {
       try {

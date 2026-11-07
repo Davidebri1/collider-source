@@ -1677,7 +1677,11 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           child: FloatingPrompt(
             summoned: _isComposerSummoned,
             busy: _busy,
-            onSubmitPrompt: (text, files) async => _onSendPrompt(await promptWithAttachedText(text, files), files),
+            onSubmitPrompt: (text, files) async {
+              final a = await promptWithAttachments(text, files);
+              _sendImages = a.imageDataUris;
+              await _onSendPrompt(a.text, files);
+            },
             onSummon: () => setState(() {
               _closeAllPanes();
               _expandedModelIds.clear();
@@ -1894,8 +1898,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         MediaGen.instance.chat(id, [
           // No shared system prompt. Each model answers with its own house
           // behaviour; a single persona here flattened them into one voice.
-          for (final m in before[id]!) if (!_isErr(m.text)) {'role': m.sender == 'user' ? 'user' : 'assistant', 'content': m.text},
-          {'role': 'user', 'content': prompt},
+          for (final m in before[id]!) if (!_isErr(m.text)) <String, Object>{'role': m.sender == 'user' ? 'user' : 'assistant', 'content': m.text},
+          _userTurn(prompt),
         ]).then((text) => _answer(id, text, false), onError: (e) => _answer(id, e is MediaGenError ? e.reason : friendlyErrorMessage(e), true)),
     ]);
     if (!mounted) return;
@@ -1922,6 +1926,21 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     if (_autosave && !_incognito) unawaited(_persistLocalHistory());
     await _directConsensus(prompt);
   }
+
+  /// Images attached to the prompt being sent (data: URIs); the models get
+  /// them with the prompt (see MediaGen.runChain).
+  List<String> _sendImages = const [];
+
+  /// The user's turn: the prompt, plus its images when there are any.
+  Map<String, Object> _userTurn(String prompt) => _sendImages.isEmpty
+      ? {'role': 'user', 'content': prompt}
+      : {
+          'role': 'user',
+          'content': [
+            {'type': 'text', 'text': prompt},
+            for (final u in _sendImages) {'type': 'image_url', 'image_url': {'url': u}},
+          ],
+        };
 
   Future<void> _onSendPrompt(String prompt, [List<String> files = const []]) async {
     if (_activeCategory.isMedia) return _onSendMedia(prompt);
