@@ -62,6 +62,7 @@ export async function webFinishChecks(h) {
   if (parts.includes('names')) await smartGenNames(h);
   if (parts.includes('attach')) await attachments(h);
   if (parts.includes('fallback')) await fallback402(h);
+  if (parts.includes('reminder')) await reminderOnly(h);
 }
 
 const FILES = process.env.ATTACH_DIR || '/workspace/webfinish/files';
@@ -174,8 +175,11 @@ async function fallback402(h) {
 
 /** (6) The Reminder card Genie made gets a due time, then its Calendar button hands over a real .ics. */
 async function reminderIcs(h, page) {
-  await h.boot(page, '?app=smartgen&sg=editor');
-  await h.sleep(1500);
+  // Back to the board Genie edited (the card editor opens from a board view, not the planka hub).
+  await h.tapAt(page, 'Close Genie'); await h.sleep(1000);
+  await h.tapAt(page, 'Notebook'); await h.sleep(1500);
+  const lab = (await h.labels(page)).find((x) => x.label.includes('Pack umbrella'));
+  if (lab) { await page.mouse.click(lab.x + Math.min(lab.w, 200) / 2, lab.y + Math.min(lab.h, 40) / 2); await h.sleep(1800); }
   let f = await h.shot(page, 'reminder_card');
   const [okTitle, dT] = painted(h.OUT, f, ['Pack umbrella']);
   await h.tapAt(page, 'Add date'); await h.sleep(1200);
@@ -183,12 +187,30 @@ async function reminderIcs(h, page) {
   await h.tapAt(page, 'OK'); await h.sleep(1500); // time
   f = await h.shot(page, 'reminder_due_set');
   const dl = page.waitForEvent('download', { timeout: 15000 }).catch(() => null);
-  const tapped = await h.tapAt(page, 'Calendar');
+  // The card's Calendar button (not the board's Calendar view chip in the row at the top).
+  const cal = (await h.labels(page)).filter((x) => x.label === 'Calendar' && x.y > 300 && x.x > 0 && x.x < h.W).sort((a, b) => a.y - b.y)[0];
+  if (cal) await page.mouse.click(cal.x + cal.w / 2, cal.y + cal.h / 2);
+  const tapped = !!cal;
   const d = await dl;
   let ics = '';
   if (d) { const p = join(h.OUT, 'reminder.ics'); await d.saveAs(p); ics = readFileSync(p, 'utf8'); }
   h.check('reminders: a Reminder card with a due time exports a calendar event (.ics)', okTitle && tapped && /BEGIN:VCALENDAR/.test(ics) && /BEGIN:VEVENT/.test(ics) && /SUMMARY:Pack umbrella/i.test(ics) && /BEGIN:VALARM/.test(ics),
     `${f} title=${okTitle} tapped=${tapped} file=${d ? d.suggestedFilename() : 'none'} ics=${ics.replace(/\r?\n/g, ' | ').slice(0, 240)}`);
+}
+
+async function reminderOnly(h) {
+  const { page, ctx } = await h.newPage(h.browser);
+  await h.boot(page, '?app=smartgen&sg=canvas'); await h.sleep(1200);
+  await h.boot(page, '?app=smartgen&sg=genie'); await h.sleep(1500);
+  const c1 = h.consoleLines.length;
+  await h.tapAt(page, 'Message Genie'); await h.sleep(500);
+  await page.keyboard.type('Add a reminder card called Pack umbrella to To Do.', { delay: 8 });
+  await page.keyboard.press('Enter');
+  const g0 = Date.now();
+  while (Date.now() - g0 < 300000 && !chainLines(h, c1).some((l) => /\[chain\] genie (answered by|9\/9 )/.test(l))) await h.sleep(2000);
+  await h.sleep(3000);
+  await reminderIcs(h, page);
+  await ctx.close();
 }
 
 /** (7) Home composer: visible glass bar, "Ask anything", focused on load, Send brightens with text. */

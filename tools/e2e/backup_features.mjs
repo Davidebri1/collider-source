@@ -40,9 +40,18 @@ export function painted(OUT, file, wanted) {
 }
 
 export async function featureChecks(h) {
-  await smartGenCards(h);
-  await filesAttach(h);
-  await browserSidebar(h);
+  const only = (process.env.FEATURES || 'smartgen,files,sidebar').split(',');
+  if (only.includes('smartgen')) await smartGenCards(h);
+  if (only.includes('files')) await filesAttach(h);
+  if (only.includes('sidebar')) await browserSidebar(h);
+}
+/** Taps the first labelled node whose label contains [part] (sidebar rows carry the page title). */
+async function tapContaining(h, page, part, wait = 1000) {
+  const l = (await h.labels(page)).find((x) => x.label.includes(part) && x.w > 60);
+  if (l) await page.mouse.click(l.x + Math.min(l.w, 200) / 2, l.y + Math.min(l.h, 44) / 2);
+  await page.mouse.move(4, 600);
+  await h.sleep(wait);
+  return !!l;
 }
 
 async function tapL(h, page, label, wait = 900) {
@@ -175,16 +184,17 @@ async function browserSidebar(h) {
   let [ok, d] = painted(OUT, fSide, ['github.com', 'Bookmarks', 'History']);
   check('browser sidebar: opens with the tab, Bookmarks and History', ok, d);
   await tapL(h, page, 'Bookmarks', 1000);
-  await tapL(h, page, 'github.com', 1000);
+  // The row with the add-bookmark mark is the current page (GitHub); tapping it bookmarks it.
+  if (!await tapContaining(h, page, 'GitHub')) await tapL(h, page, 'github.com', 1000);
   const fBm = await shot(page, 'browser_bookmarked');
-  [ok, d] = painted(OUT, fBm, ['Bookmarks', 'github.com']);
-  check('browser sidebar: Bookmarks adds the page on screen', ok && (await h.labels(page)).filter((l) => l.label.includes('github.com')).length >= 2, d);
+  [ok, d] = painted(OUT, fBm, ['Bookmarks', 'GitHub']);
+  check('browser sidebar: Bookmarks adds the page on screen', ok && (await h.labels(page)).filter((l) => /GitHub|github\.com/.test(l.label)).length >= 2, d);
   await tapL(h, page, 'Bookmarks', 1000); // the back row
   await tapL(h, page, 'History', 1000);
   const fHist = await shot(page, 'browser_history');
-  [ok, d] = painted(OUT, fHist, ['History', 'github.com', 'wikipedia.org']);
+  [ok, d] = painted(OUT, fHist, ['History', 'GitHub', 'Wikipedia']);
   check('browser sidebar: History lists the pages visited', ok, d);
-  await tapL(h, page, 'wikipedia.org', 500);
+  if (!await tapContaining(h, page, 'Wikipedia', 500)) await tapL(h, page, 'wikipedia.org', 500);
   const fr = await h.waitFrame(page, (f) => /^https:\/\/www\.wikipedia\.org\//.test(f.base), 30000);
   await sleep(2000);
   await shot(page, 'browser_history_opened');
@@ -194,11 +204,11 @@ async function browserSidebar(h) {
   await h.waitFrame(page, (f) => f.bytes > 1000);
   await tapL(h, page, 'Sidebar', 1200);
   await tapL(h, page, 'Bookmarks', 1000);
-  [ok, d] = painted(OUT, await shot(page, 'browser_bookmarks_after_reload'), ['Bookmarks', 'github.com']);
+  [ok, d] = painted(OUT, await shot(page, 'browser_bookmarks_after_reload'), ['Bookmarks', 'GitHub']);
   check('browser sidebar: after reload the bookmark is kept', ok, d);
   await tapL(h, page, 'Bookmarks', 1000);
   await tapL(h, page, 'History', 1000);
-  [ok, d] = painted(OUT, await shot(page, 'browser_history_after_reload'), ['History', 'github.com', 'wikipedia.org']);
+  [ok, d] = painted(OUT, await shot(page, 'browser_history_after_reload'), ['History', 'GitHub', 'Wikipedia']);
   check('browser sidebar: after reload the history is kept', ok, d);
   await ctx.close();
 }
