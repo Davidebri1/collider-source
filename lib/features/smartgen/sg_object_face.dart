@@ -110,27 +110,32 @@ String sgBoardAsset(SgBoardKind kind) => switch (kind) {
 
 /// Where cards sit inside the object, inside the object's own box.
 EdgeInsets sgObjectInsets(String kind) => switch (kind) {
-      'Notebook' || 'Diary' || 'Journal' => const EdgeInsets.fromLTRB(18, 28, 10, 14),
-      'Gallery' || 'Portfolio' || 'Collection' => const EdgeInsets.fromLTRB(14, 26, 12, 12),
-      'Folder' => const EdgeInsets.fromLTRB(8, 28, 8, 8),
-      'Glass' => const EdgeInsets.fromLTRB(10, 22, 10, 10),
-      'Name Photo Description' => const EdgeInsets.fromLTRB(8, 78, 8, 6),
-      'Chart' || 'Calendar Widget' => const EdgeInsets.fromLTRB(8, 36, 8, 4),
-      'Mirror' => const EdgeInsets.fromLTRB(14, 26, 14, 14),
+      'Notebook' => const EdgeInsets.fromLTRB(12, 6, 8, 8),
+      'Diary' || 'Journal' => const EdgeInsets.fromLTRB(8, 52, 8, 4),
+      'Gallery' => const EdgeInsets.fromLTRB(10, 8, 8, 8),
+      'Portfolio' || 'Collection' || 'Table' => const EdgeInsets.fromLTRB(8, 48, 8, 4),
+      'Folder' => const EdgeInsets.fromLTRB(10, 22, 8, 6),
+      'Glass' => const EdgeInsets.fromLTRB(8, 8, 8, 8),
+      'Name Photo Description' => const EdgeInsets.fromLTRB(8, 70, 8, 4),
+      'Chart' || 'Calendar Widget' => const EdgeInsets.fromLTRB(6, 4, 6, 2),
+      'Mirror' => const EdgeInsets.fromLTRB(16, 10, 14, 10),
       _ => const EdgeInsets.fromLTRB(8, 22, 8, 8),
     };
 
 Widget sgObjectFace(String kind) {
   return SizedBox.expand(child: switch (kind) {
-    'Notebook' || 'Diary' || 'Journal' => _openBook(kind),
+    'Notebook' => _openBook(ruled: true),
+    'Diary' => _diary(),
+    'Journal' => _journal(),
     'Gallery' => _album(),
-    'Portfolio' || 'Collection' => _leatherFolio(kind),
+    'Portfolio' => _pieces(),
+    'Collection' => _cells(),
     'Folder' => _folder(),
-    'Glass' => const SizedBox.expand(),
+    'Glass' => _glass(),
     'Mirror' => _mirror(),
-    'Table' => _tableTop(),
+    'Table' => _tableGrid(),
     'Swimlane vertical' || 'Swimlane horizontal' || 'Kanban Board widget' => _plasterBoard(),
-    'Calendar Widget' => _paperSheet(child: Padding(padding: const EdgeInsets.only(top: 20), child: _monthGrid())),
+    'Calendar Widget' => _paperSheet(child: _monthGrid()),
     'Chart' => _paperSheet(child: const CustomPaint(painter: _ChartBarsPainter(), child: SizedBox.expand())),
     'Name Photo Description' => _namePhoto(),
     _ => _paperSheet(),
@@ -139,10 +144,10 @@ Widget sgObjectFace(String kind) {
 
 Widget _photo(String asset, {BoxFit fit = BoxFit.cover}) => Image.asset(asset, fit: fit, filterQuality: FilterQuality.medium);
 
-Widget _openBook(String kind) {
+Widget _openBook({required bool ruled}) {
   return Stack(fit: StackFit.expand, children: [
     Padding(
-      padding: const EdgeInsets.fromLTRB(2, 6, 2, 2),
+      padding: const EdgeInsets.fromLTRB(2, 4, 2, 2),
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(5),
@@ -152,14 +157,52 @@ Widget _openBook(String kind) {
       ),
     ),
     Padding(
-      padding: const EdgeInsets.fromLTRB(8, 12, 6, 8),
+      padding: const EdgeInsets.fromLTRB(8, 8, 6, 6),
       child: Row(children: [
         Expanded(child: _page()),
         const SizedBox(width: 5),
-        Expanded(child: _page(ruled: kind == 'Notebook')),
+        Expanded(child: _page(ruled: ruled)),
       ]),
     ),
   ]);
+}
+
+Widget _diary() {
+  final now = DateTime.now();
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  final stamp = '${now.day} ${months[now.month - 1]}';
+  return Stack(fit: StackFit.expand, children: [
+    _openBook(ruled: false),
+    Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 10, 8),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Expanded(child: SizedBox()),
+        Expanded(child: Text(stamp, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF1C1B19)))),
+      ]),
+    ),
+  ]);
+}
+
+Widget _journal() {
+  final now = DateTime.now();
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  String line(int ago) {
+    final d = DateTime(now.year, now.month, now.day - ago);
+    return '${d.day} ${months[d.month - 1]}  —';
+  }
+
+  return _paperSheet(
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(10, 8, 8, 36),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        for (final ago in [2, 1, 0])
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(line(ago), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF1C1B19))),
+          ),
+      ]),
+    ),
+  );
 }
 
 Widget _page({bool ruled = false}) {
@@ -212,26 +255,83 @@ Widget _mat() {
   );
 }
 
-Widget _leatherFolio(String kind) {
+Widget _pieces() {
   return DecoratedBox(
     decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(6),
-      boxShadow: const [BoxShadow(color: Color(0x99000000), blurRadius: 10, offset: Offset(0, 5))],
-      image: DecorationImage(
-        image: AssetImage(kind == 'Collection' ? 'assets/smartgen/linen.jpg' : 'assets/smartgen/leather.jpg'),
-        fit: BoxFit.cover,
-      ),
+      borderRadius: BorderRadius.circular(4),
+      image: const DecorationImage(image: AssetImage('assets/smartgen/leather.jpg'), fit: BoxFit.cover),
     ),
-      child: Padding(
-      padding: const EdgeInsets.fromLTRB(12, 18, 10, 10),
-      child: SizedBox.expand(
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(2),
-            image: const DecorationImage(image: AssetImage('assets/smartgen/paper.jpg'), fit: BoxFit.cover),
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(6, 6, 6, 40),
+      child: Column(children: [
+        for (final n in ['Piece 1', 'Piece 2', 'Piece 3'])
+          Expanded(
+            child: Container(
+              margin: const EdgeInsets.symmetric(vertical: 2),
+              alignment: Alignment.centerLeft,
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              decoration: const BoxDecoration(image: DecorationImage(image: AssetImage('assets/smartgen/paper.jpg'), fit: BoxFit.cover)),
+              child: Text(n, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF1C1B19))),
+            ),
           ),
+      ]),
+    ),
+  );
+}
+
+Widget _cells() {
+  return DecoratedBox(
+    decoration: const BoxDecoration(image: DecorationImage(image: AssetImage('assets/smartgen/linen.jpg'), fit: BoxFit.cover)),
+    child: Padding(
+      padding: const EdgeInsets.all(6),
+      child: Column(children: [
+        for (var r = 0; r < 2; r++)
+          Expanded(
+            child: Row(children: [
+              for (var c = 0; c < 2; c++)
+                Expanded(
+                  child: Container(
+                    margin: const EdgeInsets.all(3),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: const Color(0xFF1C1B19)),
+                      image: const DecorationImage(image: AssetImage('assets/smartgen/paper.jpg'), fit: BoxFit.cover),
+                    ),
+                    child: Text('${r * 2 + c + 1}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF1C1B19))),
+                  ),
+                ),
+            ]),
+          ),
+      ]),
+    ),
+  );
+}
+
+Widget _tableGrid() {
+  return Padding(
+    padding: const EdgeInsets.all(6),
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xFF3A2414), width: 4),
+        image: const DecorationImage(image: AssetImage('assets/smartgen/table.jpg'), fit: BoxFit.cover),
+      ),
+      child: const Padding(
+        padding: EdgeInsets.all(4),
+        child: DecoratedBox(
+          decoration: BoxDecoration(color: Color(0xDDF7F1E6)),
+          child: CustomPaint(painter: _GridPainter(), child: SizedBox.expand()),
         ),
       ),
+    ),
+  );
+}
+
+Widget _glass() {
+  return DecoratedBox(
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: const Color(0xF5FFFFFF), width: 4),
+      color: const Color(0x55D5E6F0),
     ),
   );
 }
@@ -285,20 +385,6 @@ Widget _mirror() {
   );
 }
 
-Widget _tableTop() {
-  return Padding(
-    padding: const EdgeInsets.all(8),
-    child: DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(3),
-        border: Border.all(color: const Color(0xFF3A2414), width: 6),
-        boxShadow: const [BoxShadow(color: Color(0x99000000), blurRadius: 8, offset: Offset(0, 4))],
-        image: const DecorationImage(image: AssetImage('assets/smartgen/table.jpg'), fit: BoxFit.cover),
-      ),
-    ),
-  );
-}
-
 Widget _plasterBoard() {
   return DecoratedBox(
     decoration: BoxDecoration(
@@ -329,8 +415,9 @@ Widget _namePhoto() {
           ),
         ),
         SizedBox(height: 4),
-        Text('Name', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF1C1B19))),
-        Text('Description', style: TextStyle(fontSize: 9, color: Color(0xFF5C564C))),
+        Text('Name', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF1C1B19))),
+        Text('Description', style: TextStyle(fontSize: 11, color: Color(0xFF5C564C))),
+        SizedBox(height: 36),
       ]),
     ),
   );
@@ -383,6 +470,28 @@ Widget _bars(SgBoard board) {
         ),
     ]),
   );
+}
+
+class _GridPainter extends CustomPainter {
+  const _GridPainter();
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFF3A2414)
+      ..strokeWidth = 1.2;
+    const cols = 3, rows = 4;
+    for (var c = 1; c < cols; c++) {
+      final x = size.width * c / cols;
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    }
+    for (var r = 1; r < rows; r++) {
+      final y = size.height * r / rows;
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _ChartBarsPainter extends CustomPainter {

@@ -159,6 +159,27 @@ async function drag(page, a, b, label) {
   note(`${label} ${a.x.toFixed(0)},${a.y.toFixed(0)} -> ${b.x.toFixed(0)},${b.y.toFixed(0)}`);
 }
 
+const results = [];
+const record = (id, ok, evidence, shot = '') => {
+  results.push({ id, result: ok ? 'pass' : 'fail', shot, evidence });
+  note(`${ok ? 'PASS' : 'FAIL'} ${id} — ${evidence}`);
+};
+const BOARDS = [
+  ['Desk', 'board-desk'],
+  ['Kanban Board with Swim lanes', 'board-kanban'],
+  ['Calendar', 'board-calendar'],
+  ['Whiteboard empty', 'board-whiteboard-empty'],
+  ['Whiteboard with swim lanes', 'board-whiteboard-lanes'],
+  ['White board without swim lanes', 'board-whiteboard-plain'],
+  ['Long wood bench', 'board-long-bench'],
+  ['Workbench', 'board-workbench'],
+  ['Table', 'board-table'],
+  ['Wood round table', 'board-round-table'],
+  ['Wood Night Stand', 'board-night-stand'],
+  ['Wood Long Table', 'board-long-table'],
+  ['Wood Coffee Table', 'board-coffee-table'],
+  ['Various Different Charts and diagrams', 'board-charts'],
+];
 const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', headless: true, args: ['--headless=new', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--hide-scrollbars'] });
 try {
   const { page } = await newPage(browser);
@@ -215,13 +236,27 @@ try {
   }
 
   const only = (process.env.ONLY || '').split(',').map((s) => s.trim()).filter(Boolean);
+  const wantBoards = !only.length || only.includes('boards');
+  if (wantBoards) {
+    await fresh(page);
+    for (const [name, file] of BOARDS) {
+      if (!(await openMenu(page))) { record(`board ${name}`, false, 'board menu did not open', ''); continue; }
+      await sleep(300);
+      const ok = await clickPainted(page, name, 8);
+      const shotName = ok ? file : `${file}-miss`;
+      await shot(page, shotName, true);
+      record(`board ${name}`, ok, ok ? `selected by pointer; ${shotName}.png is 880x1912` : `painted label not clicked`, `${shotName}.png`);
+    }
+  }
   if (!only.length || only.includes('pointer')) {
-  await addCanvas('Notebook');
-  await addNote(page);
+  await fresh(page);
+  const created = await addCanvas('Notebook');
+  const noted = await addNote(page);
   await shot(page, 'canvas-notebook', true);
+  record('create notebook', created && noted, `canvas placed=${created} note added=${noted}`, 'canvas-notebook.png');
 
-  // Inline edit of the card sitting on the notebook.
   const noteAt = findPhrase(ocrBoxes(await shot(page, 'note-at')), 'Note');
+  let edited = false;
   if (noteAt && inside(noteAt)) {
     await page.mouse.click(noteAt.x, noteAt.y);
     await sleep(500);
@@ -229,41 +264,53 @@ try {
     await page.keyboard.type('Moved note', { delay: 20 });
     await page.keyboard.press('Enter');
     await sleep(400);
-    note('edited title');
-  } else note('MISS note to edit');
-  await shot(page, 'pointer-edit', true);
+  }
+  const editShot = await shot(page, 'pointer-edit', true);
+  const editText = (ocrBoxes(editShot) || []).map((b) => b[0]).join(' ');
+  edited = /Moved note/.test(editText);
+  record('inline-edit', edited, `ocr="${editText.slice(0, 180)}"`, 'pointer-edit.png');
 
   const beforeMove = boxOf(await labels(page), 'Move Notebook');
-  if (!beforeMove) note('MISS Move Notebook labels ' + (await labels(page)).map((l) => l.label).filter((l) => /Move|Drag|Resize|Remove|Note/.test(l)).join(' | '));
+  let moved = false;
+  if (!beforeMove) note('MISS Move Notebook');
   else {
     await drag(page, { x: beforeMove.x + 24, y: beforeMove.y + Math.min(beforeMove.h, 18) / 2 }, { x: beforeMove.x + 70, y: beforeMove.y + 90 }, 'move notebook by its header');
     const afterMove = boxOf(await labels(page), 'Move Notebook');
+    moved = !!afterMove && (afterMove.y - beforeMove.y > 30 || afterMove.x - beforeMove.x > 20);
     note(`move result ${beforeMove.x},${beforeMove.y} -> ${afterMove ? afterMove.x + ',' + afterMove.y : 'gone'}`);
+    record('move', moved, `${Math.round(beforeMove.x)},${Math.round(beforeMove.y)} -> ${afterMove ? Math.round(afterMove.x) + ',' + Math.round(afterMove.y) : 'gone'}`, 'pointer-move.png');
   }
+  if (!beforeMove) record('move', false, 'Move Notebook handle missing', 'pointer-move.png');
   await shot(page, 'pointer-move', true);
 
   await addCanvas('Gallery');
   await shot(page, 'canvas-gallery', true);
 
   const beforeSize = boxOf(await labels(page), 'Resize Notebook');
-  if (!beforeSize) note('MISS Resize Notebook');
+  let resized = false;
+  if (!beforeSize) record('resize', false, 'Resize Notebook handle missing', 'pointer-resize.png');
   else {
     const ax = beforeSize.x + beforeSize.w / 2, ay = beforeSize.y + beforeSize.h / 2;
     await drag(page, { x: ax, y: ay }, { x: ax + 50, y: ay + 70 }, 'resize notebook');
     const afterSize = boxOf(await labels(page), 'Resize Notebook');
-    note(`resize result ${Math.round(ax)},${Math.round(ay)} -> ${afterSize ? Math.round(afterSize.x + afterSize.w / 2) + ',' + Math.round(afterSize.y + afterSize.h / 2) : 'gone'}`);
+    const bx = afterSize ? afterSize.x + afterSize.w / 2 : ax;
+    const by = afterSize ? afterSize.y + afterSize.h / 2 : ay;
+    resized = Math.abs(bx - ax) > 20 || Math.abs(by - ay) > 20;
+    record('resize', resized, `${Math.round(ax)},${Math.round(ay)} -> ${Math.round(bx)},${Math.round(by)}`, 'pointer-resize.png');
   }
   await shot(page, 'pointer-resize', true);
 
   const grip = boxOf(await labels(page), 'Drag Moved note') || boxOf(await labels(page), 'Drag Note');
   const gallery = boxOf(await labels(page), 'Move Gallery');
-  if (!grip || !gallery) note('MISS card grip or gallery');
+  let dragged = false;
+  if (!grip || !gallery) record('cross-canvas drag', false, 'grip or gallery missing', 'pointer-drag.png');
   else {
     const from = { x: grip.x + Math.min(grip.w, 28) / 2, y: grip.y + Math.min(grip.h, 22) / 2 };
     const to = { x: gallery.x + 36, y: gallery.y + 80 };
     await drag(page, from, to, 'drag card to gallery');
-    const stillOnBook = boxOf(await labels(page), 'Drag Moved note');
-    note(`drag result grip ${Math.round(from.x)},${Math.round(from.y)} -> ${stillOnBook ? Math.round(stillOnBook.x) + ',' + Math.round(stillOnBook.y) : 'no grip'}`);
+    const afterGrip = boxOf(await labels(page), 'Drag Moved note') || boxOf(await labels(page), 'Drag Note');
+    dragged = !!afterGrip && afterGrip.x > grip.x + 40;
+    record('cross-canvas drag', dragged, `grip ${Math.round(grip.x)},${Math.round(grip.y)} -> ${afterGrip ? Math.round(afterGrip.x) + ',' + Math.round(afterGrip.y) : 'gone'}`, 'pointer-drag.png');
   }
   await shot(page, 'pointer-drag', true);
 
@@ -271,20 +318,36 @@ try {
   await boot(page);
   await shot(page, 'pointer-reload', true);
   const reText = (ocrBoxes(await shot(page, 'reload-read')) || []).map((b) => b[0]).join(' | ');
-  note('reload ' + reText.slice(0, 300));
+  record('reload', /Moved note/.test(reText), `local reload only, not cross-device. ocr="${reText.slice(0, 220)}"`, 'pointer-reload.png');
 
   await closeCanvases(page);
+  const left = (await labels(page)).some((l) => l.label === 'Move Notebook' || l.label === 'Move Gallery');
   await shot(page, 'pointer-remove', true);
+  record('remove', !left, left ? 'a canvas handle is still present' : 'Move Notebook and Move Gallery are gone', 'pointer-remove.png');
   }
 
+  const expectWord = {
+    'Notebook': /Note/, 'Gallery': /Note/, 'Folder': /Note|Folder/, 'Glass': /Note/, 'Mirror': /Note/,
+    'Swimlane vertical': /To Do/, 'Swimlane horizontal': /To Do|Doing/, 'Name Photo Description': /Name/,
+    'Portfolio': /Piece/, 'Collection': /[1-4]/, 'Diary': /Nov/, 'Journal': /Nov/,
+    'Kanban Board widget': /To Do/, 'Table': /Note/, 'Calendar Widget': /\b30\b/, 'Chart': /Note/,
+  };
   const todo = only.length ? CANVASES.filter((n) => only.includes(n)) : CANVASES;
   for (const name of todo) {
     await fresh(page);
-    if (!(await addCanvas(name))) { await shot(page, `canvas-${norm(name)}-miss`, true); continue; }
+    const file = `canvas-${norm(name)}`;
+    if (!(await addCanvas(name))) {
+      await shot(page, `${file}-miss`, true);
+      record(`canvas ${name}`, false, 'not created', `${file}-miss.png`);
+      continue;
+    }
     await addNote(page);
     const placed = (await labels(page)).some((l) => l.label === `Move ${name}`);
-    await shot(page, `canvas-${norm(name)}`, true);
-    note(`shot ${name} placed=${placed}`);
+    const shotFile = await shot(page, file, true);
+    const text = (ocrBoxes(shotFile) || []).map((b) => b[0]).join(' ');
+    const want = expectWord[name];
+    const saw = !want || want.test(text);
+    record(`canvas ${name}`, placed && saw, `placed=${placed} ocr="${text.slice(0, 160)}"`, `${file}.png`);
   }
 
   const ask = await newPage(browser);
@@ -293,13 +356,20 @@ try {
   const t0 = Date.now();
   while (Date.now() - t0 < 80000 && ask.page._net.filter((n) => n.status).length === 0) await sleep(2000);
   await shot(ask.page, 'provider-ask', true);
-  note('provider ' + JSON.stringify(ask.page._net).slice(0, 500));
+  const quince = ask.page._net.some((n) => n.status === 200 && /QUINCE/.test(n.text || ''));
+  record('in-browser provider', quince, JSON.stringify(ask.page._net).slice(0, 300), 'provider-ask.png');
   writeFileSync(join(ART, 'provider.json'), JSON.stringify(ask.page._net, null, 1));
   await ask.ctx.close();
 } catch (e) {
   note('FATAL ' + (e.stack || e));
+  record('run', false, String(e.stack || e).slice(0, 500), '');
 } finally {
   await browser.close();
-  writeFileSync(join(OUT, 'report.json'), JSON.stringify(log, null, 1));
+  const passed = results.filter((r) => r.result === 'pass').length;
+  const failed = results.filter((r) => r.result === 'fail').length;
+  const report = { at: new Date().toISOString(), source: 'written by this run only', passed, failed, entries: results };
+  writeFileSync(join(OUT, 'report.json'), JSON.stringify(report, null, 1));
+  writeFileSync(join(ART, 'report.json'), JSON.stringify(report, null, 1));
   writeFileSync(join(ART, 'objects-log.json'), JSON.stringify(log, null, 1));
+  console.log(`\nreport ${passed} pass / ${failed} fail -> ${join(ART, 'report.json')}`);
 }

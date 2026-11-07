@@ -135,68 +135,70 @@ class _SgPhysicalStageState extends State<SgPhysicalStage> {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(7),
-                child: Stack(fit: StackFit.expand, children: [
-                  sgObjectFace(canvas.kind),
-                  Padding(
-                    padding: const EdgeInsets.all(2),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                      SizedBox(
-                        height: 22,
-                        child: Row(children: [
-                          Expanded(
-                            child: Semantics(
-                              container: true,
-                              button: true,
-                              label: 'Move ${canvas.kind}',
-                              child: ExcludeSemantics(
-                                child: Listener(
-                                  behavior: HitTestBehavior.opaque,
-                                  onPointerDown: (e) => _beginFrame(e, canvas, size, frame, 'move'),
-                                  onPointerMove: (e) => _updateFrame(e, canvas, size),
-                                  onPointerUp: (e) => _endFrame(e, canvas),
-                                  onPointerCancel: (e) => _endFrame(e, canvas),
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(left: 6),
-                                    child: Text(canvas.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFF1C1B19))),
-                                  ),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  // Title and close sit on this rail, above the working surface,
+                  // so they do not cover the page edge or the page controls.
+                  ColoredBox(
+                    color: const Color(0xFFF4EFE4),
+                    child: SizedBox(
+                      height: 24,
+                      child: Row(children: [
+                        Expanded(
+                          child: Semantics(
+                            container: true,
+                            button: true,
+                            label: 'Move ${canvas.kind}',
+                            child: ExcludeSemantics(
+                              child: Listener(
+                                behavior: HitTestBehavior.opaque,
+                                onPointerDown: (e) => _beginFrame(e, canvas, size, frame, 'move'),
+                                onPointerMove: (e) => _updateFrame(e, canvas, size),
+                                onPointerUp: (e) => _endFrame(e, canvas),
+                                onPointerCancel: (e) => _endFrame(e, canvas),
+                                child: Padding(
+                                  padding: const EdgeInsets.only(left: 6),
+                                  child: Text(canvas.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFF1C1B19))),
                                 ),
                               ),
                             ),
                           ),
-                          Semantics(
-                            button: true,
-                            label: 'Remove ${canvas.kind}',
-                            child: GestureDetector(
-                              onTap: () => widget.store.removeCanvas(canvas.id),
-                              child: const SizedBox(width: 22, height: 22, child: Icon(Icons.close, size: 14, color: Color(0xFF1C1B19))),
-                            ),
+                        ),
+                        Semantics(
+                          button: true,
+                          label: 'Remove ${canvas.kind}',
+                          child: GestureDetector(
+                            onTap: () => widget.store.removeCanvas(canvas.id),
+                            child: const SizedBox(width: 22, height: 22, child: Icon(Icons.close, size: 14, color: Color(0xFF1C1B19))),
                           ),
-                        ]),
+                        ),
+                      ]),
+                    ),
+                  ),
+                  Expanded(
+                    child: Stack(fit: StackFit.expand, children: [
+                      sgObjectFace(canvas.kind),
+                      Padding(
+                        padding: sgObjectInsets(canvas.kind),
+                        child: _working(b, canvas, cards),
                       ),
-                      Expanded(
-                        child: Padding(
-                          padding: sgObjectInsets(canvas.kind),
-                          child: _working(b, canvas, cards),
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: Semantics(
+                          container: true,
+                          button: true,
+                          label: 'Resize ${canvas.kind}',
+                          child: Listener(
+                            behavior: HitTestBehavior.opaque,
+                            onPointerDown: (e) => _beginFrame(e, canvas, size, frame, 'resize'),
+                            onPointerMove: (e) => _updateFrame(e, canvas, size),
+                            onPointerUp: (e) => _endFrame(e, canvas),
+                            onPointerCancel: (e) => _endFrame(e, canvas),
+                            child: const SizedBox(width: 28, height: 28, child: CustomPaint(painter: _ResizeGripPainter())),
+                          ),
                         ),
                       ),
                     ]),
-                  ),
-                  Positioned(
-                    right: 0,
-                    bottom: 0,
-                      child: Semantics(
-                      container: true,
-                      button: true,
-                      label: 'Resize ${canvas.kind}',
-                      child: Listener(
-                        behavior: HitTestBehavior.opaque,
-                        onPointerDown: (e) => _beginFrame(e, canvas, size, frame, 'resize'),
-                        onPointerMove: (e) => _updateFrame(e, canvas, size),
-                        onPointerUp: (e) => _endFrame(e, canvas),
-                        onPointerCancel: (e) => _endFrame(e, canvas),
-                        child: const SizedBox(width: 36, height: 36, child: CustomPaint(painter: _ResizeGripPainter())),
-                      ),
-                    ),
                   ),
                 ]),
               ),
@@ -242,9 +244,9 @@ class _SgPhysicalStageState extends State<SgPhysicalStage> {
   Widget _working(SgBoard b, SgCanvas canvas, List<SgCard> cards) {
     return switch (canvas.kind) {
       'Kanban Board widget' || 'Swimlane vertical' || 'Swimlane horizontal' => _lanes(b, cards, vertical: canvas.kind != 'Swimlane horizontal'),
-      // The face already draws the chart, month, or portrait. The card sits
-      // at the bottom so that drawing stays visible.
-      'Calendar Widget' || 'Chart' || 'Name Photo Description' => Align(alignment: Alignment.bottomLeft, child: _cards(cards)),
+      // Marks (dates, bars, name, pieces) stay in the upper part of the face.
+      'Calendar Widget' || 'Chart' || 'Name Photo Description' || 'Diary' || 'Journal' || 'Portfolio' || 'Collection' || 'Table' =>
+        Align(alignment: Alignment.bottomLeft, child: _cards(cards)),
       _ => _cards(cards),
     };
   }
@@ -261,7 +263,7 @@ class _SgPhysicalStageState extends State<SgPhysicalStage> {
           child: DecoratedBox(
             decoration: const BoxDecoration(color: Color(0x22000000)),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Text(list.title, textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 9, fontWeight: FontWeight.w700, color: const Color(0xFF1C1B19))),
+              Text(list.title, textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF1C1B19))),
               for (final c in cards.where((c) => c.listId == list.id).take(3))
                 Text(c.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 9, color: const Color(0xFF1C1B19))),
             ]),
