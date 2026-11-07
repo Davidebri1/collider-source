@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:planka_app/local/planka_store.dart';
 import 'package:planka_app/features/views/views_screen.dart';
+import 'package:planka_app/features/statistics/workspace_statistics_screen.dart';
 
 /// Board menu — stock planka indigo chrome; only offline-capable actions.
 class BoardMenuScreen extends StatefulWidget {
@@ -116,6 +117,14 @@ class _BoardMenuScreenState extends State<BoardMenuScreen> {
                 MaterialPageRoute(builder: (_) => const ViewsScreen()),
               );
             },
+          ),
+          ListTile(
+            leading: const Icon(Icons.bar_chart_rounded),
+            title: const Text('Workspace Statistics'),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => WorkspaceStatisticsScreen(boardId: _boardId)),
+            ),
           ),
           ListTile(
             leading: const Icon(Icons.archive_outlined),

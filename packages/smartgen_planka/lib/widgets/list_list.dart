@@ -23,6 +23,7 @@ import '../models/card_models/planka_task.dart';
 import '../models/planka_user.dart';
 import '../providers/list_provider.dart';
 import '../local/planka_store.dart';
+import '../features/private_notes/private_notes_flip.dart';
 import '../providers/card_provider.dart';
 import '../providers/attachment_provider.dart';
 import '../widgets/parts/stopwatch_display.dart';
@@ -523,10 +524,13 @@ class _ListListState extends State<ListList> {
     final coverTint = PlankaStore.instance.cardCoverColors[card.id];
     final cardColor = coverTint != null ? Color(coverTint) : Colors.white;
 
-    return Card(
+    // Private notes flip (ported from the AppFlowy Smart Gen backup, R74).
+    return PrivateNotesFlip(
+      key: ValueKey('card_${card.id}'),
+      cardId: card.id,
+      front: Card(
       elevation: 3,
       color: cardColor,
-      key: ValueKey('card_${card.id}'),
       margin: const EdgeInsets.symmetric(vertical: 0.0),
       child: Column(
         children: [
@@ -689,6 +693,7 @@ class _ListListState extends State<ListList> {
           ),
         ],
       ),
+    ),
     );
   }
 
