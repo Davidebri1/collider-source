@@ -152,7 +152,8 @@ async function filesAttach(h) {
   while (Date.now() - t0 < 60000 && !sent.some((s) => s.includes('narwhal'))) await sleep(1000);
   check('files: sending carries the attached file\'s text to the models', sent.some((s) => s.includes('narwhal') && s.includes(name)), `${sent.length} provider request(s)`);
   await sleep(30000);
-  await shot(page, 'composer_attachment_sent');
+  [ok, d] = painted(OUT, await shot(page, 'composer_attachment_sent'), ['Narwhal']);
+  check('files: the models answer from the attached file (consensus reads Narwhal)', ok, d);
   await ctx.close();
 }
 
