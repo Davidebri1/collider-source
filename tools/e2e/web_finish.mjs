@@ -298,7 +298,8 @@ async function smartGenNames(h) {
   await h.sleep(1200);
   const fLib = await h.shot(page, 'add_canvas_library');
   const libLab = (await h.labels(page)).map((l) => l.label);
-  const libMissing = ['Glass', 'Notebook', 'Gallery', 'Portfolio', 'Folder'].filter((t) => !libLab.includes(t));
+  const has = (labs, t) => labs.some((l) => l === t || l.split('\n').includes(t));
+  const libMissing = ['Glass', 'Notebook', 'Gallery', 'Portfolio', 'Folder'].filter((t) => !has(libLab, t));
   h.check('add menu: Add a canvas shows the canvas library (thumbnails + labels) with a search field', libMissing.length === 0 && libLab.some((l) => /Search/.test(l)), `${fLib} missing=${JSON.stringify(libMissing)}`);
   await h.tapAt(page, 'Search');
   await h.sleep(300);
@@ -306,7 +307,7 @@ async function smartGenNames(h) {
   await h.sleep(800);
   const fSearch = await h.shot(page, 'add_canvas_search');
   const sLab = (await h.labels(page)).map((l) => l.label);
-  h.check('add menu: search narrows the library ("note" -> Notebook)', sLab.includes('Notebook') && !sLab.includes('Gallery'), fSearch);
+  h.check('add menu: search narrows the library ("note" -> Notebook)', has(sLab, 'Notebook') && !has(sLab, 'Gallery'), `${fSearch} ${sLab.slice(0, 12).join(' | ').replace(/\n/g, '/')}`);
   await h.tapAt(page, 'Notebook');
   await h.sleep(1500);
   const fNb = await h.shot(page, 'add_canvas_notebook_on_board');
