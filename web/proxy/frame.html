@@ -33,7 +33,10 @@
 		let last = "";
 		// Events can carry the proxied address; the app only ever sees the real one.
 		const real = (u) => {
-			try { u = String(u); return u.startsWith(location.origin + base + "go/") ? scramjet.decodeUrl(u) : u; } catch (_) { return String(u); }
+			u = String(u);
+			// Some sites (GitHub) push their own proxied address into history, so peel every layer.
+			for (let i = 0; i < 4 && u.startsWith(location.origin + base + "go/"); i++) { try { u = scramjet.decodeUrl(u); } catch (_) { break; } }
+			return u;
 		};
 		const report = (url) => {
 			url = url && real(url);
