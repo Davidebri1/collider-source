@@ -48,7 +48,8 @@ class AppsPopupPane extends StatelessWidget {
     final width = MediaQuery.of(context).size.width;
     final perRow = width < 480 ? 4 : 4;
     final iconSize = width < 480 ? 58.0 : 72.0;
-    final cell = iconSize + 22;
+    // The grid spans the shared pane width (Settings width).
+    final cell = VPane.width(context) / perRow;
 
     final rows = <List<_App>>[];
     for (int i = 0; i < apps.length; i += perRow) {

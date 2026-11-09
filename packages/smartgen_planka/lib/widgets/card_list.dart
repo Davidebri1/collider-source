@@ -10,6 +10,7 @@ import 'package:omni_datetime_picker/omni_datetime_picker.dart';
 import 'package:planka_app/models/planka_board.dart';
 import 'package:planka_app/models/planka_card.dart';
 import 'package:planka_app/local/planka_store.dart';
+import 'package:planka_app/features/private_notes/private_notes_flip.dart';
 import 'package:floating_action_bubble/floating_action_bubble.dart';
 import 'package:planka_app/models/planka_card_actions.dart';
 import 'package:planka_app/models/planka_fCard.dart';
@@ -46,6 +47,7 @@ class CardList extends StatefulWidget {
 class _CardListState extends State<CardList> with SingleTickerProviderStateMixin {
   final TextEditingController _taskController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
+  final TextEditingController _privateNotesController = TextEditingController();
   final TextEditingController _commentController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
 
@@ -73,6 +75,7 @@ class _CardListState extends State<CardList> with SingleTickerProviderStateMixin
     loadLabelColors();
 
     _descriptionController.text = widget.card.description ?? 'click_me_to_add_description'.tr();
+    _privateNotesController.text = PrivateNotesFlip.notesOf(widget.card.id);
 
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 260),
@@ -91,6 +94,7 @@ class _CardListState extends State<CardList> with SingleTickerProviderStateMixin
     _taskController.dispose();
     _focusNode.dispose();
     _descriptionController.dispose();
+    _privateNotesController.dispose();
     _commentController.dispose();
     super.dispose();
   }
@@ -1022,6 +1026,16 @@ class _CardListState extends State<CardList> with SingleTickerProviderStateMixin
                 controller: _descriptionController,
                 emojiConvert: true,
                 onChanged: (text) => _saveDescription(widget.card, context),
+              ),
+
+              // R74 (AppFlowy Smart Gen backup): private notes on the back of the card.
+              const SizedBox(height: 12),
+              TextField(
+                controller: _privateNotesController,
+                minLines: 1,
+                maxLines: 4,
+                decoration: const InputDecoration(labelText: 'Private Notes (Revealed on 180° 3D Flip)', isDense: true),
+                onChanged: (v) => PlankaStore.instance.updateCard(widget.card.id, {'privateNotes': v}),
               ),
 
               const SizedBox(height: 20),

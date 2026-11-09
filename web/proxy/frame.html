@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>html,body{margin:0;height:100%;background:#fff;overflow:hidden}iframe{border:0;width:100%;height:100%;display:block}</style>
+<script src="config.js"></script>
+<script src="baremux/index.js"></script>
+<script src="scram/scramjet.all.js"></script>
+</head>
+<body>
+<script>
+// One browser tab: a Scramjet frame (MercuryWorkshop/scramjet-app public/index.js
+// wiring) that the app drives with postMessage {go|back|forward|reload} and
+// that reports {nav, url, title} back, so the address bar and History follow
+// the page. The address to open first is in the hash.
+(async () => {
+	const base = new URL("./", location.href).pathname;
+	const tell = (m) => parent.postMessage(Object.assign({ colliderFrame: true }, m), location.origin);
+	try {
+		const { ScramjetController } = $scramjetLoadController();
+		const scramjet = new ScramjetController({
+			prefix: base + "go/",
+			files: { wasm: base + "scram/scramjet.wasm.wasm", all: base + "scram/scramjet.all.js", sync: base + "scram/scramjet.sync.js" },
+		});
+		await scramjet.init();
+		await navigator.serviceWorker.register(base + "sw.js", { scope: base });
+		await navigator.serviceWorker.ready;
+		const connection = new BareMux.BareMuxConnection(base + "baremux/worker.js");
+		await connection.setTransport(base + "libcurl/index.mjs", [{ websocket: self.COLLIDER_WISP_URL }]);
+		const frame = scramjet.createFrame();
+		document.body.appendChild(frame.frame);
+		let last = "";
+		// Events can carry the proxied address; the app only ever sees the real one.
+		const real = (u) => {
+			u = String(u);
+			// Some sites (GitHub) push their own proxied address into history, so peel every layer.
+			for (let i = 0; i < 4 && u.startsWith(location.origin + base + "go/"); i++) { try { u = scramjet.decodeUrl(u); } catch (_) { break; } }
+			return u;
+		};
+		const report = (url) => {
+			url = url && real(url);
+			if (!url || url === last) return;
+			last = url;
+			tell({ nav: true, url });
+		};
+		frame.addEventListener("urlchange", (e) => report(e.url));
+		frame.frame.addEventListener("load", () => {
+			let title = "";
+			try { title = frame.frame.contentDocument.title || ""; } catch (_) {}
+			try { report(scramjet.decodeUrl(frame.frame.contentWindow.location.href)); } catch (_) {}
+			tell({ loaded: true, url: last, title });
+		});
+		window.addEventListener("message", (ev) => {
+			if (ev.source !== parent || !ev.data || !ev.data.colliderGo && !ev.data.colliderCmd) return;
+			if (ev.data.colliderGo) { last = ev.data.colliderGo; frame.go(ev.data.colliderGo); }
+			else if (ev.data.colliderCmd === "back") frame.back();
+			else if (ev.data.colliderCmd === "forward") frame.forward();
+			else if (ev.data.colliderCmd === "reload") frame.reload();
+		});
+		const first = decodeURIComponent(location.hash.slice(1));
+		last = first;
+		frame.go(first);
+		tell({ ready: true });
+	} catch (e) {
+		tell({ failed: String(e && e.message || e) });
+	}
+})();
+</script>
+</body>
+</html>

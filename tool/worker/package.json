@@ -1,0 +1,10 @@
+{
+  "name": "collider-account-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --local --port 9300 --var DEV_AUTH:1",
+    "test:api": "node ./test_api.mjs"
+  },
+  "devDependencies": { "wrangler": "^4.42.0" }
+}

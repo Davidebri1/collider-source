@@ -108,8 +108,8 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
     // narrowed to fit rather than shifted.
     final aspect = (size.height / size.width).clamp(1.78, 2.17);
     final maxH = (size.height - pad.top - 84 - 112 - 90 - 52).clamp(240.0, 900.0);
-    final winW = math.min((size.width - 120).clamp(160.0, 440.0), maxH / aspect);
-    final winH = winW * aspect;
+    final winW = VPane.width(context); // the shared pane width
+    final winH = math.min(winW * aspect, maxH);
     return ListenableBuilder(
       listenable: ThemePackStore.instance,
       builder: (context, _) {

@@ -98,6 +98,7 @@ class _FCardScreenState extends State<FCardScreen> with SingleTickerProviderStat
       },
       child: Scaffold(
         appBar: AppBar(
+          centerTitle: true,
           title: _isEditingTitle ? Container(
             color: Colors.transparent,
             height: kToolbarHeight,

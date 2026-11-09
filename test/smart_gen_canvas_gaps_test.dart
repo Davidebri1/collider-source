@@ -185,7 +185,7 @@ void main() {
     expect(find.text('Lookbook'), findsWidgets);
     expect(find.text('Mood'), findsWidgets);
     expect(find.text('Notebook'), findsWidgets);
-    expect(find.text('Photo album'), findsWidgets);
+    expect(find.text('Gallery'), findsWidgets);
     expect(find.text('Vision board'), findsWidgets);
   });
 

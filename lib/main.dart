@@ -26,6 +26,7 @@ import 'features/ticker/widgets/consensus_row.dart';
 import 'features/ticker/widgets/message_zoom_overlay.dart';
 import 'features/ticker/widgets/local_history_pane.dart';
 import 'features/prompt/floating_prompt.dart';
+import 'features/prompt/attached_text.dart';
 import 'features/nav/permanent_nav_bar.dart';
 import 'features/nav/side_nav_rail.dart';
 import 'features/nav/contextual_side_nav.dart';
@@ -244,6 +245,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   bool _genOptionsOpen = false;
   /// Put back into the composer when a send cannot run (D59).
   final ValueNotifier<String?> _restoreText = ValueNotifier<String?>(null);
+  final ValueNotifier<String?> _attachFile = ValueNotifier<String?>(null);
   /// Bumped by the options sheet's Generate: the composer sends its text.
   final ValueNotifier<int> _generateTick = ValueNotifier<int>(0);
 
@@ -1675,7 +1677,11 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           child: FloatingPrompt(
             summoned: _isComposerSummoned,
             busy: _busy,
-            onSubmitPrompt: (text, files) => _onSendPrompt(text, files),
+            onSubmitPrompt: (text, files) async {
+              final a = await promptWithAttachments(text, files);
+              _sendImages = a.imageDataUris;
+              await _onSendPrompt(a.text, files);
+            },
             onSummon: () => setState(() {
               _closeAllPanes();
               _expandedModelIds.clear();
@@ -1692,6 +1698,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             onOpenOptions: () => setState(() => _genOptionsOpen = true),
             restoreText: _restoreText,
             generateTick: _generateTick,
+            attachFile: _attachFile,
           ),
         ),
       );
@@ -1822,7 +1829,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   /// only until the summary lands, or if the agent cannot be reached.
   Future<void> _summarise(String id, String text) async {
     try {
-      final s = await MediaGen.instance.consensus([
+      final s = await MediaGen.instance.summary([
         {'role': 'system', 'content': 'Summarise the reply in ONE plain sentence of at most 14 words. No preamble, no quotes, no markdown.'},
         {'role': 'user', 'content': text.length > 6000 ? text.substring(0, 6000) : text},
       ]);
@@ -1891,8 +1898,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         MediaGen.instance.chat(id, [
           // No shared system prompt. Each model answers with its own house
           // behaviour; a single persona here flattened them into one voice.
-          for (final m in before[id]!) if (!_isErr(m.text)) {'role': m.sender == 'user' ? 'user' : 'assistant', 'content': m.text},
-          {'role': 'user', 'content': prompt},
+          for (final m in before[id]!) if (!_isErr(m.text)) <String, Object>{'role': m.sender == 'user' ? 'user' : 'assistant', 'content': m.text},
+          _userTurn(prompt),
         ]).then((text) => _answer(id, text, false), onError: (e) => _answer(id, e is MediaGenError ? e.reason : friendlyErrorMessage(e), true)),
     ]);
     if (!mounted) return;
@@ -1919,6 +1926,21 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     if (_autosave && !_incognito) unawaited(_persistLocalHistory());
     await _directConsensus(prompt);
   }
+
+  /// Images attached to the prompt being sent (data: URIs); the models get
+  /// them with the prompt (see MediaGen.runChain).
+  List<String> _sendImages = const [];
+
+  /// The user's turn: the prompt, plus its images when there are any.
+  Map<String, Object> _userTurn(String prompt) => _sendImages.isEmpty
+      ? {'role': 'user', 'content': prompt}
+      : {
+          'role': 'user',
+          'content': [
+            {'type': 'text', 'text': prompt},
+            for (final u in _sendImages) {'type': 'image_url', 'image_url': {'url': u}},
+          ],
+        };
 
   Future<void> _onSendPrompt(String prompt, [List<String> files = const []]) async {
     if (_activeCategory.isMedia) return _onSendMedia(prompt);
@@ -2520,7 +2542,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           // v9.1.4 (playtest #14): dissolves out instead of a hard cut.
             Positioned.fill(child: MaterializeSwitch(show: _activeDrawer == 'premium', builder: (_) => GestureDetector(
                 behavior: HitTestBehavior.translucent,
-                child: PremiumThemeMarketView(
+                // David (Nov 7): centred at the Settings pane's width.
+                child: VPaneFrame(child: ClipRRect(borderRadius: BorderRadius.circular(VRadius.xl), child: PremiumThemeMarketView(
                 // v9.1.4 (playtest #2): rebuild once the catalog arrives, so a
                 // direct link shows real covers.
                 key: ValueKey('market-${WallpaperCatalog.premiumThemes.length}'),
@@ -2545,7 +2568,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                 },
                 onClose: () => setState(() => _activeDrawer = null),
                 onFree: () => setState(() => _activeDrawer = 'themes'),
-              ),
+              ))),
               ))),
 
           // No songs in the catalog: no Music drawer (v8.3, D46).
@@ -2575,9 +2598,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                   // Same width formula as SettingsDrawer (phone 0.82 / desktop panel).
                   // Single SettingsGlassPane host — SgPane fills it without a nested
                   // CPane phoneBoard (that double wrapper left a frost band under the canvas).
-                  final paneW = phone
-                      ? (size.width * 0.82).clamp(280.0, 360.0)
-                      : SettingsDrawer.panel.width;
+                  final paneW = VPane.width(context);
                   final paneH = phone
                       ? (size.height * 0.78).clamp(480.0, 740.0)
                       : (size.height * 0.78).clamp(SettingsDrawer.panel.height, 740.0);
@@ -2585,7 +2606,13 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                     child: SizedBox(
                       width: paneW,
                       height: paneH,
-                      child: SettingsGlassPane(
+                      // Absorb taps on the pane's own glass. A control that
+                      // removes itself mid-gesture must not fall through to the
+                      // full-screen scrim and dismiss Smart Gen.
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () {},
+                        child: SettingsGlassPane(
                         padding: EdgeInsets.zero,
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(28),
@@ -2601,6 +2628,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                           ),
                         ),
                       ),
+                      ),
                     ),
                   );
                 },
@@ -2609,7 +2637,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
           if (_activeDrawer == 'market')
             Positioned(
-              left: isMobile ? 0 : 360,
+              left: 0,
               right: 0,
               top: 0,
               bottom: 78,
@@ -2626,12 +2654,17 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
           if (_activeDrawer == 'files')
             Positioned(
-              left: isMobile ? 0 : 360,
+              left: 0,
               right: 0,
               top: 0,
               bottom: 78,
               child: FilesScreen(
                 onClose: () => _requestSwitchSurface(null),
+                onAttachToPrompt: (f) {
+                  _attachFile.value = f.name;
+                  _requestSwitchSurface(null);
+                  setState(() => _isComposerSummoned = true);
+                },
               ),
             ),
 

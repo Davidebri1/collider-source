@@ -33,10 +33,7 @@ enum CPaneSpan { regular, phoneBoard }
 class CPaneTokens {
   CPaneTokens._();
   static bool phone(BuildContext c) => MediaQuery.sizeOf(c).width < 768;
-  static double width(BuildContext c) {
-    final w = MediaQuery.sizeOf(c).width;
-    return phone(c) ? (w - 104).clamp(260.0, 300.0) : (w * 0.46).clamp(480.0, 640.0);
-  }
+  static double width(BuildContext c) => VPane.width(c);
   static const double topGap = 40;
   static const double radius = VRadius.xl;
 }
@@ -73,8 +70,7 @@ class CPane extends StatelessWidget {
     // Phone board: nearly full phone width, centred. Side rail floats OVER the
     // pane and never offsets it (David: main.dart ticker comment; v9.2.0 Genie
     // layout FAIL — LTRB(80,,12,) shifted the pane right and bled the right edge).
-    final screenW = MediaQuery.sizeOf(context).width;
-    final w = phoneWork ? (screenW - 24).clamp(300.0, screenW) : CPaneTokens.width(context);
+    final w = CPaneTokens.width(context); // one width for every pane (Settings width)
     final maxH = maxHeight(context);
     // Fill panes are the work surfaces (Smart Gen, Files, Market). They use
     // the clearer work frost so the wallpaper stays readable through the

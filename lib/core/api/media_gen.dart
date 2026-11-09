@@ -18,6 +18,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 
 import '../../models/media_specs.dart';
+import '../../models/model_def.dart';
 
 // Empty defaults — production web builds must ship with COLLIDER_PROXY only.
 const String _crazyRouterKey = String.fromEnvironment('CRAZYROUTER_KEY');
@@ -52,31 +53,79 @@ String _wireSlug(String wire, String remote) =>
 
 /// Each text model's ordered list of (wire, remote id) attempts.
 /// No OpenRouter / Groq / Vercel. Browser traffic uses COLLIDER_PROXY.
+///
+/// Nov 6, 2026 provider check (every attempt below sent through the Worker):
+/// - CrazyRouter does not carry laguna-s/xs, ling-3.1-flash or either
+///   Nemotron (404 model_not_found); those attempts are gone.
+/// - NVIDIA retired z-ai/glm-5.3 (Oct 28) and moonshotai/kimi-k3 (Oct 15),
+///   410 Gone; poolside/laguna-s-2.1 is not in NVIDIA's catalogue (404).
+/// - NVIDIA deepseek-v4.1-flash runs past the Worker's limit (524 after
+///   ~125 s), so CrazyRouter answers DeepSeek first.
+/// - MiniMax direct answers 402 insufficient_balance; MiniMax M3.1 Flash is
+///   also on NVIDIA (minimaxai/minimax-m3.1-flash), so it is asked there next.
+/// - Every attempt in a row is that row's model; no row answers with another.
+/// - Command Code answers 401 and OpenCode 503 (no key on the Worker); their
+///   attempts stay so a key added to the Worker starts working with no build.
 const Map<String, List<(String, String)>> _text = {
   'free/glm-5-3-flash': [('cr', 'glm-5.3-flash'), ('nv', 'z-ai/glm-5.3-flash')],
-  'free/laguna-s-2-1': [('cr', 'laguna-s-2.1'), ('nv', 'poolside/laguna-s-2.1'), ('cc', 'poolside/laguna-s-2.1-free')],
-  'free/laguna-xs-2-1': [('nv', 'poolside/laguna-xs-2.1'), ('cr', 'laguna-xs-2.1')],
-  'free/ling-3-1-flash': [('cr', 'ling-3.1-flash'), ('cc', 'inclusionai/ling-3.1-flash:free')],
-  'free/nemotron-3-5-lightning': [('nv', 'nvidia/nemotron-3.5-lightning-30b-a3b'), ('cr', 'nemotron-3.5-lightning')],
-  'pro/glm-5-3': [('cr', 'glm-5.3'), ('nv', 'z-ai/glm-5.3'), ('oc', 'glm-5.3'), ('cc', 'zai-org/GLM-5.3')],
-  'pro/deepseek-4-1-flash': [('nv', 'deepseek-ai/deepseek-v4.1-flash'), ('cr', 'deepseek-v4.1-flash'), ('oc', 'deepseek-v4.1-flash'), ('cc', 'deepseek/deepseek-v4.1-flash')],
-  // MiniMax M3.1 Flash via MiniMax direct (Genie + Consensus agent 1).
-  'pro/minimax-m3': [('mm', 'MiniMax-M3.1-Flash'), ('mm', 'MiniMax-M3'), ('cr', 'minimax-m2.5')],
+  'free/laguna-s-2-1': [('cc', 'poolside/laguna-s-2.1-free')],
+  'free/laguna-xs-2-1': [('nv', 'poolside/laguna-xs-2.1')],
+  'free/ling-3-1-flash': [('cc', 'inclusionai/ling-3.1-flash:free')],
+  'free/nemotron-3-5-lightning': [('nv', 'nvidia/nemotron-3.5-lightning-30b-a3b')],
+  'pro/glm-5-3': [('cr', 'glm-5.3'), ('oc', 'glm-5.3'), ('cc', 'zai-org/GLM-5.3')],
+  'pro/deepseek-4-1-flash': [('cr', 'deepseek-v4.1-flash'), ('nv', 'deepseek-ai/deepseek-v4.1-flash'), ('oc', 'deepseek-v4.1-flash'), ('cc', 'deepseek/deepseek-v4.1-flash')],
+  // MiniMax M3.1 Flash: MiniMax direct, then the same model on NVIDIA (Genie +
+  // Consensus agent 1). The old tail (MiniMax-M3, CrazyRouter minimax-m2.5)
+  // answered under this row's name with a different model; it is gone.
+  'pro/minimax-m3': [('mm', 'MiniMax-M3.1-Flash'), ('nv', 'minimaxai/minimax-m3.1-flash')],
   'pro/mimo-v2-6-flash': [('cr', 'mimo-v2.6-flash'), ('cc', 'xiaomi/mimo-v2.6-flash')],
-  'pro/nemotron-3-ultra': [('nv', 'nvidia/nemotron-3-ultra-550b-a55b'), ('cr', 'nemotron-3-ultra'), ('cc', 'nvidia/nemotron-3-ultra-550b-a55b')],
-  'elite/kimi-k3': [('cr', 'kimi-k3'), ('nv', 'moonshotai/kimi-k3'), ('oc', 'kimi-k3'), ('cc', 'moonshotai/Kimi-K3')],
+  'pro/nemotron-3-ultra': [('nv', 'nvidia/nemotron-3-ultra-550b-a55b'), ('cc', 'nvidia/nemotron-3-ultra-550b-a55b')],
+  'elite/kimi-k3': [('cr', 'kimi-k3'), ('oc', 'kimi-k3'), ('cc', 'moonshotai/Kimi-K3')],
 };
 
-/// Consensus agent 1 (headcount / essence / groups): MiniMax M3.1 Flash direct.
-const List<String> consensusModels = [
-  'pro/minimax-m3',
+/// One entry of a role's fallback list: the model David named, the provider
+/// he named for it, and that provider's id for it.
+typedef ChainEntry = ({String model, String wire, String remote});
+
+/// David's list for the Consensus agent (Oct 11), in his order. The same agent
+/// writes the one-line summaries, which feed the consensus summary.
+/// Provider ids as of Nov 6/7, 2026:
+/// - 1 is the roster's MiniMax M3.1 Flash id at MiniMax (answers 402 while
+///   the account has no balance).
+/// - 2/3 are Command Code / OpenCode's ids for MiniMax M3 (no key on the
+///   Worker yet: 401 / 503).
+/// - 4 Kimi K3 and 6 GLM 5.3 are retired at NVIDIA (410; NVIDIA lists no
+///   current id for either), so they fail fast and the next entry is asked.
+/// - 9 Nemotron Nano is NVIDIA's nvidia/nemotron-nano-3-30b-a3b.
+const List<ChainEntry> consensusChain = [
+  (model: 'MiniMax M3.1', wire: 'mm', remote: 'MiniMax-M3.1-Flash'),
+  (model: 'MiniMax M3', wire: 'cc', remote: 'minimax/minimax-m3'),
+  (model: 'MiniMax M3', wire: 'oc', remote: 'minimax-m3'),
+  (model: 'Kimi K3', wire: 'nv', remote: 'moonshotai/kimi-k3'),
+  (model: 'DeepSeek 4.1 Flash', wire: 'nv', remote: 'deepseek-ai/deepseek-v4.1-flash'),
+  (model: 'GLM 5.3', wire: 'nv', remote: 'z-ai/glm-5.3'),
+  (model: 'GLM 5.3 Flash', wire: 'nv', remote: 'z-ai/glm-5.3-flash'),
+  (model: 'Nemotron Ultra', wire: 'nv', remote: 'nvidia/nemotron-3-ultra-550b-a55b'),
+  (model: 'Nemotron Nano', wire: 'nv', remote: 'nvidia/nemotron-nano-3-30b-a3b'),
 ];
 
-/// Consensus agent 2 (logical chain / "link" analysis): NVIDIA DeepSeek 4.1 Flash.
-const List<String> logicalChainModels = [
-  'pro/deepseek-4-1-flash',
-];
+/// Smart Gen, Smart Genie included: David's list is the same, in the same order.
+const List<ChainEntry> smartGenChain = consensusChain;
 
+/// Consensus agent 2 (logical chains) has no list of its own from David. It
+/// keeps DeepSeek V4.1 Flash's own row chain first, then his consensus list.
+List<ChainEntry> get logicalChainChain => [
+      for (final (w, r) in _text['pro/deepseek-4-1-flash']!) (model: 'DeepSeek V4.1 Flash', wire: w, remote: r),
+      ...consensusChain,
+    ];
+
+/// A ticker row's own chain (model_def roster id -> its providers), as entries.
+List<ChainEntry>? rowChain(String modelId) {
+  final tries = _text[modelId.replaceFirst('code-', '')];
+  if (tries == null) return null;
+  final name = ModelRoster.byId(modelId)?.label ?? modelId;
+  return [for (final (w, r) in tries) (model: name, wire: w, remote: r)];
+}
 
 /// chat.ts friendlyErrorMessage, restored: our own words, never provider text.
 String friendlyErrorMessage(Object error) {
@@ -234,6 +283,15 @@ class MediaGen {
   static final MediaGen instance = MediaGen._();
   final Dio _dio = Dio(BaseOptions(connectTimeout: const Duration(seconds: 15), receiveTimeout: const Duration(minutes: 6)));
 
+  /// Text replies. The Worker sends nothing back until the provider has
+  /// finished the whole answer, and on web Dio's connectTimeout keeps running
+  /// until the response headers arrive. With the shared 15 s connectTimeout,
+  /// every reply that took longer than 15 s (MiMo ~55 s, MiniMax on NVIDIA
+  /// ~20 s, GLM 5.3 Flash on NVIDIA ~115 s) was aborted in the browser and the
+  /// row said "Couldn't reach this model", even though the provider answered.
+  /// The Worker itself gives up at about 125 s, so 150 s covers it.
+  final Dio _textDio = Dio(BaseOptions(connectTimeout: const Duration(seconds: 150), receiveTimeout: const Duration(seconds: 180)));
+
   ({String base, String key}) _wire(_Route r) {
     // OpenRouter removed. CrazyRouter carries crazy:true media rows and any
     // remaining openrouter-* media that still resolves through this helper.
@@ -260,32 +318,91 @@ class MediaGen {
 
   String _keyFor(String w) => _textWires[w]!.key;
 
+  /// The ordered (wire, remote id) attempts for a text model; tests read it.
+  List<(String, String)>? textAttempts(String modelId) => _text[modelId.replaceFirst('code-', '')];
+
   /// One OpenAI-compatible call on a text wire. Throws a raw error string.
-  Future<String> _textCall(String w, String remote, List<Map<String, String>> messages, {int? maxTokens}) async {
+  Future<String> _textCall(String w, String remote, List<Map<String, Object>> messages, {int? maxTokens, Duration? firstByte}) async {
     final t = _textWires[w]!;
     final key = _keyFor(w);
     final viaProxy = _proxy.isNotEmpty && _proxyRoute.containsKey(w);
     if (!viaProxy && key.isEmpty) throw const MediaGenError('no-key');
     final url = viaProxy ? '$_proxy/api/p?u=${_proxyRoute[w]}' : '${t.base}/chat/completions';
-    try {
-      final res = await _dio.post(url,
-          data: {'model': _wireSlug(w, remote), 'messages': messages, if (maxTokens != null) 'max_tokens': maxTokens},
-          options: Options(
-            headers: viaProxy
-                ? {'Content-Type': 'application/json'}
-                : {'Content-Type': 'application/json', 'Authorization': 'Bearer $key'},
-            receiveTimeout: const Duration(seconds: 180),
-          ));
-      final msg = res.data['choices']?[0]?['message'];
-      final text = _messageText(msg);
-      if (text.isEmpty) throw const MediaGenError('empty');
-      return text;
-    } on DioException catch (e) {
-      final sc = e.response?.statusCode;
-      if (w == 'nv' && (sc == 503 || sc == 429)) await Future<void>.delayed(const Duration(milliseconds: 1500));
-      if (e.type == DioExceptionType.receiveTimeout || e.type == DioExceptionType.connectionTimeout) throw const MediaGenError('timeout');
-      throw MediaGenError('provider ${e.response?.statusCode ?? 'unreachable'}: ${_errBody(e)}');
+    // NVIDIA answers 429 when several rows and the consensus agents hit it in
+    // the same minute; wait and ask again (twice) before giving up.
+    for (var attempt = 0;; attempt++) {
+      // First-byte limit (agent lists): the answer is streamed, and an entry
+      // that sends nothing within [firstByte] is dropped so the next entry is
+      // asked. Once bytes flow the entry may finish normally.
+      final cancel = firstByte == null ? null : CancelToken();
+      var gotByte = false;
+      final fb = firstByte == null ? null : Timer(firstByte, () {
+        if (!gotByte) cancel!.cancel('first-byte');
+      });
+      try {
+        final res = await _textDio.post(url,
+            data: {'model': _wireSlug(w, remote), 'messages': messages, if (maxTokens != null) 'max_tokens': maxTokens, if (firstByte != null) 'stream': true},
+            cancelToken: cancel,
+            onReceiveProgress: firstByte == null
+                ? null
+                : (_, __) {
+                    gotByte = true;
+                    fb?.cancel();
+                  },
+            options: Options(
+              responseType: firstByte == null ? null : ResponseType.plain,
+              headers: viaProxy
+                  ? {'Content-Type': 'application/json'}
+                  : {'Content-Type': 'application/json', 'Authorization': 'Bearer $key'},
+            ));
+        final text = firstByte == null ? _messageText(res.data['choices']?[0]?['message']) : _streamedText(res.data);
+        if (text.isEmpty) throw const MediaGenError('empty');
+        return text;
+      } on DioException catch (e) {
+        if (e.type == DioExceptionType.cancel) throw MediaGenError('timeout: no first byte in ${firstByte?.inSeconds} s');
+        final sc = e.response?.statusCode;
+        if (w == 'nv' && (sc == 503 || sc == 429)) {
+          await Future<void>.delayed(Duration(milliseconds: 2500 * (attempt + 1)));
+          if (attempt < 2) continue;
+        }
+        if (e.type == DioExceptionType.receiveTimeout || e.type == DioExceptionType.connectionTimeout) throw const MediaGenError('timeout');
+        throw MediaGenError('provider ${e.response?.statusCode ?? 'unreachable'}: ${_errBody(e)}');
+      } finally {
+        fb?.cancel();
+      }
     }
+  }
+
+  /// The text of a streamed (SSE) chat completion, or of a plain JSON one
+  /// when the provider ignored `stream`.
+  static String _streamedText(dynamic data) {
+    if (data is Map) return _messageText(data['choices']?[0]?['message']);
+    final raw = '$data'.trim();
+    if (raw.startsWith('{')) {
+      try {
+        final j = jsonDecode(raw);
+        if (j is Map) return _messageText(j['choices']?[0]?['message']);
+      } catch (_) {}
+      return '';
+    }
+    final content = StringBuffer();
+    final reasoning = StringBuffer();
+    for (final line in const LineSplitter().convert(raw)) {
+      final l = line.trim();
+      if (!l.startsWith('data:')) continue;
+      final body = l.substring(5).trim();
+      if (body.isEmpty || body == '[DONE]') continue;
+      try {
+        final j = jsonDecode(body);
+        final ch = j is Map ? j['choices'] : null;
+        final d = ch is List && ch.isNotEmpty && ch[0] is Map ? (ch[0]['delta'] ?? ch[0]['message']) : null;
+        if (d is! Map) continue;
+        if (d['content'] is String) content.write(d['content']);
+        final r = d['reasoning_content'] ?? d['reasoning'];
+        if (r is String) reasoning.write(r);
+      } catch (_) {}
+    }
+    return _messageText({'content': content.toString(), 'reasoning_content': reasoning.toString()});
   }
 
   /// Pollinations' OpenAI-compatible text endpoint. Needs no key, so it is the
@@ -298,7 +415,7 @@ class MediaGen {
   /// Payment Required. Serialize through [_pollinationsGate] and retry 402/429.
   Future<void>? _pollinationsGate;
 
-  Future<String> _pollinationsText(List<Map<String, String>> messages) async {
+  Future<String> _pollinationsText(List<Map<String, Object>> messages) async {
     // Queue callers so consensus / multi-row Home do not stampede the free tier.
     while (_pollinationsGate != null) {
       try {
@@ -315,7 +432,7 @@ class MediaGen {
     }
   }
 
-  Future<String> _pollinationsTextOnce(List<Map<String, String>> messages) async {
+  Future<String> _pollinationsTextOnce(List<Map<String, Object>> messages) async {
     Object? last;
     for (var attempt = 0; attempt < 4; attempt++) {
       if (attempt > 0) {
@@ -341,62 +458,145 @@ class MediaGen {
     throw MediaGenError('Pollinations unreachable: $last');
   }
 
-  /// Tries each attempt in order; throws the first meaningful error. With
-  /// [fallback] on, a failed chain still ends at the keyless floor rather than
-  /// at nothing. The judge turns it off so it can move to the next model
-  /// instead of quietly settling for the weakest one.
-  Future<String> _chain(List<(String, String)> tries, List<Map<String, String>> messages,
-      {int? maxTokens, bool fallback = true}) async {
+  /// Which entry answered last, per role ("consensus", "summary", "genie",
+  /// "chains", or a row id): "3/9 MiniMax M3 via oc". Read by the e2e.
+  final Map<String, String> answeredBy = {};
+
+  /// The most one entry of an agent list (consensus, summaries, chains,
+  /// Genie) may take in all once it has started answering.
+  static const Duration _agentEntryLimit = Duration(seconds: 90);
+
+  /// An agent-list entry that sends no first byte in this long is dropped and
+  /// the next entry is asked (David, Nov 7: ~20 s; ticker rows keep 150 s).
+  static const Duration agentFirstByte = Duration(seconds: 20);
+
+  /// An entry that just hung (no first byte in [agentFirstByte]) is skipped
+  /// by every agent list for this long, so the next question does not wait
+  /// on it again.
+  static const Duration hungCoolOff = Duration(minutes: 10);
+  final Map<String, DateTime> _hungUntil = {};
+
+  /// The one chain-runner every model call goes through. Asks each entry of
+  /// [chain] in order and returns the first real answer. Any failure (402,
+  /// 401, 404, 410, 429 after its retries, 5xx, timeout, empty answer) moves
+  /// on to the next entry; it only throws when every entry has failed, with
+  /// the first meaningful error.
+  Future<String> runChain(String role, List<ChainEntry> chain, List<Map<String, Object>> messages, {int? maxTokens, Duration? perEntry}) async {
     Object? first;
-    for (final (w, remote) in tries) {
-      if (!_wireUsable(w)) {
-        first ??= MediaGenError(_textWires[w]!.cors ? 'no-key' : 'cors');
+    for (var i = 0; i < chain.length; i++) {
+      final e = chain[i];
+      if (!_wireUsable(e.wire)) {
+        first ??= MediaGenError(_textWires[e.wire]!.cors ? 'no-key' : 'cors');
+        continue;
+      }
+      final hungKey = '${e.wire} ${e.remote}';
+      if (perEntry != null && i < chain.length - 1 && (_hungUntil[hungKey]?.isAfter(DateTime.now()) ?? false)) {
+        // ignore: avoid_print
+        print('[chain] $role ${i + 1}/${chain.length} ${e.model} via ${e.wire} skipped: hung in the last ${hungCoolOff.inMinutes} min');
         continue;
       }
       try {
-        return await _textCall(w, remote, messages, maxTokens: maxTokens);
-      } catch (e) {
-        if (first == null || '$first'.contains('no-key') || '$first'.contains('cors')) first = e;
-      }
-    }
-    if (fallback) {
-      try {
-        return await _pollinationsText(messages);
-      } catch (e) {
-        if (first == null || '$first'.contains('no-key') || '$first'.contains('cors')) first = e;
+        final msgs = _hasImages(messages) && !_seesImages(e) ? await _describeImages(messages) : messages;
+        final String text;
+        try {
+          final call = _textCall(e.wire, e.remote, msgs, maxTokens: maxTokens, firstByte: perEntry != null && i < chain.length - 1 ? agentFirstByte : null);
+          // A listed entry that hangs (NVIDIA's DeepSeek 4.1 Flash and GLM 5.3 Flash ran into the
+          // 125 s gateway limit on Nov 7) must not hold up the rest of the list.
+          text = perEntry != null && i < chain.length - 1 ? await call.timeout(perEntry, onTimeout: () => throw const MediaGenError('timeout')) : await call;
+        } catch (err) {
+          // A model we thought could see images refused them: describe instead.
+          if (!identical(msgs, messages) || !_hasImages(messages)) rethrow;
+          final t = await _textCall(e.wire, e.remote, await _describeImages(messages), maxTokens: maxTokens);
+          answeredBy[role] = '${i + 1}/${chain.length} ${e.model} via ${e.wire} (image described)';
+          return t;
+        }
+        answeredBy[role] = '${i + 1}/${chain.length} ${e.model} via ${e.wire}';
+        // ignore: avoid_print
+        print('[chain] $role answered by ${answeredBy[role]} (${e.remote})');
+        return text;
+      } catch (err) {
+        // ignore: avoid_print
+        print('[chain] $role ${i + 1}/${chain.length} ${e.model} via ${e.wire} failed: ${'$err'.split('\n').first}');
+        if ('$err'.contains('timeout')) _hungUntil[hungKey] = DateTime.now().add(hungCoolOff);
+        if (first == null || '$first'.contains('no-key') || '$first'.contains('cors')) first = err;
       }
     }
     throw first ?? const MediaGenError('no-key');
   }
 
-  /// Consensus agent 1 — MiniMax M3.1 Flash via MiniMax direct.
-  /// Headcount / essence / sentiment groups (RATIO, SUMMARY, GROUP).
-  Future<String> consensus(List<Map<String, String>> messages) async {
-    for (final id in consensusModels) {
-      final tries = _text[id];
-      if (tries == null) continue;
-      try {
-        return await _chain(tries, messages, maxTokens: 2048, fallback: false);
-      } catch (_) {}
+  /// Models that read images themselves (checked Nov 7, 2026 with a test
+  /// image through the Worker). Every other model gets a description.
+  static const Set<String> _vision = {
+    'cr mimo-v2.6-flash',
+    'cr glm-5.3-flash',
+    'cr deepseek-v4.1-flash',
+    'nv minimaxai/minimax-m3.1-flash',
+  };
+  bool _seesImages(ChainEntry e) => _vision.contains('${e.wire} ${e.remote}');
+
+  /// Who describes an image for a text-only model: the vision-capable listed
+  /// models, in roster order.
+  static const List<ChainEntry> _describers = [
+    (model: 'GLM 5.3 Flash', wire: 'cr', remote: 'glm-5.3-flash'),
+    (model: 'DeepSeek V4.1 Flash', wire: 'cr', remote: 'deepseek-v4.1-flash'),
+    (model: 'MiniMax M3.1 Flash', wire: 'nv', remote: 'minimaxai/minimax-m3.1-flash'),
+    (model: 'MiMo V2.6 Flash', wire: 'cr', remote: 'mimo-v2.6-flash'),
+  ];
+
+  static bool _hasImages(List<Map<String, Object>> messages) =>
+      messages.any((m) => m['content'] is List && (m['content'] as List).any((p) => p is Map && p['type'] == 'image_url'));
+
+  final Map<int, Future<String>> _descriptions = {};
+
+  /// The same messages with every image replaced by a written description.
+  Future<List<Map<String, Object>>> _describeImages(List<Map<String, Object>> messages) async {
+    final out = <Map<String, Object>>[];
+    for (final m in messages) {
+      final c = m['content'];
+      if (c is! List) {
+        out.add(m);
+        continue;
+      }
+      final b = StringBuffer();
+      for (final p in c) {
+        if (p is! Map) continue;
+        if (p['type'] == 'text') {
+          b.write(p['text']);
+        } else if (p['type'] == 'image_url') {
+          final url = '${(p['image_url'] as Map)['url']}';
+          final d = await (_descriptions[url.hashCode] ??= runChain('describe', _describers, [
+            {
+              'role': 'user',
+              'content': [
+                {'type': 'text', 'text': 'Describe this image in detail for someone who cannot see it. Quote any text in it exactly.'},
+                {'type': 'image_url', 'image_url': {'url': url}},
+              ],
+            },
+          ], maxTokens: 1024).catchError((_) => 'The image could not be described.'));
+          b.write('\n\n[Attached image, described: $d]');
+        }
+      }
+      out.add({...m, 'content': b.toString()});
     }
-    throw const MediaGenError('Consensus agent 1 (MiniMax M3.1 Flash) unreachable');
+    return out;
   }
 
-  /// Consensus agent 2 — NVIDIA DeepSeek 4.1 Flash (logical / "link" chain analysis).
-  /// Returns CHAIN / CONSENSUS_CHAIN lines per the Consensus Agent spec.
-  Future<String> logicalChains(List<Map<String, String>> messages) async {
-    for (final id in logicalChainModels) {
-      final tries = _text[id];
-      if (tries == null) continue;
-      try {
-        return await _chain(tries, messages, maxTokens: 2048, fallback: false);
-      } catch (_) {}
-    }
-    throw const MediaGenError('Consensus agent 2 (DeepSeek 4.1 Flash) unreachable');
-  }
+  /// Consensus agent 1 (headcount / essence / groups): David's consensus list.
+  Future<String> consensus(List<Map<String, Object>> messages) =>
+      runChain('consensus', consensusChain, messages, maxTokens: 2048, perEntry: _agentEntryLimit);
 
-  /// Smart Gen Genie — MiniMax M3.1 Flash via MiniMax direct (same as consensus agent 1).
-  Future<String> genie(List<Map<String, String>> messages) => consensus(messages);
+  /// The one-line summary under each ticker reply: the Consensus agent, so the
+  /// same list.
+  Future<String> summary(List<Map<String, Object>> messages) =>
+      runChain('summary', consensusChain, messages, maxTokens: 2048, perEntry: _agentEntryLimit);
+
+  /// Consensus agent 2 (logical / "link" chain analysis).
+  Future<String> logicalChains(List<Map<String, Object>> messages) =>
+      runChain('chains', logicalChainChain, messages, maxTokens: 2048, perEntry: _agentEntryLimit);
+
+  /// Smart Gen Genie: David's Smart Gen list.
+  Future<String> genie(List<Map<String, Object>> messages) =>
+      runChain('genie', smartGenChain, messages, maxTokens: 2048, perEntry: _agentEntryLimit);
 
   /// chat.ts hasCredentials: is there a key for the wire this route uses?
   /// Pollinations is keyless in the source (it now answers 402, D61).
@@ -539,14 +739,14 @@ class MediaGen {
   }
 
   /// callOpenRouter (non-streaming): text answer for General / Coding.
-  Future<String> chat(String modelId, List<Map<String, String>> messages) async {
+  Future<String> chat(String modelId, List<Map<String, Object>> messages) async {
     final tx = _text[modelId.replaceFirst('code-', '')];
     if (tx != null) {
       try {
         // Enough tokens for reasoning models to finish the visible answer.
         // 2048 so reasoning models can close <think> and still emit an answer.
-        // fallback:false — never attribute a Pollinations reply to a named model.
-        return await _chain(tx, messages, maxTokens: 2048, fallback: false);
+        // A row only ever answers as its own model: its own provider chain.
+        return await runChain(modelId, rowChain(modelId)!, messages, maxTokens: 2048);
       } catch (e) {
         throw MediaGenError(friendlyErrorMessage(e));
       }

@@ -425,7 +425,7 @@ void main() {
     ]);
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: SizedBox(width: 440, height: 900, child: SgFiles(store: store, onOpen: (_) {})))));
     await tester.pump();
-    expect(find.text('Files'), findsOneWidget);
+    expect(find.text('Folder'), findsOneWidget);
     expect(find.text('Type'), findsOneWidget);
     expect(find.text('Name'), findsOneWidget);
     expect(find.text('Open card'), findsOneWidget);

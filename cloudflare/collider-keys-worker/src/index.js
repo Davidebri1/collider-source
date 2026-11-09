@@ -116,8 +116,10 @@ export default {
       return json(502, { error: 'upstream unreachable', provider: u });
     }
 
-    const text = await upstreamRes.text();
-    return new Response(text, {
+    // Stream the upstream body through (SSE when the app asks for
+    // `stream: true`), so the app's 20 s first-byte limit measures the
+    // provider's first byte, not the whole answer.
+    return new Response(upstreamRes.body, {
       status: upstreamRes.status,
       headers: {
         'Content-Type': upstreamRes.headers.get('Content-Type') || 'application/json',

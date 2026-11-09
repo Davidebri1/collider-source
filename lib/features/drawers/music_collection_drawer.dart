@@ -26,7 +26,7 @@ class MusicCollectionDrawer extends StatelessWidget {
     final p = MusicPlayer.instance;
     final size = MediaQuery.sizeOf(context);
     final pad = MediaQuery.paddingOf(context);
-    final width = (size.width - 96).clamp(280.0, 460.0); // a pane, not full width
+    final width = VPane.width(context); // the shared pane width
     return Stack(
       fit: StackFit.expand,
       children: [

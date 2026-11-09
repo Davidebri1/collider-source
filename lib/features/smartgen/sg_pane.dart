@@ -6,12 +6,15 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_font.dart';
-import '../../core/vision/cpane.dart';
 import '../../core/vision/vision_kit.dart';
 import '../../core/vision/vision_tokens.dart';
+import '../account/account_id_token.dart';
 import 'sg_harness_imgs.dart';
+import 'reminder_calendar.dart';
+import 'reminder_sync.dart';
 import 'sg_model.dart';
 import 'sg_free_drag.dart';
+import 'sg_physical.dart';
 import 'sg_views.dart';
 
 class SgPane extends StatefulWidget {
@@ -39,9 +42,6 @@ class _SgPaneState extends State<SgPane> {
   Timer? _toastTimer;
   bool _forceFlip = false;
   String _overlay = '';
-  final Map<SgSurface, GlobalKey> _viewChipKeys = {};
-  SgSurface? _viewChipEnsured;
-
   bool _genieMinimized = false;
   double _kanbanPage = 0;
   final GlobalKey _listKey = GlobalKey();
@@ -391,7 +391,7 @@ class _SgPaneState extends State<SgPane> {
         }
         if (q['canvases'] == '1') {
           for (var i = b.canvases.length; i < 3; i++) {
-            store.addCanvas('Canvas ${i + 1}', 'Glass');
+            store.addCanvas('Glass', 'Glass');
           }
           store.touch(() => b.surface = SgSurface.canvas);
         }
@@ -445,7 +445,7 @@ class _SgPaneState extends State<SgPane> {
       }
       if (sg == 'canvas11') {
         while (b.canvases.length < 10) {
-          store.addCanvas('Canvas ${b.canvases.length + 1}', 'Glass');
+          store.addCanvas('Glass', 'Glass');
         }
         store.touch(() => b.surface = SgSurface.canvas);
         final ok = store.addCanvas('too many', 'Glass');
@@ -675,19 +675,28 @@ class _SgPaneState extends State<SgPane> {
       });
       return;
     }
-    final surface = SgSurface.values.asNameMap()[section];
-    if (surface == null) return;
     if (store.boards.isEmpty) {
       store.createBoard('Board', goHome: false);
     }
     final b = store.board;
     if (b == null) return;
+    // "canvas" is the physical stage. It must not reset a board the user
+    // already set to Workbench, a table, or a whiteboard — including after reload.
+    final kind = switch (section) {
+      'kanban' => SgBoardKind.kanban,
+      'calendar' => SgBoardKind.calendar,
+      'whiteboard' => SgBoardKind.whiteboard,
+      'desk' => SgBoardKind.desk,
+      _ => null,
+    };
+    if (kind == null) {
+      store.atHome = false;
+      if (mounted) setState(() {});
+      return;
+    }
     store.touch(() {
-      b.surface = surface;
-      if (surface == SgSurface.canvas && b.canvases.isEmpty) {
-        b.canvases.add(SgCanvas(id: 'v${DateTime.now().millisecondsSinceEpoch}', name: 'Canvas 1', kind: 'Glass'));
-        b.canvasIndex = 0;
-      }
+      b.kind = kind;
+      b.surface = SgSurface.values.asNameMap()[section] ?? b.surface;
     });
     store.atHome = false;
     if (mounted) setState(() {});
@@ -698,6 +707,48 @@ class _SgPaneState extends State<SgPane> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.section != widget.section) {
       _applySection(widget.section);
+    }
+  }
+
+  Future<void> _syncReminder(SgCard c) async {
+    final token = await requestCalendarAccessToken();
+    if (!mounted) return;
+    if (token == null) {
+      await showVAlert(
+        context,
+        icon: Icons.event_available_rounded,
+        title: 'Sign in is unavailable',
+        actions: const [VAlertChoice('OK')],
+      );
+      return;
+    }
+    final cards = [
+      for (final card in store.board?.cards ?? const <SgCard>[])
+        if (card.type == SgType.reminder && card.dueMs != null) card,
+    ];
+    final gateway = GoogleCalendarGateway();
+    try {
+      final ids = await runReminderSync(
+        accessToken: token,
+        local: [for (final card in cards) reminderFromCard(card)],
+        gateway: gateway,
+      );
+      final remote = await gateway.listOurs(token);
+      store.touch(() {
+        for (final card in cards) {
+          final id = ids[card.id];
+          if (id != null && id.isNotEmpty) card.custom['gcalId'] = id;
+          final ev = remote.where((e) => e.colliderId == card.id).firstOrNull;
+          if (ev == null) continue;
+          final localUpdated = card.activity.isEmpty ? 0 : card.activity.last.at;
+          if (!ev.updated.isBefore(DateTime.fromMillisecondsSinceEpoch(localUpdated))) {
+            card.title = ev.summary;
+            card.dueMs = ev.start.toLocal().millisecondsSinceEpoch;
+          }
+        }
+      });
+    } on CalendarSyncException catch (e) {
+      debugPrint('calendar sync failed: ${e.status}');
     }
   }
 
@@ -724,7 +775,6 @@ class _SgPaneState extends State<SgPane> {
               children: [
                 _header(b),
                 _viewChips(b),
-                if (b.canvases.isNotEmpty) _canvasChips(b),
                 // Body + Genie share the remaining pane height so Genie stays
                 // below the number chips and the canvas paints to the pane floor.
                 Expanded(
@@ -1049,56 +1099,54 @@ class _SgPaneState extends State<SgPane> {
   Widget _viewChips(SgBoard b) {
     // Single horizontal row with VFadeScroll edge fade (Theme Gallery mask).
     // Selected chip stays scrolled into view via ensureVisible.
-    final surfaces = SgSurface.values;
-    final selected = b.surface;
-    WidgetsBinding.instance.addPostFrameCallback((_) => _ensureViewChipVisible(selected));
-    return SizedBox(
-      height: 40,
-      child: VFadeScroll(
-        axis: Axis.horizontal,
-        fade: 28,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: Row(
-          children: [
-            for (var i = 0; i < surfaces.length; i++) ...[
-              if (i > 0) const SizedBox(width: 4),
-              KeyedSubtree(
-                key: _viewChipKeys.putIfAbsent(surfaces[i], GlobalKey.new),
-                child: _glassChoice(
-                  label: surfaces[i].label,
-                  selected: selected == surfaces[i],
-                  size: 11,
-                  onSelected: (_) {
-                    final s = surfaces[i];
-                    _viewChipEnsured = null;
-                    store.touch(() => b.surface = s);
-                    if (s == SgSurface.kanban && widget.onOpenKanbanInPlanka != null) {
-                      widget.onOpenKanbanInPlanka!();
-                    } else {
-                      setState(() {});
-                    }
-                    WidgetsBinding.instance.addPostFrameCallback((_) => _ensureViewChipVisible(s));
-                  },
-                ),
-              ),
-            ],
-          ],
-        ),
+    // Corkboard, Clipboard, Ledger, Binder and Slate are names from the old clone, not in the Smart Gen
+    // spec's board or canvas types, so they are not offered (a board already set to one keeps it).
+    // Canvas types (Notebook, Gallery, Portfolio, Folder...) are not board
+    // views: per the spec they are canvases added onto the board from the
+    // board's add menu ("Add a canvas"). Only board views are offered; a
+    // board already set to another surface keeps that one chip.
+    const surfaces = [SgSurface.desk, SgSurface.kanban, SgSurface.calendar, SgSurface.whiteboard];
+    // Highlight a view only when the board kind is that view. A workbench or
+    // table is not the Desk, even though the physical stage stays on this pane.
+    final selected = switch (b.kind) {
+      SgBoardKind.kanban => SgSurface.kanban,
+      SgBoardKind.calendar => SgSurface.calendar,
+      SgBoardKind.whiteboard || SgBoardKind.whiteboardLanes || SgBoardKind.whiteboardPlain => SgSurface.whiteboard,
+      SgBoardKind.desk => SgSurface.desk,
+      SgBoardKind.longBench || SgBoardKind.workbench || SgBoardKind.table || SgBoardKind.roundTable || SgBoardKind.nightStand || SgBoardKind.longTable || SgBoardKind.coffeeTable || SgBoardKind.charts => null,
+    };
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        spacing: 4,
+        runSpacing: 4,
+        children: [
+          for (final s in surfaces)
+            _glassChoice(
+              label: s.label,
+              selected: selected != null && selected == s,
+              size: 11,
+              onSelected: (_) {
+                store.touch(() {
+                  b.surface = s;
+                  b.kind = switch (s) {
+                    SgSurface.kanban => SgBoardKind.kanban,
+                    SgSurface.calendar => SgBoardKind.calendar,
+                    SgSurface.whiteboard => SgBoardKind.whiteboard,
+                    SgSurface.desk => SgBoardKind.desk,
+                    _ => b.kind,
+                  };
+                });
+                if (s == SgSurface.kanban && widget.onOpenKanbanInPlanka != null) {
+                  widget.onOpenKanbanInPlanka!();
+                } else {
+                  setState(() {});
+                }
+              },
+            ),
+        ],
       ),
-    );
-  }
-
-  void _ensureViewChipVisible(SgSurface s) {
-    if (!mounted) return;
-    if (_viewChipEnsured == s) return;
-    final ctx = _viewChipKeys[s]?.currentContext;
-    if (ctx == null) return;
-    _viewChipEnsured = s;
-    Scrollable.ensureVisible(
-      ctx,
-      duration: const Duration(milliseconds: 220),
-      alignment: 0.5,
-      curve: Curves.easeOutCubic,
     );
   }
 
@@ -1147,64 +1195,34 @@ class _SgPaneState extends State<SgPane> {
     );
   }
 
-  Widget _canvasChips(SgBoard b) {
-    // Same _glassChoice style as surface chips — no coloured ring / focus halo.
-    return SizedBox(
-      height: 40,
-      child: ScrollConfiguration(
-        behavior: const SgScroll(),
-        child: ListView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          children: [
-            for (var i = 0; i < b.canvases.length; i++)
-              Padding(
-                padding: const EdgeInsets.only(right: 4),
-                child: _glassChoice(
-                  label: '${i + 1}',
-                  selected: b.canvasIndex == i,
-                  size: 11,
-                  onSelected: (_) => store.touch(() => b.canvasIndex = i),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _menuBody(SgBoard b) {
-    return ScrollConfiguration(
-      behavior: const SgScroll(),
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
-        children: [
-          SizedBox(
-            height: 44,
-            child: Stack(alignment: Alignment.center, children: [
-              Text('Board menu', textAlign: TextAlign.center, style: appFont(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white)),
-              Align(alignment: Alignment.centerRight, child: _icon('Close', Icons.close, () => setState(() => _menu = false))),
-            ]),
-          ),
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      SizedBox(
+        height: 44,
+        child: Stack(alignment: Alignment.center, children: [
+          Text('Board menu', textAlign: TextAlign.center, style: appFont(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white)),
+          Align(alignment: Alignment.centerRight, child: _icon('Close', Icons.close, () => setState(() => _menu = false))),
+        ]),
+      ),
+      _menuAction(Icons.add_rounded, 'New card', () => setState(() { _menu = false; _overlay = 'create'; })),
+      _menuAction(Icons.dashboard_customize_outlined, 'Add a canvas', () => setState(() {
+            _menu = false;
+            _overlay = 'add-canvas';
+            _query = '';
+          })),
+      Expanded(
+        child: ScrollConfiguration(
+          behavior: const SgScroll(),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
+            children: [
           _menuAction(Icons.search_rounded, 'Search', () => setState(() { _menu = false; _overlay = 'search'; })),
           _menuAction(Icons.bar_chart_rounded, 'Statistics', () => setState(() { _menu = false; _overlay = 'stats'; })),
           _menuAction(Icons.checklist_rounded, _multi ? 'Stop selecting' : 'Select cards', () => setState(() { _menu = false; _multi = !_multi; })),
-          _menuAction(Icons.add_rounded, 'New card', () => setState(() { _menu = false; _overlay = 'create'; })),
-          _menuAction(Icons.dashboard_customize_outlined, 'Add a canvas', () {
-            final ok = store.addCanvas('Canvas ${b.canvases.length + 1}', 'Glass');
-            setState(() {
-              _menu = false;
-              if (!ok) {
-                _showToast(store.notice, red: false);
-              } else {
-                b.surface = SgSurface.canvas;
-              }
-            });
-          }),
-                    _menuAction(Icons.dashboard_outlined, 'Place board', () {
+          _menuAction(Icons.dashboard_outlined, 'Place board', () {
             final hostId = b.id;
             if (b.canvases.isEmpty) {
-              store.addCanvas('Canvas 1', 'Glass');
+              store.addCanvas('Glass', 'Glass');
             }
             final host = store.boards.firstWhere((x) => x.id == hostId);
             final canvasId = host.canvases[host.canvasIndex.clamp(0, host.canvases.length - 1)].id;
@@ -1233,14 +1251,17 @@ class _SgPaneState extends State<SgPane> {
           Wrap(spacing: 4, children: [
             for (final k in SgBoardKind.values)
               _glassChoice(
-                label: k.name,
+                label: k.label,
                 selected: b.kind == k,
                 size: 10,
-                onSelected: (_) => store.touch(() {
-                  b.kind = k;
-                  final surface = SgSurface.values.asNameMap()[k.name];
-                  if (surface != null) b.surface = surface;
-                }),
+                onSelected: (_) {
+                  store.touch(() {
+                    b.kind = k;
+                    final surface = SgSurface.values.asNameMap()[k.name];
+                    if (surface != null) b.surface = surface;
+                  });
+                  setState(() => _menu = false);
+                },
               ),
           ]),
           _toggle('Auto arrange', b.autoArrange, (v) => store.touch(() => b.autoArrange = v)),
@@ -1253,13 +1274,18 @@ class _SgPaneState extends State<SgPane> {
             for (final k in SgStatusKind.values)
               _glassChoice(label: _statusKindLabel(k), selected: b.statusKind == k, size: 10, onSelected: (_) => store.touch(() => b.statusKind = k)),
           ]),
-        ],
+            ],
+          ),
+        ),
       ),
-    );
+    ]);
   }
 
   Widget _menuAction(IconData icon, String label, VoidCallback onTap) {
-    return InkWell(
+    return Semantics(
+      button: true,
+      label: label,
+      child: InkWell(
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -1269,6 +1295,7 @@ class _SgPaneState extends State<SgPane> {
           Text(label, style: appFont(fontSize: 16, color: Colors.white)),
         ]),
       ),
+    ),
     );
   }
 
@@ -1286,11 +1313,28 @@ class _SgPaneState extends State<SgPane> {
     // (regression: overlays trapped the board and Statistics/Genie could not open).
     if (_menu) return _menuBody(b);
     if (_overlay == 'search') return _search(b);
+    if (_overlay == 'add-canvas') return _addCanvas(b);
     if (_overlay == 'stats') return _stats(b);
     // Genie floats over the surface (see build Stack) — do not replace the body.
     if (_overlay == 'editor-bulk') return _bulkEdit(b);
     if (open != null) return _editor(b, open);
-    return SgSurfaceView(store: store, onOpen: _open, multi: _multi, selected: _selected, forceFlip: _forceFlip, kanbanPage: _kanbanPage, forceHotListId: _forceHotListId, liftCardId: _liftCardId, onSelect: (c) => setState(() => _selected.contains(c.id) ? _selected.remove(c.id) : _selected.add(c.id)));
+    if (_forceFlip && b.cards.isNotEmpty) {
+      return SgSurfaceView(store: store, onOpen: _open, forceFlip: true);
+    }
+    // Capture harness for the stock column drag. The board itself is the physical stage.
+    if (_liftCardId != null || _forceHotListId != null || _kanbanPage != 0) {
+      return SgSurfaceView(
+        store: store,
+        onOpen: _open,
+        multi: _multi,
+        selected: _selected,
+        kanbanPage: _kanbanPage,
+        forceHotListId: _forceHotListId,
+        liftCardId: _liftCardId,
+        onSelect: (c) => setState(() => _selected.contains(c.id) ? _selected.remove(c.id) : _selected.add(c.id)),
+      );
+    }
+    return SgPhysicalStage(store: store, onOpen: _open);
   }
 
   Widget _create() {
@@ -1299,7 +1343,10 @@ class _SgPaneState extends State<SgPane> {
         padding: const EdgeInsets.all(8),
         child: Wrap(spacing: 8, runSpacing: 8, children: [
           for (final t in SgType.values)
-            GestureDetector(
+            Semantics(
+              button: true,
+              label: t.label,
+              child: GestureDetector(
               onTap: () {
                 final c = store.addCard(t);
                 if (c == null) {
@@ -1321,6 +1368,7 @@ class _SgPaneState extends State<SgPane> {
                   Text(t.label, textAlign: TextAlign.center, style: appFont(fontSize: 11, color: Colors.white)),
                 ]),
               ),
+            ),
             ),
         ]),
       ),
@@ -1359,6 +1407,83 @@ class _SgPaneState extends State<SgPane> {
   }
 
   String _query = '';
+
+  /// The board's add menu for canvases: a scrollable visual library of the
+  /// canvas types (thumbnail + label) with a search field. Picking one adds
+  /// that canvas onto the board and shows it.
+  Widget _addCanvas(SgBoard b) {
+    final q = _query.trim().toLowerCase();
+    final types = [for (final t in kSgCanvasTypes) if (q.isEmpty || t.$1.toLowerCase().contains(q)) t];
+    return Padding(
+      key: const ValueKey('sg-add-canvas'),
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        SizedBox(
+          height: 40,
+          child: Stack(alignment: Alignment.center, children: [
+            Text('Add a canvas', textAlign: TextAlign.center, style: appFont(fontSize: 17, fontWeight: FontWeight.w700, color: Colors.white)),
+            Align(alignment: Alignment.centerRight, child: _icon('Close', Icons.close, () => setState(() => _overlay = ''))),
+          ]),
+        ),
+        Semantics(
+          label: 'Search',
+          textField: true,
+          child: TextField(
+            style: appFont(color: Colors.white, fontSize: 14),
+            decoration: const InputDecoration(hintText: 'Search', hintStyle: TextStyle(color: Colors.white54), prefixIcon: Icon(Icons.search_rounded, color: Colors.white54, size: 18)),
+            onChanged: (v) => setState(() => _query = v),
+            onSubmitted: (v) {
+              final name = v.trim();
+              if (name.isEmpty) return;
+              final known = kSgCanvasTypes.where((t) => t.$1.toLowerCase() == name.toLowerCase()).firstOrNull;
+              final kind = known?.$1 ?? name;
+              final ok = store.addCanvas(kind, kind);
+              setState(() {
+                _overlay = '';
+                _query = '';
+                if (!ok) _showToast(store.notice, red: false);
+              });
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: GridView.count(
+            crossAxisCount: 3,
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 8,
+            childAspectRatio: 0.82,
+            children: [
+              for (final t in types)
+                Semantics(
+                  button: true,
+                  label: t.$1,
+                  child: GestureDetector(
+                    key: ValueKey('sg-add-canvas-${t.$1}'),
+                    onTap: () {
+                      final ok = store.addCanvas(t.$1, t.$1);
+                      setState(() {
+                        _overlay = '';
+                        if (!ok) {
+                          _showToast(store.notice, red: false);
+                        } else {
+                          store.touch(() => b.surface = SgSurface.canvas);
+                        }
+                      });
+                    },
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                      Expanded(child: SgPhotoThumb(kind: t.$1)),
+                      const SizedBox(height: 4),
+                      Text(t.$1, textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis, style: appFont(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white)),
+                    ]),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ]),
+    );
+  }
 
   Widget _stats(SgBoard b) {
     final urgent = b.cards.where((c) => c.urgent).length;
@@ -1750,11 +1875,32 @@ class _SgPaneState extends State<SgPane> {
             const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerLeft,
-              child: ActionChip(
-                avatar: const Icon(Icons.schedule, size: 16, color: _ink),
-                label: Text(_dueLabel(c.dueMs), style: appFont(fontSize: 14, color: _ink, fontWeight: FontWeight.w600)),
-                onPressed: () => _pickDue(c),
-              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                ActionChip(
+                  avatar: const Icon(Icons.schedule, size: 16, color: _ink),
+                  label: Text(_dueLabel(c.dueMs), style: appFont(fontSize: 14, color: _ink, fontWeight: FontWeight.w600)),
+                  onPressed: () => _pickDue(c),
+                ),
+                // .ics is an export, not calendar sync. Sync is the provider connection.
+                if (c.type == SgType.reminder && c.dueMs != null) ...[
+                  Tooltip(
+                    message: 'Export',
+                    child: IconButton(
+                      key: const ValueKey('sg-reminder-calendar'),
+                      onPressed: () => exportReminders([c], name: 'reminder-${c.id}.ics'),
+                      icon: const Icon(Icons.event_available_rounded, color: _ink),
+                    ),
+                  ),
+                  Tooltip(
+                    message: 'Sync',
+                    child: IconButton(
+                      key: const ValueKey('sg-reminder-sync'),
+                      onPressed: () => _syncReminder(c),
+                      icon: const Icon(Icons.sync_rounded, color: _ink),
+                    ),
+                  ),
+                ],
+              ]),
             ),
             const SizedBox(height: 8),
             SizedBox(

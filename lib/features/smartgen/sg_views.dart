@@ -828,7 +828,7 @@ class _SgNotebookState extends State<SgNotebook> {
         for (final p in (c.pages.isEmpty ? [c.description.isEmpty ? c.title : c.description] : c.pages)) (c, p),
     ];
     if (sheets.isEmpty) {
-      return Center(child: Text('No notebook pages yet', style: appFont(color: Colors.white70, fontSize: 13)));
+      return Image.asset('assets/smartgen/paper.jpg', fit: BoxFit.cover);
     }
     final title = sheets[_index.clamp(0, sheets.length - 1)].$1.title;
     return Padding(
@@ -897,7 +897,7 @@ class SgAlbum extends StatelessWidget {
       child: SgFreePlane(
         store: store,
         cards: cards,
-        title: 'Photo album',
+        title: 'Gallery',
         titleIcon: Icons.photo_library_outlined,
         onOpen: onOpen,
         slotsFor: (plane, cs) => SgFreeLayouts.grid2(plane, cs.length),
@@ -1111,7 +1111,7 @@ class SgDesk extends StatelessWidget {
         SgFreePlane(
           store: store,
           cards: cards,
-          title: 'Portfolio desk',
+          title: 'Portfolio',
           titleIcon: Icons.desk_rounded,
           onOpen: onOpen,
           slotsFor: (plane, cs) => SgFreeLayouts.papers(plane, cs.length),
@@ -1245,7 +1245,7 @@ class _SgFilesState extends State<SgFiles> {
               Row(mainAxisSize: MainAxisSize.min, children: [
                 const Icon(Icons.folder_open_rounded, size: 16, color: Color(0xFFFFD56A)),
                 const SizedBox(width: 6),
-                Text('Files', textAlign: TextAlign.center, style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white70)),
+                Text('Folder', textAlign: TextAlign.center, style: appFont(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white70)),
               ]),
               Align(
                 alignment: Alignment.centerRight,
@@ -1579,10 +1579,16 @@ class _SgCanvasBoardState extends State<SgCanvasBoard> {
     if (b.canvases.isEmpty) {
       return ColoredBox(
         color: const Color(0xFF12141A),
-        child: Center(child: Text('Add a canvas from the board menu', style: appFont(fontSize: 13, color: Colors.white70))),
+        child: Image.asset('assets/smartgen/desk.jpg', fit: BoxFit.cover),
       );
     }
     final canvas = b.canvases[b.canvasIndex.clamp(0, b.canvases.length - 1)];
+    // A canvas added from the add menu as a type (Notebook, Gallery...)
+    // draws as that object; Glass is the free canvas below.
+    final typed = sgCanvasTypeSurface(canvas.kind);
+    if (typed != null) {
+      return SgSurfaceView.typeView(typed, store, widget.onOpen) ?? const SizedBox.shrink();
+    }
     final cards = b.cards.where((c) => c.canvasId.isEmpty || c.canvasId == canvas.id).take(8).toList();
     final boardTiles = [
       for (final ob in store.boards)
@@ -1831,6 +1837,20 @@ class SgSurfaceView extends StatelessWidget {
   final double kanbanPage;
   final String? forceHotListId;
   final String? liftCardId;
+
+  /// The view a canvas of type [s] draws on the board.
+  static Widget? typeView(SgSurface s, SgStore store, void Function(SgCard) onOpen) => switch (s) {
+        SgSurface.notebook => SgNotebook(store: store, onOpen: onOpen),
+        SgSurface.album => SgAlbum(store: store, onOpen: onOpen),
+        SgSurface.storyboard => SgStory(store: store, onOpen: onOpen),
+        SgSurface.vision => SgVision(store: store, onOpen: onOpen),
+        SgSurface.swimlane => SgSwim(store: store, onOpen: onOpen),
+        SgSurface.portfolio => SgDesk(store: store, onOpen: onOpen, wood: const Color(0xFF8B5E3C)),
+        SgSurface.usMap => SgPlaces(store: store, onOpen: onOpen, world: false),
+        SgSurface.worldMap => SgPlaces(store: store, onOpen: onOpen, world: true),
+        SgSurface.files => SgFiles(store: store, onOpen: onOpen),
+        _ => null,
+      };
 
   @override
   Widget build(BuildContext context) {
