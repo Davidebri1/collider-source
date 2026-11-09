@@ -388,6 +388,12 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     if (Uri.base.queryParameters['composer'] == '1') _isComposerSummoned = true;
     if (Uri.base.queryParameters['settings'] == '1') _settingsOpen = true;
     if (Uri.base.queryParameters['browser'] == '1') _browserOpen = true;
+    // Screenshot tour and phone shortcuts. Applied here, not after the roster
+    // call: GitHub Pages and a missing API return before that call finishes,
+    // which used to leave ?app= on the home screen.
+    const openable = {'smartgen', 'market', 'themes', 'premium', 'music', 'files', 'consensus', 'apps'};
+    final appLink = Uri.base.queryParameters['app'];
+    if (appLink != null && openable.contains(appLink)) _activeDrawer = appLink;
     final cq = Uri.base.queryParameters['cat'];
     if (cq != null) _activeCategory = ModelCategory.values.firstWhere((c) => c.name == cq, orElse: () => ModelCategory.general);
     if (Uri.base.queryParameters['genopts'] == '1' && _activeCategory.isMedia) _genOptionsOpen = true;

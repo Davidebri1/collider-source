@@ -170,12 +170,12 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
-    const paper = Color(0xFFFAF7F2);
-    final sheet = find.byWidgetPredicate((w) => w is ColoredBox && w.color == paper);
+    final sheet = find.byKey(const ValueKey('sg-card-sheet'));
     expect(sheet, findsOneWidget);
+    final paper = tester.widget<ColoredBox>(sheet).color;
 
     final sheetRect = tester.getRect(sheet);
-    for (final label in ['Move', 'Labels', 'Members', 'Checklist', 'Attachment', 'Done']) {
+    for (final label in ['Cover', 'Move', 'Labels', 'Members', 'Checklist', 'Attachment', 'Done']) {
       final finder = find.descendant(of: sheet, matching: find.text(label));
       expect(finder, findsWidgets, reason: label);
       final count = finder.evaluate().length;
@@ -205,6 +205,16 @@ void main() {
     }
     expect(find.descendant(of: sheet, matching: find.text('Doing')), findsWidgets);
     expect(find.descendant(of: sheet, matching: find.text('Done')), findsWidgets);
+    expect(find.descendant(of: sheet, matching: find.text('Custom fields')), findsOneWidget);
+    expect(find.text('Custom Fields'), findsNothing);
+    expect(find.text('Board Menu'), findsNothing);
+
+    await tester.tap(find.descendant(of: sheet, matching: find.text('Cover')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.text('Card cover'), findsOneWidget);
+    expect(find.text('None'), findsOneWidget);
+    expect(find.byKey(const ValueKey('sg-cover-sheet')), findsOneWidget);
   });
 
   testWidgets('the selected view tab and board-kind chip are the strong fill', (tester) async {
@@ -229,6 +239,8 @@ void main() {
     await tester.tap(find.byTooltip('Board menu'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Board menu'), findsOneWidget);
+    expect(find.text('Board Menu'), findsNothing);
     _expectStrongChip(tester, 'notebook', 'portfolio');
 
     await tester.pumpWidget(const SizedBox.shrink());
@@ -240,9 +252,13 @@ void main() {
     final reply = s.askGenie('set all priority to high');
     expect(reply, contains('priority'));
     expect(s.board!.cards.every((c) => c.priority == 3), isTrue);
+    final kept = s.board!.cards.firstWhere((c) => c.type == SgType.task);
+    kept.color = 0xFF61BD4F;
     final ref = s.askGenie('refactor task as note');
     expect(ref, contains('Note'));
     expect(s.board!.cards.where((c) => c.type == SgType.task), isEmpty);
+    expect(s.board!.cards.firstWhere((c) => c.id == kept.id).color, 0xFF61BD4F);
+    expect(s.board!.cards.where((c) => c.type == SgType.note && c.id != kept.id).every((c) => c.color == SgType.note.argb), isTrue);
     expect(callAiApi('hello', cards: 1, columns: 1), contains('not called'));
   });
 }

@@ -24,6 +24,12 @@ extension CLayerX on CLayer {
 /// hug: as tall as its content, up to that height (menus, Account).
 enum CPaneFit { fill, hug }
 
+/// [regular] is the shared narrow window. [phoneBoard] is the phone work
+/// surface: full width after the side rail, full height from the safe area
+/// to just above the dock. Only Smart Gen asks for it, so other screens keep
+/// the regular pane.
+enum CPaneSpan { regular, phoneBoard }
+
 class CPaneTokens {
   CPaneTokens._();
   static bool phone(BuildContext c) => MediaQuery.sizeOf(c).width < 768;
@@ -49,9 +55,10 @@ class CPane extends StatelessWidget {
   final Widget child;
   final CLayer layer;
   final CPaneFit fit;
+  final CPaneSpan span;
   /// The glass body, not the top gap. Layout tests use this rect.
   static const Key bodyKey = ValueKey<String>('cpane-body');
-  const CPane({super.key, required this.child, this.layer = CLayer.floating, this.fit = CPaneFit.fill});
+  const CPane({super.key, required this.child, this.layer = CLayer.floating, this.fit = CPaneFit.fill, this.span = CPaneSpan.regular});
 
   /// The rectangle a pane occupies, for screens that must lay out inside it.
   static double maxHeight(BuildContext c) {
@@ -62,7 +69,8 @@ class CPane extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final r = BorderRadius.circular(CPaneTokens.radius);
-    final w = CPaneTokens.width(context);
+    final phoneWork = span == CPaneSpan.phoneBoard && CPaneTokens.phone(context);
+    final w = phoneWork ? (MediaQuery.sizeOf(context).width - 92) : CPaneTokens.width(context);
     final maxH = maxHeight(context);
     // Fill panes are the work surfaces (Smart Gen, Files, Market). They use
     // the clearer work frost so the wallpaper stays readable through the
@@ -80,10 +88,17 @@ class CPane extends StatelessWidget {
       decoration: BoxDecoration(color: fill, borderRadius: r),
       child: ClipRRect(borderRadius: r, child: child),
     );
-    // Hug panes (the board) sit in the vertical centre of the band above
-    // the dock. Fill panes (the card) use that whole band.
-    final topInset = MediaQuery.paddingOf(context).top + CPaneTokens.topGap;
-    final bottomInset = CShell.reserveOf(context);
+    // Hug panes sit in the vertical centre of the band above the dock.
+    // Fill panes use that whole band. A phone board clears the side rail
+    // and runs from the safe area to just above the dock.
+    final topInset = MediaQuery.paddingOf(context).top + (phoneWork ? 8 : CPaneTokens.topGap);
+    final bottomInset = phoneWork ? 78.0 : CShell.reserveOf(context);
+    if (phoneWork) {
+      return Padding(
+        padding: EdgeInsets.fromLTRB(80, topInset, 12, bottomInset),
+        child: SizedBox(key: bodyKey, width: double.infinity, height: double.infinity, child: glass),
+      );
+    }
     return Padding(
       padding: EdgeInsets.only(top: topInset, bottom: bottomInset),
       child: Align(
